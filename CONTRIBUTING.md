@@ -67,8 +67,7 @@ Run the same checks used by continuous integration:
 
 ```sh
 pnpm run lint
-pnpm run compile-web
-pnpm run package-web
+pnpm run package-vsix
 pnpm test
 ```
 
@@ -76,7 +75,7 @@ pnpm test
 tests in Chromium. Tests are under `src/web/test/suite` and are discovered by
 the webpack test entry.
 
-For active development, start the incremental compiler:
+For a faster browser development loop, run the **watch-web** build task or:
 
 ```sh
 pnpm run watch-web
@@ -88,20 +87,46 @@ To open the extension in a browser-hosted VS Code instance:
 pnpm run run-in-browser
 ```
 
+## Build a VSIX
+
+Build an installable VSIX package for local testing:
+
+```sh
+pnpm run package-vsix
+```
+
+The command runs the standard `vscode:prepublish` lifecycle, builds the Node.js
+and web-worker extension bundles, and creates `api-review-<version>.vsix` in
+the repository root. VSIX files are ignored by Git.
+
+Install the generated package from the command line:
+
+```sh
+code --install-extension api-review-0.0.1.vsix
+```
+
+Alternatively, run **Extensions: Install from VSIX...** from the VS Code
+Command Palette and select the generated file. Reload VS Code after installing
+or replacing the extension.
+
 ## Debug in VS Code
 
 Open the Run and Debug view and select one of the checked-in launch
 configurations:
 
+- **Run Extension** builds and launches the extension in the desktop Node.js
+  extension host.
 - **Run Web Extension** builds and launches the extension in a web extension
   host.
 - **Extension Tests** builds and runs the browser test suite under the debugger.
 
-Set breakpoints in `src/web` before starting the selected configuration.
+Set breakpoints in `src/web` before starting the selected configuration. Both
+hosts run bundles built from the same browser-safe source entry point.
 
 ## Implementation Constraints
 
-- Keep a single browser-safe extension bundle targeting a web worker.
+- Keep a single browser-safe source entry point with Node.js and web-worker
+  bundles.
 - Use VS Code workspace APIs for file access. Do not use Node.js file-system or
   path APIs.
 - Test URI-based behavior with virtual schemes and multi-root workspaces where

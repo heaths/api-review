@@ -22,7 +22,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
-      - run: pnpm run compile-web
-      - run: pnpm run package-web
+      - run: pnpm run package-vsix
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test

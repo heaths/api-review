@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 export function resolveOriginalLocation(
   sourceMapText: string,
-  sourceMapUri: vscode.Uri,
+  workspaceFolderUri: vscode.Uri,
   generatedLine: number,
   generatedColumn: number,
 ): vscode.Location | undefined {
@@ -30,7 +30,6 @@ export function resolveOriginalLocation(
     return undefined;
   }
 
-  const directory = sourceMapUri.with({ path: sourceMapUri.path.replace(/\/[^/]*$/, '/') });
-  const sourceUri = vscode.Uri.joinPath(directory, ...original.source.split('/'));
+  const sourceUri = vscode.Uri.joinPath(workspaceFolderUri, ...original.source.split('/'));
   return new vscode.Location(sourceUri, new vscode.Position(original.line - 1, original.column));
 }

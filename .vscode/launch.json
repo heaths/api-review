@@ -2,7 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Web Extension ",
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentKind=workspace"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/dist/node/**/*.js"
+      ],
+      "preLaunchTask": "npm: compile-node"
+    },
+    {
+      "name": "Run Web Extension",
       "type": "extensionHost",
       "debugWebWorkerHost": true,
       "request": "launch",

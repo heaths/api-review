@@ -1,3 +1,4 @@
+.github/**
 .vscode/**
 .vscode-test-web/**
 src/**
@@ -5,10 +6,13 @@ out/**
 node_modules/**
 dist/**/test/**
 .gitignore
-vsc-extension-quickstart.md
-webpack.config.js
-esbuild.js
+.markdownlint-cli2.yaml
 .yarnrc
+AGENTS.md
+esbuild.js
+pnpm-lock.yaml
+pnpm-workspace.yaml
+webpack.config.js
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map

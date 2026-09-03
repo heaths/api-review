@@ -14,6 +14,7 @@ const webpack = require('webpack');
 
 /** @type WebpackConfig */
 const webExtensionConfig = {
+  name: 'web',
   mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
   target: 'webworker', // extensions run in a webworker context
   entry: {
@@ -68,4 +69,35 @@ const webExtensionConfig = {
   },
 };
 
-module.exports = [webExtensionConfig];
+/** @type WebpackConfig */
+const nodeExtensionConfig = {
+  name: 'node',
+  mode: 'none',
+  target: 'node',
+  entry: {
+    'extension': './src/web/extension.ts',
+  },
+  output: {
+    filename: '[name].js',
+    path: path.join(__dirname, './dist/node'),
+    libraryTarget: 'commonjs2',
+    devtoolModuleFilenameTemplate: '../../[resource-path]',
+  },
+  resolve: {
+    mainFields: ['module', 'main'],
+    extensions: ['.ts', '.js'],
+  },
+  module: webExtensionConfig.module,
+  externals: {
+    'vscode': 'commonjs vscode',
+  },
+  performance: {
+    hints: false,
+  },
+  devtool: 'nosources-source-map',
+  infrastructureLogging: {
+    level: 'log',
+  },
+};
+
+module.exports = [webExtensionConfig, nodeExtensionConfig];

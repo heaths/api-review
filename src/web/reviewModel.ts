@@ -34,11 +34,15 @@ export class ReviewModel {
     }
   }
 
-  public getEntries(document: vscode.TextDocument): Promise<readonly ReviewEntry[]> {
+  public async getEntries(document: vscode.TextDocument): Promise<readonly ReviewEntry[]> {
     const key = document.uri.toString();
-    const descriptor = this.descriptors.get(key);
+    let descriptor = this.descriptors.get(key);
     if (!descriptor) {
-      return Promise.resolve([]);
+      await this.refresh();
+      descriptor = this.descriptors.get(key);
+      if (!descriptor) {
+        return [];
+      }
     }
 
     let entries = this.cache.get(key);
@@ -67,7 +71,7 @@ export class ReviewModel {
         const sourceMap = await readText(descriptor.sourceMap);
         for (const codeLine of getFencedCodeLines(document.getText())) {
           const column = codeLine.text.search(/\S|$/);
-          const source = resolveOriginalLocation(sourceMap, descriptor.sourceMap, codeLine.line + 1, column);
+          const source = resolveOriginalLocation(sourceMap, descriptor.workspaceFolder.uri, codeLine.line + 1, column);
           if (source) {
             entries.set(codeLine.line, { ...entries.get(codeLine.line), line: codeLine.line, language: codeLine.language, source });
           }
