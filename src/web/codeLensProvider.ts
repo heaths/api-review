@@ -4,11 +4,15 @@ import { ReviewModel } from './reviewModel';
 export const showDocumentationCommand = 'heaths.apiReview.showDocumentation';
 export const goToSourceCommand = 'heaths.apiReview.goToSource';
 
+// How long a `Documentation` CodeLens click keeps documentation available at its anchor.
+const requestTimeout = 30_000;
+
 interface DocumentationRequest {
   readonly uri: string;
   readonly version: number;
   readonly line: number;
   readonly character: number;
+  readonly expires: number;
 }
 
 export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.HoverProvider {
@@ -55,6 +59,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
       || request.version !== document.version
       || request.line !== position.line
       || request.character !== position.character
+      || request.expires <= Date.now()
       || !isRequested(document, position)) {
       return undefined;
     }
@@ -87,6 +92,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
       version: document.version,
       line: position.line,
       character: position.character,
+      expires: Date.now() + requestTimeout,
     };
 
     const editor = await vscode.window.showTextDocument(document);

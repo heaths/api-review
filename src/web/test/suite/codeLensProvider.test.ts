@@ -35,9 +35,11 @@ suite('Documentation hover placement', function () {
     assert.ok(lens.command.tooltip, 'Documentation CodeLens should show documentation as a plain text tooltip');
 
     const line = lens.range.start.line;
-    assert.deepStrictEqual(
-      await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uri, lens.range.start),
-      [],
+    const documentation = lens.command.tooltip.split('\n')[0];
+
+    assert.strictEqual(
+      await findDocumentation(uri, lens.range.start, documentation),
+      undefined,
       'Documentation should not be shown when hovering the code line',
     );
 
@@ -45,19 +47,33 @@ suite('Documentation hover placement', function () {
 
     const position = getHoverPosition(document, line);
     assert.ok(position, 'Documentation should be anchored above the declaration');
+    assert.strictEqual(position.line, line - 1, 'Documentation should be anchored to the CodeLens row');
 
-    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-      'vscode.executeHoverProvider',
-      uri,
-      position,
-    );
-    assert.strictEqual(hovers.length, 1, 'Documentation should be shown for the CodeLens anchor');
-    assert.ok(hovers[0].range?.isEmpty, 'Documentation should be anchored to a zero-width range');
+    const hover = await findDocumentation(uri, position, documentation);
+    assert.ok(hover, 'Documentation should be shown for the CodeLens anchor');
+    assert.ok(hover.range?.isEmpty, 'Documentation should be anchored to a zero-width range');
 
-    assert.deepStrictEqual(
-      await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uri, lens.range.start),
-      [],
+    assert.strictEqual(
+      await findDocumentation(uri, lens.range.start, documentation),
+      undefined,
       'Documentation should not be shown when hovering the code line after showing documentation',
     );
   });
 });
+
+async function findDocumentation(
+  uri: vscode.Uri,
+  position: vscode.Position,
+  documentation: string,
+): Promise<vscode.Hover | undefined> {
+  const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+    'vscode.executeHoverProvider',
+    uri,
+    position,
+  );
+
+  return hovers.find(hover => hover.contents.some(content => {
+    const value = typeof content === 'string' ? content : content.value;
+    return value.includes(documentation);
+  }));
+}
