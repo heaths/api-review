@@ -1,6 +1,8 @@
 $schema: https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/v0.23.2/schema/markdownlint-cli2-config-schema.json
 globs:
   - "**/*.md"
-ignores:
-  - "node_modules/**"
-  - ".vscode-test-web/**"
+gitignore: true
+
+config:
+  line_length:
+    code_blocks: false

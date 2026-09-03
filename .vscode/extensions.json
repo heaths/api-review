@@ -1,6 +1,8 @@
 {
   "recommendations": [
+    "amodio.tsl-problem-matcher",
+    "DavidAnson.vscode-markdownlint",
     "dbaeumer.vscode-eslint",
-    "amodio.tsl-problem-matcher"
+    "EditorConfig.EditorConfig"
   ]
 }
