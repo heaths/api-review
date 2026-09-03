@@ -1,0 +1,97 @@
+{
+  "name": "api-review",
+  "displayName": "Azure API Review",
+  "description": "Adds some capabilities from APIView.dev for Azure API reviews to support the new API Review Hub.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.136.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "browser": "./dist/web/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Azure API Review",
+      "properties": {
+        "heaths.apiReview.files.include": {
+          "type": "array",
+          "scope": "resource",
+          "default": [
+            "**/api/API.md"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Workspace-relative API Markdown glob patterns. Supports `${workspaceFolder}` and `${workspaceFolder:<name>}` variables."
+        },
+        "heaths.apiReview.files.comments": {
+          "type": "array",
+          "scope": "resource",
+          "default": [
+            "API.comments.diff",
+            "API.comments.patch"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered comment patch patterns resolved relative to each API Markdown file. Supports file-context variables like `${fileBasename}`."
+        },
+        "heaths.apiReview.files.sourceMaps": {
+          "type": "array",
+          "scope": "resource",
+          "default": [
+            "API.md.map"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered source map patterns resolved relative to each API Markdown file. Supports file-context variables like `${fileBasename}`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
+    "pretest": "pnpm run compile-web",
+    "vscode:prepublish": "pnpm run package-web",
+    "compile-web": "webpack",
+    "watch-web": "webpack --watch",
+    "package-web": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src",
+    "prerun-in-browser": "pnpm run compile-web",
+    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
+  },
+  "devDependencies": {
+    "@types/assert": "^1.5.11",
+    "@types/mocha": "^10.0.10",
+    "@types/vscode": "^1.136.0",
+    "@types/webpack-env": "^1.18.8",
+    "@vscode/test-web": "^0.0.81",
+    "assert": "^2.1.0",
+    "eslint": "^10.5.0",
+    "markdownlint-cli2": "^0.23.2",
+    "mocha": "^11.7.6",
+    "process": "^0.11.10",
+    "ts-loader": "^9.6.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1",
+    "webpack": "^5.107.2",
+    "webpack-cli": "^7.0.3"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "source-map-js": "^1.2.1"
+  }
+}

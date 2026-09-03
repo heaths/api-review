@@ -1,0 +1,4 @@
+allowBuilds:
+  '@playwright/browser-chromium': true
+minimumReleaseAgeExclude:
+  - '@types/vscode@1.136.0'
