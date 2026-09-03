@@ -45,6 +45,9 @@ importers:
       mocha:
         specifier: ^11.7.6
         version: 11.8.0
+      playwright:
+        specifier: ^1.62.1
+        version: 1.62.1
       process:
         specifier: ^0.11.10
         version: 0.11.10
