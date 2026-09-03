@@ -12,10 +12,10 @@ workspaces using VS Code's virtual workspace file system.
 Open a configured API Markdown file. For declarations with review metadata,
 CodeLens actions appear above the declaration:
 
-- **Documentation** shows the extracted doc comments as a plain text tooltip when
-  hovered and opens a native Markdown hover when clicked. The hover is anchored
-  above the declaration so VS Code renders it above or below the **Documentation**
-  CodeLens - wherever there is space - without obscuring it. Hovering the
+- **Documentation** opens a native Markdown hover containing the extracted doc
+  comments. The hover is anchored under the **Documentation** CodeLens, aligned
+  with the declaration's indentation, so VS Code renders it above or below -
+  wherever there is space - without obscuring the CodeLens. Hovering the
   declaration itself does not show documentation.
 - **Go to source** opens the original source file and selects the mapped
   location.

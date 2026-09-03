@@ -36,7 +36,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
         codeLenses.push(new vscode.CodeLens(range, {
           command: showDocumentationCommand,
           title: '$(eye) Documentation',
-          tooltip: entry.documentation.join('\n'),
+          tooltip: 'Click to show documentation',
           arguments: [argument],
         }));
       }
@@ -44,7 +44,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
         codeLenses.push(new vscode.CodeLens(range, {
           command: goToSourceCommand,
           title: '$(go-to-file) Go to source',
-          tooltip: 'Go to source',
+          tooltip: 'Navigate to declaration',
           arguments: [argument],
         }));
       }
@@ -103,19 +103,22 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
 }
 
 /**
- * Gets the zero-width position anchoring documentation for `line` to the row where its
- * `Documentation` CodeLens is rendered, or `undefined` if there is no such row.
+ * Gets the zero-width position anchoring documentation for `line` under the `Documentation`
+ * CodeLens rendered for it, or `undefined` if there is no row to anchor to.
  *
- * VS Code renders CodeLenses on a virtual row directly above the declaration, so anchoring
- * documentation to the end of the preceding line lets VS Code render it above or below that
- * line - wherever there is space - without obscuring the `Documentation` CodeLens.
+ * VS Code renders CodeLenses on a virtual row directly above the declaration at the
+ * declaration's indentation, and has no API to attach a hover to that row. Anchoring
+ * documentation to the same column on the preceding line keeps it aligned under the
+ * `Documentation` CodeLens - however long the preceding line is - and lets VS Code render
+ * it above or below, wherever there is space, without obscuring the CodeLens.
  */
 export function getHoverPosition(document: vscode.TextDocument, line: number): vscode.Position | undefined {
   if (line <= 0 || line >= document.lineCount) {
     return undefined;
   }
 
-  return document.lineAt(line - 1).range.end;
+  const character = document.lineAt(line).firstNonWhitespaceCharacterIndex;
+  return document.validatePosition(new vscode.Position(line - 1, character));
 }
 
 function isRequested(document: vscode.TextDocument, position: vscode.Position): boolean {
