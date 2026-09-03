@@ -41,7 +41,7 @@
 
 ## Validation
 
-Run `pnpm run lint`, `pnpm run package-vsix`, and `pnpm test`. Browser tests
+Run `pnpm run lint`, `pnpm run package:vsix`, and `pnpm test`. Browser tests
 require Chromium system dependencies.
 
 ## License

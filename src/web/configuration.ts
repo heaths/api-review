@@ -1,19 +1,19 @@
 import * as vscode from 'vscode';
 
-export interface ApiReviewConfiguration {
+export interface AzureApiReviewConfiguration {
   readonly include: readonly string[];
   readonly comments: readonly string[];
   readonly sourceMaps: readonly string[];
 }
 
-const defaults: ApiReviewConfiguration = {
+const defaults: AzureApiReviewConfiguration = {
   include: ['**/api/API.md'],
   comments: ['API.comments.diff', 'API.comments.patch'],
   sourceMaps: ['API.md.map'],
 };
 
-export function getConfiguration(scope?: vscode.Uri): ApiReviewConfiguration {
-  const configuration = vscode.workspace.getConfiguration('heaths.apiReview.files', scope);
+export function getConfiguration(scope?: vscode.Uri): AzureApiReviewConfiguration {
+  const configuration = vscode.workspace.getConfiguration('heaths.azureApiReview.files', scope);
   return {
     include: readArray(configuration, 'include', defaults.include),
     comments: readArray(configuration, 'comments', defaults.comments),
@@ -23,7 +23,7 @@ export function getConfiguration(scope?: vscode.Uri): ApiReviewConfiguration {
 
 function readArray(
   configuration: vscode.WorkspaceConfiguration,
-  key: keyof ApiReviewConfiguration,
+  key: keyof AzureApiReviewConfiguration,
   fallback: readonly string[],
 ): readonly string[] {
   const values = configuration.get<unknown>(key);

@@ -34,7 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(showDocumentationCommand, argument => provider.showDocumentation(argument)),
     vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('heaths.apiReview.files')) {
+      if (event.affectsConfiguration('heaths.azureApiReview.files')) {
         void refreshDiscovery();
       }
     }),

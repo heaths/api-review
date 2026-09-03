@@ -1,6 +1,6 @@
 # azure_core
 
-**Description**: Rust wrappers around Microsoft Azure REST APIs - Core crate
+- **Description**: Rust wrappers around Microsoft Azure REST APIs - Core crate
 - **Edition**: 2021
 - **Rust version**: 1.88
 

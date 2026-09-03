@@ -67,7 +67,7 @@ Run the same checks used by continuous integration:
 
 ```sh
 pnpm run lint
-pnpm run package-vsix
+pnpm run package:vsix
 pnpm test
 ```
 
@@ -75,10 +75,10 @@ pnpm test
 tests in Chromium. Tests are under `src/web/test/suite` and are discovered by
 the webpack test entry.
 
-For a faster browser development loop, run the **watch-web** build task or:
+For a faster browser development loop, run the **watch:web** build task or:
 
 ```sh
-pnpm run watch-web
+pnpm run watch:web
 ```
 
 To open the extension in a browser-hosted VS Code instance:
@@ -92,17 +92,17 @@ pnpm run run-in-browser
 Build an installable VSIX package for local testing:
 
 ```sh
-pnpm run package-vsix
+pnpm run package:vsix
 ```
 
 The command runs the standard `vscode:prepublish` lifecycle, builds the Node.js
-and web-worker extension bundles, and creates `api-review-<version>.vsix` in
+and web-worker extension bundles, and creates `azure-api-review-<version>.vsix` in
 the repository root. VSIX files are ignored by Git.
 
 Install the generated package from the command line:
 
 ```sh
-code --install-extension api-review-0.0.1.vsix
+code --install-extension azure-api-review-0.0.1.vsix
 ```
 
 Alternatively, run **Extensions: Install from VSIX...** from the VS Code
