@@ -1,29 +1,17 @@
 import * as vscode from 'vscode';
+import { createDocumentationUri } from './documentation';
 import { ReviewModel } from './reviewModel';
 
 export const showDocumentationCommand = 'heaths.apiReview.showDocumentation';
 export const goToSourceCommand = 'heaths.apiReview.goToSource';
 
-// How long a `Documentation` CodeLens click keeps documentation available at its anchor.
-const requestTimeout = 30_000;
-
-interface DocumentationRequest {
-  readonly uri: string;
-  readonly version: number;
-  readonly line: number;
-  readonly character: number;
-  readonly expires: number;
-}
-
-export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.HoverProvider {
+export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
   private readonly changed = new vscode.EventEmitter<void>();
   public readonly onDidChangeCodeLenses = this.changed.event;
-  private request: DocumentationRequest | undefined;
 
   public constructor(private readonly model: ReviewModel) { }
 
   public refresh(): void {
-    this.request = undefined;
     this.changed.fire();
   }
 
@@ -52,81 +40,31 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider, vscode.H
     return codeLenses;
   }
 
-  public async provideHover(document: vscode.TextDocument, position: vscode.Position): Promise<vscode.Hover | undefined> {
-    // Documentation is shown only for the `Documentation` CodeLens and never for the code line itself.
-    const request = this.request;
-    if (request?.uri !== document.uri.toString()
-      || request.version !== document.version
-      || request.line !== position.line
-      || request.character !== position.character
-      || request.expires <= Date.now()
-      || !isRequested(document, position)) {
-      return undefined;
-    }
-
-    const entry = (await this.model.getEntries(document)).find(candidate => candidate.line === request.line + 1);
-    if (!entry?.documentation) {
-      return undefined;
-    }
-
-    const markdown = new vscode.MarkdownString();
-    markdown.isTrusted = false;
-    markdown.appendCodeblock(entry.documentation.join('\n'), entry.language);
-    return new vscode.Hover(markdown, new vscode.Range(position, position));
-  }
-
   public async showDocumentation(argument: { uri: string; line: number }): Promise<void> {
     const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(argument.uri));
-    const entries = await this.model.getEntries(document);
-    if (!entries.some(entry => entry.line === argument.line && entry.documentation)) {
+    const entry = (await this.model.getEntries(document))
+      .find(candidate => candidate.line === argument.line && candidate.documentation);
+    if (!entry) {
+      void vscode.window.showWarningMessage('The documentation is no longer available.');
       return;
     }
 
-    const position = getHoverPosition(document, argument.line);
-    if (!position) {
-      return;
-    }
-
-    this.request = {
-      uri: document.uri.toString(),
-      version: document.version,
-      line: position.line,
-      character: position.character,
-      expires: Date.now() + requestTimeout,
-    };
-
+    // VS Code renders the peek widget below the declaration, so it never obscures the CodeLens
+    // and behaves like the built-in peek actions.
+    const position = document.lineAt(entry.line).range.start;
     const editor = await vscode.window.showTextDocument(document);
     editor.selection = new vscode.Selection(position, position);
-    editor.revealRange(new vscode.Range(position, document.lineAt(argument.line).range.end));
-    await vscode.commands.executeCommand('editor.action.showHover');
+
+    const target = createDocumentationUri(document.uri, entry.line, entry.language);
+    const location = new vscode.Location(target, new vscode.Position(0, 0));
+    await vscode.commands.executeCommand(
+      'editor.action.peekLocations',
+      document.uri,
+      position,
+      [location],
+      'peek',
+    );
   }
-}
-
-/**
- * Gets the zero-width position anchoring documentation for `line` under the `Documentation`
- * CodeLens rendered for it, or `undefined` if there is no row to anchor to.
- *
- * VS Code renders CodeLenses on a virtual row directly above the declaration at the
- * declaration's indentation, and has no API to attach a hover to that row. Anchoring
- * documentation to the same column on the preceding line keeps it aligned under the
- * `Documentation` CodeLens - however long the preceding line is - and lets VS Code render
- * it above or below, wherever there is space, without obscuring the CodeLens.
- */
-export function getHoverPosition(document: vscode.TextDocument, line: number): vscode.Position | undefined {
-  if (line <= 0 || line >= document.lineCount) {
-    return undefined;
-  }
-
-  const character = document.lineAt(line).firstNonWhitespaceCharacterIndex;
-  return document.validatePosition(new vscode.Position(line - 1, character));
-}
-
-function isRequested(document: vscode.TextDocument, position: vscode.Position): boolean {
-  // The request remains valid only while the cursor stays where the command placed it,
-  // so moving or clicking elsewhere dismisses the documentation.
-  const editor = vscode.window.activeTextEditor;
-  return editor?.document.uri.toString() === document.uri.toString()
-    && editor.selection.active.isEqual(position);
 }
 
 export async function goToSource(

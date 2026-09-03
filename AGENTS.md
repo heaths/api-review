@@ -17,9 +17,12 @@
   and requires a mapping on the exact generated line.
 - `reviewModel.ts` combines and caches metadata. Invalidate it on API edits and
   refresh discovery when configuration, workspace folders, or artifacts change.
-- Native Markdown CodeLens and hover behavior lives in `codeLensProvider.ts`.
-  CodeLens tooltips are plain text; rich docs use an untrusted `MarkdownString`
-  in VS Code's native hover. Do not introduce a webview for this workflow.
+- Native Markdown CodeLens behavior lives in `codeLensProvider.ts`. CodeLens
+  tooltips are short plain text describing the action. `documentation.ts` serves
+  doc comments as read-only virtual documents that the `Documentation` CodeLens
+  opens with `editor.action.peekLocations`, so the peek widget renders below the
+  declaration and never obscures the CodeLens. Do not introduce a webview or a
+  hover for this workflow.
 
 ## Conventions
 
