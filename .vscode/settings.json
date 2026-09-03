@@ -5,6 +5,16 @@
   "search.exclude": {
     "dist": true
   },
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "file": ".github/instructions/conventional-commits.instructions.md"
+    }
+  ],
+  "github.copilot.chat.pullRequestDescriptionGeneration.instructions": [
+    {
+      "file": ".github/instructions/conventional-commits.instructions.md"
+    }
+  ],
   "heaths.apiReview.files.include": [
     "**/API.md"
   ],
