@@ -96,8 +96,8 @@ pnpm run package:vsix
 ```
 
 The command runs the standard `vscode:prepublish` lifecycle, builds the Node.js
-and web-worker extension bundles, and creates `azure-api-review-<version>.vsix` in
-the repository root. VSIX files are ignored by Git.
+and web-worker extension bundles, and creates `azure-api-review-<version>.vsix`
+in the repository root. VSIX files are ignored by Git.
 
 Install the generated package from the command line:
 

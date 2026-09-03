@@ -22,6 +22,8 @@ CodeLens actions appear above the declaration:
 Actions are omitted when the corresponding comment patch or source mapping is
 missing or does not map unambiguously to the declaration.
 
+[![Watch the Azure API Review demo](https://img.youtube.com/vi/U9ZKXLJRsUY/hqdefault.jpg)](https://youtu.be/U9ZKXLJRsUY)
+
 ## Configure Repositories
 
 The defaults support repositories that generate `api/API.md` together with
@@ -57,6 +59,24 @@ Related-file patterns support file-context variables such as `${file}`,
 `${fileDirname}`, and `${workspaceFolder}`. Environment, command, input,
 selection, and configuration variables are intentionally unsupported so path
 resolution remains deterministic in web and virtual workspaces.
+
+### Additional Configuration
+
+Edits to API review files like `API.md` can disable code lenses.
+To mitigate possible changes to review files, you should consider configuring
+your workspace's `.vscode/settings.json` to treat default or custom review files
+as read-only:
+
+```json
+{
+  "files.readonlyInclude": {
+    "**/API.md": true,
+    "**/API.comments.diff": true,
+    "**/API.comments.patch": true,
+    "**/API.md.map": true
+  }
+}
+```
 
 ## Contributing
 
