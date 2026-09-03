@@ -131,8 +131,9 @@ hosts run bundles built from the same browser-safe source entry point.
   path APIs.
 - Test URI-based behavior with virtual schemes and multi-root workspaces where
   practical.
-- Keep rich documentation in VS Code's native Markdown hover. Do not introduce
-  a webview for the existing CodeLens workflow.
+- Keep rich documentation in VS Code's native peek widget, backed by a read-only
+  virtual document. Do not introduce a webview or a hover for the existing
+  CodeLens workflow.
 
 See [AGENTS.md](AGENTS.md) for the concise architecture and repository
 conventions reference.

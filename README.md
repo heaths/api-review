@@ -12,8 +12,10 @@ workspaces using VS Code's virtual workspace file system.
 Open a configured API Markdown file. For declarations with review metadata,
 CodeLens actions appear above the declaration:
 
-- **Documentation** opens a native Markdown hover containing extracted doc
-  comments. VS Code provides scrolling for long content.
+- **Documentation** opens the extracted doc comments in a peek widget, like the
+  built-in peek actions. VS Code renders the widget inline below the declaration,
+  so it never obscures the CodeLens, and provides scrolling for long content.
+  Press `Escape` to close it.
 - **Go to source** opens the original source file and selects the mapped
   location.
 
