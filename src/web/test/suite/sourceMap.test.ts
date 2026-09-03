@@ -9,12 +9,12 @@ suite('Source map', () => {
     generator.addMapping({
       generated: { line: 4, column: 0 },
       original: { line: 4, column: 0 },
-      source: '../src/lib.rs',
+      source: 'src/lib.rs',
     });
 
     const location = resolveOriginalLocation(
       generator.toString(),
-      vscode.Uri.parse('memfs:/crate/api/API.md.map'),
+      vscode.Uri.parse('memfs:/crate'),
       4,
       0,
     );
@@ -28,12 +28,12 @@ suite('Source map', () => {
     generator.addMapping({
       generated: { line: 3, column: 0 },
       original: { line: 1, column: 0 },
-      source: '../src/lib.rs',
+      source: 'src/lib.rs',
     });
 
     assert.strictEqual(resolveOriginalLocation(
       generator.toString(),
-      vscode.Uri.parse('memfs:/crate/api/API.md.map'),
+      vscode.Uri.parse('memfs:/crate'),
       4,
       0,
     ), undefined);

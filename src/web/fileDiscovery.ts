@@ -23,6 +23,12 @@ export async function discoverApiDocuments(): Promise<readonly ApiDocumentDescri
       for (const uri of matches) {
         documents.set(uri.toString(), { uri, folder: expanded.folder });
       }
+      const relativePattern = new vscode.RelativePattern(expanded.folder, expanded.pattern);
+      for (const document of vscode.workspace.textDocuments) {
+        if (vscode.languages.match({ pattern: relativePattern }, document) > 0) {
+          documents.set(document.uri.toString(), { uri: document.uri, folder: expanded.folder });
+        }
+      }
     }
   }
 

@@ -2,9 +2,9 @@
 
 ## Architecture
 
-- The extension has one browser entry point, `src/web/extension.ts`, bundled as
-  a single `webworker` target. Do not add Node-only APIs or a separate desktop
-  entry point.
+- The extension has one browser-safe source entry point, `src/web/extension.ts`,
+  bundled for both Node.js and `webworker` extension hosts. Do not add Node-only
+  APIs or a separate desktop source entry point.
 - Use `vscode.workspace.fs`, `findFiles`, `RelativePattern`, and `Uri` for all
   workspace I/O. Never use Node `fs`, platform path helpers, or `Uri.file`.
 - `configuration.ts`, `variables.ts`, and `fileDiscovery.ts` own resource-scoped
@@ -33,8 +33,8 @@
 
 ## Validation
 
-Run `pnpm run lint`, `pnpm run compile-web`, `pnpm test`, and
-`pnpm run package-web`. Browser tests require Chromium system dependencies.
+Run `pnpm run lint`, `pnpm run package-vsix`, and `pnpm test`. Browser tests
+require Chromium system dependencies.
 
 ## License
 

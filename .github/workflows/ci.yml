@@ -2,7 +2,8 @@ name: ci
 
 on:
   push:
-    - main
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -11,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -22,7 +24,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
-      - run: pnpm run compile-web
-      - run: pnpm run package-web
+      - run: pnpm run package-vsix
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test

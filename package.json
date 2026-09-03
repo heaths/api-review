@@ -3,6 +3,10 @@
   "displayName": "Azure API Review",
   "description": "Adds some capabilities from APIView.dev for Azure API reviews to support the new API Review Hub.",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heaths/api-review.git"
+  },
   "engines": {
     "vscode": "^1.136.0"
   },
@@ -16,6 +20,7 @@
   "activationEvents": [
     "onLanguage:markdown"
   ],
+  "main": "./dist/node/extension.js",
   "browser": "./dist/web/extension.js",
   "contributes": {
     "configuration": {
@@ -59,12 +64,13 @@
     }
   },
   "scripts": {
-    "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
+    "test": "vscode-test-web --browserType=chromium --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
     "pretest": "pnpm run compile-web",
-    "vscode:prepublish": "pnpm run package-web",
-    "compile-web": "webpack",
-    "watch-web": "webpack --watch",
-    "package-web": "webpack --mode production --devtool hidden-source-map",
+    "vscode:prepublish": "webpack --mode production --devtool hidden-source-map",
+    "compile-node": "webpack --config-name node",
+    "compile-web": "webpack --config-name web",
+    "watch-web": "webpack --config-name web --watch",
+    "package-vsix": "vsce package --no-dependencies",
     "lint": "eslint src",
     "prerun-in-browser": "pnpm run compile-web",
     "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
@@ -75,10 +81,12 @@
     "@types/vscode": "^1.136.0",
     "@types/webpack-env": "^1.18.8",
     "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^3.9.2",
     "assert": "^2.1.0",
     "eslint": "^10.5.0",
     "markdownlint-cli2": "^0.23.2",
     "mocha": "^11.7.6",
+    "playwright": "^1.62.1",
     "process": "^0.11.10",
     "ts-loader": "^9.6.2",
     "typescript": "^6.0.3",
@@ -87,7 +95,7 @@
     "webpack-cli": "^7.0.3"
   },
   "overrides": {
-    "diff": "^8.0.4",
+    "diff": "^9.0.0",
     "serialize-javascript": "^7.0.6"
   },
   "dependencies": {

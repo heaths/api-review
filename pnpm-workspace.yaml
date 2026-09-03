@@ -1,4 +1,6 @@
 allowBuilds:
   '@playwright/browser-chromium': true
+  '@vscode/vsce-sign': false
+  keytar: false
 minimumReleaseAgeExclude:
   - '@types/vscode@1.136.0'
