@@ -3,7 +3,6 @@ import {
   goToSource,
   goToSourceCommand,
   ReviewCodeLensProvider,
-  showDocumentation,
   showDocumentationCommand,
 } from './codeLensProvider';
 import { ReviewModel } from './reviewModel';
@@ -29,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     watcher,
     vscode.languages.registerCodeLensProvider(selector, provider),
     vscode.languages.registerHoverProvider(selector, provider),
-    vscode.commands.registerCommand(showDocumentationCommand, argument => showDocumentation(model, argument)),
+    vscode.commands.registerCommand(showDocumentationCommand, argument => provider.showDocumentation(argument)),
     vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('heaths.apiReview.files')) {
