@@ -3,7 +3,7 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "compile-web",
+      "script": "compile:web",
       "group": {
         "kind": "build",
         "isDefault": true
@@ -15,7 +15,7 @@
     },
     {
       "type": "npm",
-      "script": "watch-web",
+      "script": "watch:web",
       "group": "build",
       "isBackground": true,
       "problemMatcher": [

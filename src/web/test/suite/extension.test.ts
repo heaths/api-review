@@ -8,14 +8,14 @@ suite('Web Extension Test Suite', function () {
   test('activates for Markdown and registers review commands', async () => {
     const document = await vscode.workspace.openTextDocument({ language: 'markdown', content: '# API' });
     await vscode.window.showTextDocument(document);
-    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'api-review');
+    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'azure-api-review');
 
     assert.ok(extension, 'Development extension was not found');
     await extension.activate();
 
     const commands = await vscode.commands.getCommands(true);
-    assert.ok(commands.includes('heaths.apiReview.showDocumentation'));
-    assert.ok(commands.includes('heaths.apiReview.goToSource'));
+    assert.ok(commands.includes('heaths.azureApiReview.showDocumentation'));
+    assert.ok(commands.includes('heaths.azureApiReview.goToSource'));
   });
 
   test('provides review CodeLens for the API fixture', async () => {
@@ -25,7 +25,7 @@ suite('Web Extension Test Suite', function () {
     const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
-    const include = vscode.workspace.getConfiguration('heaths.apiReview.files', uri).get<string[]>('include');
+    const include = vscode.workspace.getConfiguration('heaths.azureApiReview.files', uri).get<string[]>('include');
     assert.deepStrictEqual(include, ['**/API.md']);
 
     const descriptor = (await discoverApiDocuments()).find(candidate => candidate.uri.toString() === uri.toString());
@@ -38,9 +38,9 @@ suite('Web Extension Test Suite', function () {
       uri,
     );
 
-    assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.apiReview.showDocumentation'),
+    assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.azureApiReview.showDocumentation'),
       `Documentation CodeLens missing from ${codeLenses.length} results`);
-    assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.apiReview.goToSource'),
+    assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.azureApiReview.goToSource'),
       `Source CodeLens missing from ${codeLenses.length} results`);
   });
 });

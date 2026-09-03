@@ -12,7 +12,7 @@
       "outFiles": [
         "${workspaceFolder}/dist/node/**/*.js"
       ],
-      "preLaunchTask": "npm: compile-node"
+      "preLaunchTask": "npm: compile:node"
     },
     {
       "name": "Run Web Extension",

@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { createDocumentationUri } from './documentation';
 import { ReviewModel } from './reviewModel';
 
-export const showDocumentationCommand = 'heaths.apiReview.showDocumentation';
-export const goToSourceCommand = 'heaths.apiReview.goToSource';
+export const showDocumentationCommand = 'heaths.azureApiReview.showDocumentation';
+export const goToSourceCommand = 'heaths.azureApiReview.goToSource';
 
 export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
   private readonly changed = new vscode.EventEmitter<void>();

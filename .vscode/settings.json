@@ -21,7 +21,7 @@
       "file": ".github/instructions/commits.instructions.md"
     }
   ],
-  "heaths.apiReview.files.include": [
+  "heaths.azureApiReview.files.include": [
     "**/API.md"
   ],
   "js/ts.tsc.autoDetect": "off"

@@ -36,7 +36,7 @@ suite('Documentation peek', function () {
 
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
-    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'api-review');
+    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'azure-api-review');
     assert.ok(extension, 'Development extension was not found');
     await extension.activate();
 
@@ -44,11 +44,11 @@ suite('Documentation peek', function () {
       'vscode.executeCodeLensProvider',
       uri,
     );
-    const lens = codeLenses.find(candidate => candidate.command?.command === 'heaths.apiReview.showDocumentation');
+    const lens = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.showDocumentation');
     assert.ok(lens?.command?.arguments, 'Documentation CodeLens was not provided');
     assert.strictEqual(lens.command.tooltip, 'Click to show documentation');
 
-    const source = codeLenses.find(candidate => candidate.command?.command === 'heaths.apiReview.goToSource');
+    const source = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.goToSource');
     assert.strictEqual(source?.command?.tooltip, 'Navigate to declaration');
 
     const line = lens.range.start.line;
@@ -70,7 +70,7 @@ suite('Documentation peek', function () {
     );
 
     // The command opens the peek widget and leaves the declaration selected.
-    await vscode.commands.executeCommand('heaths.apiReview.showDocumentation', ...lens.command.arguments);
+    await vscode.commands.executeCommand('heaths.azureApiReview.showDocumentation', ...lens.command.arguments);
     assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), uri.toString());
     assert.strictEqual(vscode.window.activeTextEditor?.selection.active.line, line);
   });

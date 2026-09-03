@@ -1,17 +1,27 @@
 {
-  "name": "api-review",
+  "publisher": "heaths",
+  "name": "azure-api-review",
+  "version": "0.1.0",
+  "preview": true,
   "displayName": "Azure API Review",
   "description": "Adds some capabilities from APIView.dev for Azure API reviews to support the new API Review Hub.",
-  "version": "0.0.1",
+  "icon": "assets/icon.png",
+  "license": "MIT",
+  "homepage": "https://github.com/heaths/api-review",
   "repository": {
     "type": "git",
     "url": "https://github.com/heaths/api-review.git"
   },
-  "engines": {
-    "vscode": "^1.136.0"
+  "bugs": {
+    "url": "https://github.com/heaths/api-review/issues"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "azure",
+    "api",
+    "review"
   ],
   "extensionKind": [
     "workspace",
@@ -26,7 +36,7 @@
     "configuration": {
       "title": "Azure API Review",
       "properties": {
-        "heaths.apiReview.files.include": {
+        "heaths.azureApiReview.files.include": {
           "type": "array",
           "scope": "resource",
           "default": [
@@ -37,7 +47,7 @@
           },
           "description": "Workspace-relative API Markdown glob patterns. Supports `${workspaceFolder}` and `${workspaceFolder:<name>}` variables."
         },
-        "heaths.apiReview.files.comments": {
+        "heaths.azureApiReview.files.comments": {
           "type": "array",
           "scope": "resource",
           "default": [
@@ -49,7 +59,7 @@
           },
           "description": "Ordered comment patch patterns resolved relative to each API Markdown file. Supports file-context variables like `${fileBasename}`."
         },
-        "heaths.apiReview.files.sourceMaps": {
+        "heaths.azureApiReview.files.sourceMaps": {
           "type": "array",
           "scope": "resource",
           "default": [
@@ -63,17 +73,12 @@
       }
     }
   },
-  "scripts": {
-    "test": "vscode-test-web --browserType=chromium --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
-    "pretest": "pnpm run compile-web",
-    "vscode:prepublish": "webpack --mode production --devtool hidden-source-map",
-    "compile-node": "webpack --config-name node",
-    "compile-web": "webpack --config-name web",
-    "watch-web": "webpack --config-name web --watch",
-    "package-vsix": "vsce package --no-dependencies",
-    "lint": "eslint src",
-    "prerun-in-browser": "pnpm run compile-web",
-    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
+  "engines": {
+    "vscode": "^1.136.0"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "source-map-js": "^1.2.1"
   },
   "devDependencies": {
     "@types/assert": "^1.5.11",
@@ -88,6 +93,7 @@
     "mocha": "^11.7.6",
     "playwright": "^1.62.1",
     "process": "^0.11.10",
+    "sharp": "^0.35.4",
     "ts-loader": "^9.6.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
@@ -98,8 +104,22 @@
     "diff": "^9.0.0",
     "serialize-javascript": "^7.0.6"
   },
-  "dependencies": {
-    "diff": "^9.0.0",
-    "source-map-js": "^1.2.1"
+  "scripts": {
+    "test": "vscode-test-web --browserType=chromium --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
+    "pretest": "pnpm run compile:web",
+    "vscode:prepublish": "pnpm run compile -- --mode production --devtool hidden-source-map",
+    "generate:icon": "node scripts/generate-icon.mjs",
+    "precompile": "pnpm run generate:icon",
+    "compile": "webpack",
+    "precompile:node": "pnpm run generate:icon",
+    "compile:node": "webpack --config-name node",
+    "precompile:web": "pnpm run generate:icon",
+    "compile:web": "webpack --config-name web",
+    "prewatch:web": "pnpm run generate:icon",
+    "watch:web": "webpack --config-name web --watch",
+    "package:vsix": "vsce package --no-dependencies",
+    "lint": "eslint src",
+    "prerun-in-browser": "pnpm run compile:web",
+    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
   }
 }

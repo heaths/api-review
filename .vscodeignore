@@ -1,7 +1,9 @@
 .github/**
 .vscode/**
 .vscode-test-web/**
+assets/icon.svg
 src/**
+scripts/**
 out/**
 node_modules/**
 dist/**/test/**

@@ -29,14 +29,14 @@ adjacent patch and source-map files:
 
 ```json
 {
-  "heaths.apiReview.files.include": [
+  "heaths.azureApiReview.files.include": [
     "**/api/API.md"
   ],
-  "heaths.apiReview.files.comments": [
+  "heaths.azureApiReview.files.comments": [
     "API.comments.diff",
     "API.comments.patch"
   ],
-  "heaths.apiReview.files.sourceMaps": [
+  "heaths.azureApiReview.files.sourceMaps": [
     "API.md.map"
   ]
 }
@@ -44,12 +44,12 @@ adjacent patch and source-map files:
 
 Configure these settings at workspace or workspace-folder scope:
 
-- `heaths.apiReview.files.include` contains workspace-relative API Markdown
+- `heaths.azureApiReview.files.include` contains workspace-relative API Markdown
   glob patterns. It supports `${workspaceFolder}` and
   `${workspaceFolder:<name>}`.
-- `heaths.apiReview.files.comments` contains ordered glob candidates relative
+- `heaths.azureApiReview.files.comments` contains ordered glob candidates relative
   to each matched API file. The first existing file is used.
-- `heaths.apiReview.files.sourceMaps` follows the same ordered, relative lookup
+- `heaths.azureApiReview.files.sourceMaps` follows the same ordered, relative lookup
   rules for source maps.
 
 Related-file patterns support file-context variables such as `${file}`,
