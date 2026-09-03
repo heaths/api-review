@@ -31,7 +31,7 @@
   `src/web/test/suite` and are discovered by the existing webpack context.
 - Test virtual URI schemes and multi-root behavior, not only local file paths.
 - Write commit messages and pull request titles and descriptions as described in
-  `.github/instructions/conventional-commits.instructions.md`.
+  `.github/instructions/commits.instructions.md`.
 - Keep dependency and Playwright caching in sync across workflows, including
   `.github/workflows/ci.yml` and `.github/workflows/copilot-setup-steps.yml`,
   so they use the same cache paths and keys and can reuse the same caches.

@@ -7,12 +7,12 @@
   },
   "github.copilot.chat.commitMessageGeneration.instructions": [
     {
-      "file": ".github/instructions/conventional-commits.instructions.md"
+      "file": ".github/instructions/commits.instructions.md"
     }
   ],
   "github.copilot.chat.pullRequestDescriptionGeneration.instructions": [
     {
-      "file": ".github/instructions/conventional-commits.instructions.md"
+      "file": ".github/instructions/commits.instructions.md"
     }
   ],
   "heaths.apiReview.files.include": [

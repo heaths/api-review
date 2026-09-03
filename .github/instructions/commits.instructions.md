@@ -4,7 +4,7 @@ description: Required rules for writing commit messages and pull request titles 
 
 # Commit and pull request instructions
 
-Write commit messages and pull request titles as [Conventional Commits](https://git-cliff.org/docs/configuration/git#conventional_commits):
+Write commit messages and pull request titles as [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```text
 <type>(<optional scope>): <description>
