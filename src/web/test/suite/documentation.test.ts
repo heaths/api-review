@@ -36,6 +36,9 @@ suite('Documentation peek', function () {
 
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
+    const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'api-review');
+    assert.ok(extension, 'Development extension was not found');
+    await extension.activate();
 
     const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
       'vscode.executeCodeLensProvider',
@@ -48,6 +51,12 @@ suite('Documentation peek', function () {
     const source = codeLenses.find(candidate => candidate.command?.command === 'heaths.apiReview.goToSource');
     assert.strictEqual(source?.command?.tooltip, 'Navigate to declaration');
 
+    const line = lens.range.start.line;
+    const target = createDocumentationUri(uri, line, 'rust');
+    const peeked = await vscode.workspace.openTextDocument(target);
+    const documentation = peeked.getText().trim();
+    assert.ok(documentation, 'The peeked document should contain the extracted doc comments');
+
     // Documentation is never rendered as a hover, so it can no longer obscure the CodeLens.
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
       'vscode.executeHoverProvider',
@@ -56,14 +65,9 @@ suite('Documentation peek', function () {
     );
     assert.ok(
       !hovers.some(hover => hover.contents.some(content =>
-        (typeof content === 'string' ? content : content.value).includes('///'))),
+        (typeof content === 'string' ? content : content.value).includes(documentation))),
       'Documentation should not be shown as a hover',
     );
-
-    const line = lens.range.start.line;
-    const target = createDocumentationUri(uri, line, 'rust');
-    const peeked = await vscode.workspace.openTextDocument(target);
-    assert.ok(peeked.getText().includes('///'), 'The peeked document should contain the extracted doc comments');
 
     // The command opens the peek widget and leaves the declaration selected.
     await vscode.commands.executeCommand('heaths.apiReview.showDocumentation', ...lens.command.arguments);

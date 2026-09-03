@@ -2,6 +2,12 @@
   "files.exclude": {
     "dist": false
   },
+  "files.readonlyInclude": {
+    "**/API.md": true,
+    "**/API.comments.diff": true,
+    "**/API.comments.patch": true,
+    "**/API.md.map": true
+  },
   "search.exclude": {
     "dist": true
   },
