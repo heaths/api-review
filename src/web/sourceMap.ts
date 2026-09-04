@@ -3,11 +3,12 @@ import * as vscode from 'vscode';
 
 export function resolveOriginalLocation(
   sourceMapText: string,
-  workspaceFolderUri: vscode.Uri,
+  repositoryRootUri: vscode.Uri,
   generatedLine: number,
   generatedColumn: number,
 ): vscode.Location | undefined {
   const rawSourceMap = JSON.parse(sourceMapText) as RawSourceMap;
+  rawSourceMap.sourceRoot = repositoryRootUri.toString();
   const consumer = new SourceMapConsumer(rawSourceMap);
   let hasMappingOnLine = false;
 
@@ -26,10 +27,10 @@ export function resolveOriginalLocation(
     return undefined;
   }
 
-  if (/^[a-z][a-z0-9+.-]*:/i.test(original.source) || original.source.startsWith('/')) {
+  const sourceUri = vscode.Uri.parse(original.source);
+  if (sourceUri.scheme !== repositoryRootUri.scheme) {
     return undefined;
   }
 
-  const sourceUri = vscode.Uri.joinPath(workspaceFolderUri, ...original.source.split('/'));
   return new vscode.Location(sourceUri, new vscode.Position(original.line - 1, original.column));
 }

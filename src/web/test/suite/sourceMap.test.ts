@@ -23,6 +23,45 @@ suite('Source map', () => {
     assert.deepStrictEqual(location?.range.start, new vscode.Position(3, 0));
   });
 
+  test('overrides sourceRoot with a virtual repository root', () => {
+    const generator = new SourceMapGenerator({
+      sourceRoot: 'https://example.invalid/wrong/root',
+    });
+    generator.addMapping({
+      generated: { line: 1, column: 0 },
+      original: { line: 2, column: 3 },
+      source: 'src/client.ts',
+    });
+
+    const location = resolveOriginalLocation(
+      generator.toString(),
+      vscode.Uri.parse('memfs:/workspace/repository'),
+      1,
+      0,
+    );
+
+    assert.strictEqual(location?.uri.toString(), 'memfs:/workspace/repository/src/client.ts');
+    assert.deepStrictEqual(location?.range.start, new vscode.Position(1, 3));
+  });
+
+  test('overrides sourceRoot with a physical repository root', () => {
+    const generator = new SourceMapGenerator({ sourceRoot: '/wrong/root' });
+    generator.addMapping({
+      generated: { line: 1, column: 0 },
+      original: { line: 1, column: 0 },
+      source: 'src/client.ts',
+    });
+
+    const location = resolveOriginalLocation(
+      generator.toString(),
+      vscode.Uri.file('/workspace/repository'),
+      1,
+      0,
+    );
+
+    assert.strictEqual(location?.uri.toString(), 'file:///workspace/repository/src/client.ts');
+  });
+
   test('does not leak a mapping from a previous generated line', () => {
     const generator = new SourceMapGenerator();
     generator.addMapping({
