@@ -23,7 +23,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
       if (entry.documentation) {
         codeLenses.push(new vscode.CodeLens(range, {
           command: showDocumentationCommand,
-          title: '$(eye) Documentation',
+          title: '$(file-text) Documentation',
           tooltip: 'Click to show documentation',
           arguments: [argument],
         }));
