@@ -20,9 +20,19 @@
 - Native Markdown CodeLens behavior lives in `codeLensProvider.ts`. CodeLens
   tooltips are short plain text describing the action. `documentation.ts` serves
   doc comments as read-only virtual documents that the `Documentation` CodeLens
-  opens with `editor.action.peekLocations`, so the peek widget renders below the
-  declaration and never obscures the CodeLens. Do not introduce a webview or a
-  hover for this workflow.
+  opens through a transient definition provider and `editor.action.peekDefinition`,
+  so editor associations cannot replace the source text editor. Dispose the
+  provider after each peek. Do not introduce a webview or a hover for this workflow.
+- The custom Markdown editor loads CSS declared by installed extensions through
+  `markdown.previewStyles`, after its own base stylesheet. Resolve contributions
+  from each extension's `extensionUri` so desktop, remote, and web hosts work.
+- Preview extensibility is CSS-only. Do not load `markdown.styles`, execute
+  `markdown.previewScripts`, or activate `markdown.markdownItPlugins` in the
+  custom editor.
+- Keep the custom editor selector broad enough for all Markdown files. Repository
+  `workbench.editorAssociations` settings choose which configured API files open
+  in it by default; the manifest selector cannot follow resource-scoped include
+  settings.
 
 ## Conventions
 

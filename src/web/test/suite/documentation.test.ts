@@ -35,7 +35,11 @@ suite('Documentation peek', function () {
     assert.notStrictEqual(uri.scheme, 'file', 'Test workspace should use a virtual URI scheme');
 
     const document = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'default');
+    assert.ok(
+      vscode.window.tabGroups.activeTabGroup.activeTab?.input instanceof vscode.TabInputText,
+      'API fixture should start in the default text editor',
+    );
     const extension = vscode.extensions.all.find(candidate => candidate.packageJSON.name === 'azure-api-review');
     assert.ok(extension, 'Development extension was not found');
     await extension.activate();
@@ -57,6 +61,10 @@ suite('Documentation peek', function () {
     const documentation = peeked.getText().trim();
     assert.ok(documentation, 'The peeked document should contain the extracted doc comments');
 
+    // The command opens the peek widget without allowing the editor association to reopen the
+    // declaration in the Azure API Review custom editor.
+    await vscode.commands.executeCommand('heaths.azureApiReview.showDocumentation', ...lens.command.arguments);
+
     // Documentation is never rendered as a hover, so it can no longer obscure the CodeLens.
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
       'vscode.executeHoverProvider',
@@ -69,9 +77,34 @@ suite('Documentation peek', function () {
       'Documentation should not be shown as a hover',
     );
 
-    // The command opens the peek widget and leaves the declaration selected.
-    await vscode.commands.executeCommand('heaths.azureApiReview.showDocumentation', ...lens.command.arguments);
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    assert.ok(
+      input instanceof vscode.TabInputText,
+      `Documentation should remain in the text editor; active input was ${describeTabInput(input)}`,
+    );
+    assert.strictEqual(input.uri.toString(), uri.toString());
     assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), uri.toString());
     assert.strictEqual(vscode.window.activeTextEditor?.selection.active.line, line);
+
+    const definitions = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+      'vscode.executeDefinitionProvider',
+      uri,
+      lens.range.start,
+    );
+    assert.ok(
+      !definitions?.some(definition =>
+        (definition instanceof vscode.Location ? definition.uri : definition.targetUri).scheme === documentationScheme),
+      'Documentation definition provider should be disposed after the peek opens',
+    );
   });
 });
+
+function describeTabInput(input: unknown): string {
+  if (input instanceof vscode.TabInputCustom) {
+    return `custom editor ${input.viewType} for ${input.uri.toString()}`;
+  }
+  if (input instanceof vscode.TabInputText) {
+    return `text editor for ${input.uri.toString()}`;
+  }
+  return input?.constructor.name ?? String(input);
+}

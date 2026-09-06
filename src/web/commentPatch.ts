@@ -1,4 +1,4 @@
-import { parsePatch } from 'diff';
+import { applyPatch, parsePatch } from 'diff';
 
 export interface DocumentationAnchor {
   readonly line: number;
@@ -7,6 +7,11 @@ export interface DocumentationAnchor {
 }
 
 const documentationLine = /^\s*(?:\/\/[!/]|\/\*\*?|\*\/?|#!?\[doc\s*=|#|--)/;
+
+export function applyCommentsPatch(source: string, patch: string): string | undefined {
+  const result = applyPatch(source, patch, { fuzzFactor: 0 });
+  return result === false ? undefined : result;
+}
 
 export function extractDocumentationAnchors(patch: string): DocumentationAnchor[] {
   const anchors: DocumentationAnchor[] = [];

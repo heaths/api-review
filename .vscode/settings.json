@@ -8,6 +8,12 @@
     "**/API.comments.patch": true,
     "**/API.md.map": true
   },
+  "heaths.azureApiReview.files.include": [
+    "**/API.md"
+  ],
+  "workbench.editorAssociations": {
+    "**/API.md": "heaths.azureApiReview.preview"
+  },
   "search.exclude": {
     "dist": true
   },
@@ -20,9 +26,6 @@
     {
       "file": ".github/instructions/commits.instructions.md"
     }
-  ],
-  "heaths.azureApiReview.files.include": [
-    "**/API.md"
   ],
   "js/ts.tsc.autoDetect": "off"
 }

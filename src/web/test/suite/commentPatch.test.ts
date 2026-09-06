@@ -1,7 +1,32 @@
 import * as assert from 'assert';
-import { extractDocumentationAnchors } from '../../commentPatch';
+import { applyCommentsPatch, extractDocumentationAnchors } from '../../commentPatch';
 
 suite('Comment patch', () => {
+  test('applies inserted comments in memory', () => {
+    const source = 'pub fn hello();\n';
+    const patch = [
+      '@@ -1,1 +1,2 @@',
+      '+/// Prints a greeting.',
+      ' pub fn hello();',
+    ].join('\n');
+
+    assert.strictEqual(applyCommentsPatch(source, patch), [
+      '/// Prints a greeting.',
+      'pub fn hello();',
+      '',
+    ].join('\n'));
+  });
+
+  test('rejects a patch whose context does not match', () => {
+    const patch = [
+      '@@ -1,1 +1,2 @@',
+      ' missing();',
+      '+/// Documentation.',
+    ].join('\n');
+
+    assert.strictEqual(applyCommentsPatch('actual();\n', patch), undefined);
+  });
+
   test('anchors contiguous Rust documentation to the following declaration', () => {
     const patch = [
       '--- a/src/lib.rs',

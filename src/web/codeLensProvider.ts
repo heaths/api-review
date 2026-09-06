@@ -52,18 +52,29 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
     // VS Code renders the peek widget below the declaration, so it never obscures the CodeLens
     // and behaves like the built-in peek actions.
     const position = document.lineAt(entry.line).range.start;
-    const editor = await vscode.window.showTextDocument(document);
+    const activeEditor = vscode.window.activeTextEditor;
+    const editor = activeEditor?.document.uri.toString() === document.uri.toString()
+      ? activeEditor
+      : await vscode.window.showTextDocument(document);
     editor.selection = new vscode.Selection(position, position);
 
     const target = createDocumentationUri(document.uri, entry.line, entry.language);
     const location = new vscode.Location(target, new vscode.Position(0, 0));
-    await vscode.commands.executeCommand(
-      'editor.action.peekLocations',
-      document.uri,
-      position,
-      [location],
-      'peek',
+    const registration = vscode.languages.registerDefinitionProvider(
+      { scheme: document.uri.scheme, language: document.languageId },
+      {
+        provideDefinition(candidate, requestedPosition) {
+          return candidate.uri.toString() === document.uri.toString() && requestedPosition.isEqual(position)
+            ? location
+            : undefined;
+        },
+      },
     );
+    try {
+      await vscode.commands.executeCommand('editor.action.peekDefinition');
+    } finally {
+      registration.dispose();
+    }
   }
 }
 

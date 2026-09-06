@@ -33,6 +33,71 @@
   "main": "./dist/node/extension.js",
   "browser": "./dist/web/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "heaths.azureApiReview.preview.showComments",
+        "title": "Show Comments",
+        "category": "Azure API Review",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.hideComments",
+        "title": "Hide Comments",
+        "category": "Azure API Review",
+        "icon": "$(collapse-all)"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.reopenAsText",
+        "title": "Reopen as source file",
+        "category": "Azure API Review",
+        "icon": "$(file-code)"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "heaths.azureApiReview.preview",
+        "displayName": "Azure API Review",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "heaths.azureApiReview.preview.showComments",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && !heaths.azureApiReview.preview.commentsVisible",
+          "group": "navigation@1"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.hideComments",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && heaths.azureApiReview.preview.commentsVisible",
+          "group": "navigation@1"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.reopenAsText",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "heaths.azureApiReview.preview.showComments",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.hideComments",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.reopenAsText",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "Azure API Review",
       "properties": {
@@ -78,10 +143,13 @@
   },
   "dependencies": {
     "diff": "^9.0.0",
+    "highlight.js": "^11.12.0",
+    "markdown-it": "^15.0.1",
     "source-map-js": "^1.2.1"
   },
   "devDependencies": {
     "@types/assert": "^1.5.11",
+    "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/vscode": "^1.136.0",
     "@types/webpack-env": "^1.18.8",
