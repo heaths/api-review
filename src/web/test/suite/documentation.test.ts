@@ -31,7 +31,7 @@ suite('Documentation peek', function () {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
-    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
+    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/fixtures/API.md');
     assert.notStrictEqual(uri.scheme, 'file', 'Test workspace should use a virtual URI scheme');
 
     const document = await vscode.workspace.openTextDocument(uri);

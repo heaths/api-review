@@ -1,0 +1,5 @@
+--- a/API.md
++++ b/API.md
+@@ -4,1 +4,2 @@
++/// Prints a greeting.
+ pub fn hello(target: Option<String>);
