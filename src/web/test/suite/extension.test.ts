@@ -39,7 +39,7 @@ suite('Web Extension Test Suite', function () {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
-    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
+    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/fixtures/API.md');
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
     const include = vscode.workspace.getConfiguration('heaths.azureApiReview.files', uri).get<string[]>('include');
@@ -65,7 +65,7 @@ suite('Web Extension Test Suite', function () {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
-    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
+    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/fixtures/API.md');
     const document = await vscode.workspace.openTextDocument(uri);
     const output = vscode.window.createOutputChannel('Azure API Review Test');
     const model = new ReviewModel(output);
@@ -75,8 +75,8 @@ suite('Web Extension Test Suite', function () {
       const preview = await model.getPreviewContent(document);
 
       assert.strictEqual(preview.hasCommentsPatch, true);
-      assert.ok(preview.markdown.includes('//! # Azure Core shared client library for Rust'));
-      assert.ok(!document.getText().includes('//! # Azure Core shared client library for Rust'));
+      assert.ok(preview.markdown.includes('/// Prints a greeting.'));
+      assert.ok(!document.getText().includes('/// Prints a greeting.'));
     } finally {
       output.dispose();
     }
@@ -86,7 +86,7 @@ suite('Web Extension Test Suite', function () {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
-    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
+    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/fixtures/API.md');
     await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
 
     const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
@@ -98,7 +98,7 @@ suite('Web Extension Test Suite', function () {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
-    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/examples/API.md');
+    const uri = vscode.Uri.joinPath(folder.uri, 'src/web/test/fixtures/API.md');
     await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
     await vscode.commands.executeCommand(reopenPreviewAsTextCommand);
 
