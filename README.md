@@ -24,6 +24,21 @@ missing or does not map unambiguously to the declaration.
 
 [![Watch the Azure API Review demo](https://img.youtube.com/vi/U9ZKXLJRsUY/hqdefault.jpg)](https://youtu.be/U9ZKXLJRsUY)
 
+### Custom Markdown Preview
+
+Use **Reopen Editor With** > **Azure API Review** to render an API Markdown file
+with its configured comments patch applied in memory. Comments are hidden by
+default; use the expand-all and collapse-all actions in the editor title to show
+or hide all comments. The preview is available for any Markdown file, and the
+source Markdown file is never modified.
+
+The custom preview applies CSS contributed by installed extensions through
+`markdown.previewStyles`. It does not load contributed preview scripts,
+Markdown-it plugins, or styles from the `markdown.styles` setting.
+
+The standard Markdown editor remains available and continues to provide the
+Documentation and Go to source CodeLens actions described above.
+
 ## Configure Repositories
 
 The defaults support repositories that generate `api/API.md` together with
@@ -59,6 +74,23 @@ Related-file patterns support file-context variables such as `${file}`,
 `${fileDirname}`, and `${workspaceFolder}`. Environment, command, input,
 selection, and configuration variables are intentionally unsupported so path
 resolution remains deterministic in web and virtual workspaces.
+
+To open configured API files in the custom preview by default, add a matching
+editor association to the repository's `.vscode/settings.json`. Keep the glob in
+sync with `heaths.azureApiReview.files.include`:
+
+```json
+{
+  "heaths.azureApiReview.files.include": [
+    "**/api/API.md"
+  ],
+  "workbench.editorAssociations": {
+    "**/api/API.md": "heaths.azureApiReview.preview"
+  }
+}
+```
+
+Repositories can replace both occurrences with their own API Markdown pattern.
 
 ### Additional Configuration
 

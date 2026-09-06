@@ -6,6 +6,13 @@ import {
   showDocumentationCommand,
 } from './codeLensProvider';
 import { DocumentationProvider, documentationScheme } from './documentation';
+import {
+  hidePreviewCommentsCommand,
+  reopenPreviewAsTextCommand,
+  ReviewMarkdownPreview,
+  reviewMarkdownPreviewViewType,
+  showPreviewCommentsCommand,
+} from './markdownPreview';
 import { ReviewModel } from './reviewModel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -13,6 +20,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const model = new ReviewModel(output);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, output);
+  const preview = new ReviewMarkdownPreview(model, context.extensionUri);
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
@@ -21,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await model.refresh();
       provider.refresh();
       documentation.refresh();
+      preview.refresh();
     } catch (error) {
       output.appendLine(`Unable to discover API review files: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -29,10 +38,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     output,
     watcher,
+    vscode.window.registerCustomEditorProvider(
+      reviewMarkdownPreviewViewType,
+      preview,
+      { webviewOptions: { enableFindWidget: true } },
+    ),
     vscode.languages.registerCodeLensProvider(selector, provider),
     vscode.workspace.registerTextDocumentContentProvider(documentationScheme, documentation),
     vscode.commands.registerCommand(showDocumentationCommand, argument => provider.showDocumentation(argument)),
     vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
+    vscode.commands.registerCommand(showPreviewCommentsCommand, () => preview.showComments()),
+    vscode.commands.registerCommand(hidePreviewCommentsCommand, () => preview.hideComments()),
+    vscode.commands.registerCommand(reopenPreviewAsTextCommand, () =>
+      vscode.commands.executeCommand('reopenActiveEditorWith', 'default')),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('heaths.azureApiReview.files')) {
         void refreshDiscovery();
@@ -43,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       model.invalidate(event.document.uri);
       provider.refresh();
       documentation.refresh(event.document.uri);
+      preview.refresh(event.document.uri);
     }),
     watcher.onDidCreate(() => void refreshDiscovery()),
     watcher.onDidChange(() => void refreshDiscovery()),

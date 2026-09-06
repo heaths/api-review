@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { extractDocumentationAnchors } from './commentPatch';
+import { applyCommentsPatch, extractDocumentationAnchors } from './commentPatch';
 import { ApiDocumentDescriptor, discoverApiDocuments } from './fileDiscovery';
 import { getFencedCodeLines, mapDocumentation } from './markdown';
 import { resolveOriginalLocation } from './sourceMap';
@@ -9,6 +9,11 @@ export interface ReviewEntry {
   readonly language: string;
   readonly documentation?: readonly string[];
   readonly source?: vscode.Location;
+}
+
+export interface PreviewContent {
+  readonly markdown: string;
+  readonly hasCommentsPatch: boolean;
 }
 
 export class ReviewModel {
@@ -36,13 +41,9 @@ export class ReviewModel {
 
   public async getEntries(document: vscode.TextDocument): Promise<readonly ReviewEntry[]> {
     const key = document.uri.toString();
-    let descriptor = this.descriptors.get(key);
+    const descriptor = await this.getDescriptor(document.uri);
     if (!descriptor) {
-      await this.refresh();
-      descriptor = this.descriptors.get(key);
-      if (!descriptor) {
-        return [];
-      }
+      return [];
     }
 
     let entries = this.cache.get(key);
@@ -51,6 +52,36 @@ export class ReviewModel {
       this.cache.set(key, entries);
     }
     return entries;
+  }
+
+  public async getPreviewContent(document: vscode.TextDocument): Promise<PreviewContent> {
+    const markdown = document.getText();
+    const descriptor = await this.getDescriptor(document.uri);
+    if (!descriptor?.comments) {
+      return { markdown, hasCommentsPatch: false };
+    }
+
+    try {
+      const patch = await readText(descriptor.comments);
+      const patched = applyCommentsPatch(markdown, patch);
+      if (patched === undefined) {
+        throw new Error(`patch ${descriptor.comments.toString()} does not apply`);
+      }
+      return { markdown: patched, hasCommentsPatch: true };
+    } catch (error) {
+      this.output.appendLine(`Unable to prepare preview for ${document.uri.toString()}: ${formatError(error)}`);
+      return { markdown, hasCommentsPatch: false };
+    }
+  }
+
+  private async getDescriptor(uri: vscode.Uri): Promise<ApiDocumentDescriptor | undefined> {
+    const key = uri.toString();
+    let descriptor = this.descriptors.get(key);
+    if (!descriptor) {
+      await this.refresh();
+      descriptor = this.descriptors.get(key);
+    }
+    return descriptor;
   }
 
   private async loadEntries(
