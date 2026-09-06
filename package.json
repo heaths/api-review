@@ -1,7 +1,7 @@
 {
   "publisher": "heaths",
   "name": "azure-api-review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "preview": true,
   "displayName": "Azure API Review",
   "description": "Adds some capabilities from APIView.dev for Azure API reviews to support the new API Review Hub.",
