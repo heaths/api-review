@@ -4,5 +4,12 @@ globs:
 gitignore: true
 
 config:
-  line_length:
+  line-length:
     code_blocks: false
+
+overrides:
+- filter:
+  - CHANGELOG.md
+  combine: merge
+  config:
+    no-duplicate-heading: false
