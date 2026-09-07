@@ -1,31 +1,105 @@
 :root {
   color-scheme: light dark;
+  --preview-max-width: 980px;
+  --preview-padding-inline: 26px;
+  --preview-padding-inline-narrow: 16px;
+  --preview-padding-bottom: 40px;
+  --preview-padding-bottom-narrow: 28px;
+  --preview-line-height: 1.6;
+  --preview-heading-padding-bottom: 0.3em;
+  --preview-heading-border-width: 1px;
+  --preview-h1-font-size: 2em;
+  --preview-h2-font-size: 1.5em;
+  --preview-blockquote-padding-inline-start: 1em;
+  --preview-blockquote-border-width: 0.25em;
+  --preview-inline-code-padding-block: 0.1em;
+  --preview-inline-code-padding-inline: 0.3em;
+  --preview-inline-code-radius: 3px;
+  --preview-code-block-padding: 16px;
+  --preview-code-line-min-height: 1lh;
+  --preview-table-cell-padding-block: 6px;
+  --preview-table-cell-padding-inline: 13px;
+  --preview-hover-delay: 0.2s;
+  --preview-hover-fade-duration: 0.1s;
+  --preview-hover-gap: 8px;
+  --preview-hover-padding: 4px;
+  --preview-hover-min-margin: 8px;
+  --preview-hover-border-radius: 6px;
+  --preview-hover-border-width: 1px;
+  --preview-hover-shadow: 0 2px 8px rgb(0 0 0 / 16%);
+  --preview-hover-button-size: 28px;
+  --preview-hover-icon-size: 16px;
+  --preview-hover-focus-offset: 2px;
+  --preview-hover-background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background, var(--vscode-textCodeBlock-background)));
+  --preview-hover-foreground: var(--vscode-editorHoverWidget-foreground, var(--vscode-editor-foreground));
+  --preview-hover-border-color: var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+  --preview-hover-button-background: transparent;
+  --preview-hover-button-background-hover: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+  --preview-hover-button-background-active: var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground)));
+  --preview-hover-button-foreground: var(--preview-hover-foreground);
+  --preview-hover-button-disabled-opacity: 0.6;
+  --preview-focus-outline-color: var(--vscode-focusBorder);
+  --preview-hljs-keyword: #569cd6;
+  --preview-hljs-link: #569cd6;
+  --preview-hljs-built-in: #4ec9b0;
+  --preview-hljs-number: #b8d7a3;
+  --preview-hljs-string: #d69d85;
+  --preview-hljs-regexp: #9a5334;
+  --preview-hljs-default: #dcdcdc;
+  --preview-hljs-comment: #57a64a;
+  --preview-hljs-doctag: #608b4e;
+  --preview-hljs-meta: #9b9b9b;
+  --preview-hljs-variable: #bd63c5;
+  --preview-hljs-attribute: #9cdcfe;
+  --preview-hljs-section: gold;
+  --preview-hljs-selector: #d7ba7d;
+  --preview-hljs-addition: rgb(155 185 85);
+  --preview-hljs-deletion: rgb(255 0 0);
+  --preview-hljs-addition-background: var(--vscode-diffEditor-insertedTextBackground, rgb(155 185 85 / 20%));
+  --preview-hljs-deletion-background: var(--vscode-diffEditor-removedTextBackground, rgb(255 0 0 / 20%));
+}
+
+.vscode-light {
+  --preview-hljs-comment: #008000;
+  --preview-hljs-number: #008000;
+  --preview-hljs-variable: #008000;
+  --preview-hljs-keyword: #00f;
+  --preview-hljs-link: #00b0e8;
+  --preview-hljs-built-in: #007acc;
+  --preview-hljs-string: #a31515;
+  --preview-hljs-regexp: #a31515;
+  --preview-hljs-default: inherit;
+  --preview-hljs-doctag: #808080;
+  --preview-hljs-meta: #2b91af;
+  --preview-hljs-attribute: #f00;
+  --preview-hljs-section: #a31515;
+  --preview-hljs-selector: #00f;
 }
 
 body {
   box-sizing: border-box;
   margin: 0 auto;
-  max-width: 980px;
-  padding: 0 26px 40px;
+  max-width: var(--preview-max-width);
+  padding: 0 var(--preview-padding-inline) var(--preview-padding-bottom);
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-  line-height: 1.6;
+  line-height: var(--preview-line-height);
 }
 
 .markdown-body h1,
 .markdown-body h2 {
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  padding-bottom: var(--preview-heading-padding-bottom);
+  border-bottom: var(--preview-heading-border-width) solid var(--vscode-panel-border);
 }
 
 .markdown-body h1 {
-  font-size: 2em;
+  font-size: var(--preview-h1-font-size);
 }
 
 .markdown-body h2 {
-  font-size: 1.5em;
+  font-size: var(--preview-h2-font-size);
 }
 
 .markdown-body a {
@@ -38,9 +112,9 @@ body {
 
 .markdown-body blockquote {
   margin-left: 0;
-  padding-left: 1em;
+  padding-left: var(--preview-blockquote-padding-inline-start);
   color: var(--vscode-descriptionForeground);
-  border-left: 0.25em solid var(--vscode-textBlockQuote-border);
+  border-left: var(--preview-blockquote-border-width) solid var(--vscode-textBlockQuote-border);
 }
 
 .markdown-body code {
@@ -49,14 +123,14 @@ body {
 }
 
 .markdown-body :not(pre) > code {
-  padding: 0.1em 0.3em;
+  padding: var(--preview-inline-code-padding-block) var(--preview-inline-code-padding-inline);
   background: var(--vscode-textCodeBlock-background);
-  border-radius: 3px;
+  border-radius: var(--preview-inline-code-radius);
 }
 
 .markdown-body pre {
   overflow: auto;
-  padding: 16px;
+  padding: var(--preview-code-block-padding);
   background: var(--vscode-textCodeBlock-background);
 }
 
@@ -67,12 +141,98 @@ body {
 
 .markdown-body pre code .code-line {
   display: block;
-  min-height: 1lh;
+  min-height: var(--preview-code-line-min-height);
 }
 
-.has-comments-patch:not(.comments-visible) .markdown-body pre code .hljs-comment,
-.has-comments-patch:not(.comments-visible) .markdown-body pre code .comment-line {
+.markdown-body pre code .preview-action-line {
+  outline: none;
+}
+
+.markdown-body pre code .preview-action-line:focus-visible {
+  outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
+  outline-offset: var(--preview-hover-focus-offset);
+}
+
+.has-comments-patch .markdown-body pre code .preview-documentation-line {
   display: none;
+}
+
+.has-comments-patch .markdown-body pre code .preview-documentation-line.preview-documentation-visible {
+  display: block;
+}
+
+#preview-hover-actions {
+  position: fixed;
+  z-index: 10;
+  display: inline-flex;
+  gap: var(--preview-hover-padding);
+  align-items: center;
+  padding: var(--preview-hover-padding);
+  color: var(--preview-hover-foreground);
+  background: var(--preview-hover-background);
+  border: var(--preview-hover-border-width) solid var(--preview-hover-border-color);
+  border-radius: var(--preview-hover-border-radius);
+  box-shadow: var(--preview-hover-shadow);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(0);
+  transition:
+    opacity var(--preview-hover-fade-duration) ease,
+    visibility 0s linear var(--preview-hover-fade-duration);
+}
+
+#preview-hover-actions.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity var(--preview-hover-fade-duration) ease,
+    visibility 0s linear 0s;
+}
+
+#preview-hover-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--preview-hover-button-size);
+  block-size: var(--preview-hover-button-size);
+  padding: 0;
+  color: var(--preview-hover-button-foreground);
+  cursor: pointer;
+  background: var(--preview-hover-button-background);
+  border: none;
+  border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
+}
+
+#preview-hover-actions button:hover {
+  background: var(--preview-hover-button-background-hover);
+}
+
+#preview-hover-actions button:focus-visible {
+  outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
+  outline-offset: var(--preview-hover-focus-offset);
+}
+
+#preview-hover-actions button:active {
+  background: var(--preview-hover-button-background-active);
+}
+
+#preview-hover-actions button[disabled] {
+  cursor: default;
+  opacity: var(--preview-hover-button-disabled-opacity);
+}
+
+#preview-hover-actions button[disabled]:hover,
+#preview-hover-actions button[disabled]:active {
+  background: var(--preview-hover-button-background);
+}
+
+#preview-hover-actions button svg {
+  inline-size: var(--preview-hover-icon-size);
+  block-size: var(--preview-hover-icon-size);
+  display: block;
+  fill: currentColor;
 }
 
 /* Keep this palette aligned with VS Code's Markdown preview media/highlight.css. */
@@ -80,32 +240,32 @@ body {
 .hljs-literal,
 .hljs-symbol,
 .hljs-name {
-  color: #569cd6;
+  color: var(--preview-hljs-keyword);
 }
 
 .hljs-link {
-  color: #569cd6;
+  color: var(--preview-hljs-link);
   text-decoration: underline;
 }
 
 .hljs-built_in,
 .hljs-type {
-  color: #4ec9b0;
+  color: var(--preview-hljs-built-in);
 }
 
 .hljs-number,
 .hljs-class {
-  color: #b8d7a3;
+  color: var(--preview-hljs-number);
 }
 
 .hljs-string,
 .hljs-meta-string {
-  color: #d69d85;
+  color: var(--preview-hljs-string);
 }
 
 .hljs-regexp,
 .hljs-template-tag {
-  color: #9a5334;
+  color: var(--preview-hljs-regexp);
 }
 
 .hljs-subst,
@@ -113,38 +273,38 @@ body {
 .hljs-title,
 .hljs-params,
 .hljs-formula {
-  color: #dcdcdc;
+  color: var(--preview-hljs-default);
 }
 
 .hljs-comment,
 .hljs-quote {
-  color: #57a64a;
+  color: var(--preview-hljs-comment);
   font-style: italic;
 }
 
 .hljs-doctag {
-  color: #608b4e;
+  color: var(--preview-hljs-doctag);
 }
 
 .hljs-meta,
 .hljs-meta-keyword,
 .hljs-tag {
-  color: #9b9b9b;
+  color: var(--preview-hljs-meta);
 }
 
 .hljs-variable,
 .hljs-template-variable {
-  color: #bd63c5;
+  color: var(--preview-hljs-variable);
 }
 
 .hljs-attr,
 .hljs-attribute,
 .hljs-builtin-name {
-  color: #9cdcfe;
+  color: var(--preview-hljs-attribute);
 }
 
 .hljs-section {
-  color: gold;
+  color: var(--preview-hljs-section);
 }
 
 .hljs-emphasis {
@@ -161,81 +321,21 @@ body {
 .hljs-selector-class,
 .hljs-selector-attr,
 .hljs-selector-pseudo {
-  color: #d7ba7d;
+  color: var(--preview-hljs-selector);
 }
 
 .hljs-addition {
   display: inline-block;
   width: 100%;
-  color: rgb(155 185 85);
-  background-color: var(--vscode-diffEditor-insertedTextBackground, rgb(155 185 85 / 20%));
+  color: var(--preview-hljs-addition);
+  background-color: var(--preview-hljs-addition-background);
 }
 
 .hljs-deletion {
   display: inline-block;
   width: 100%;
-  color: rgb(255 0 0);
-  background: var(--vscode-diffEditor-removedTextBackground, rgb(255 0 0 / 20%));
-}
-
-.vscode-light .hljs-function,
-.vscode-light .hljs-params,
-.vscode-light .hljs-number,
-.vscode-light .hljs-class {
-  color: inherit;
-}
-
-.vscode-light .hljs-comment,
-.vscode-light .hljs-quote,
-.vscode-light .hljs-number,
-.vscode-light .hljs-class,
-.vscode-light .hljs-variable {
-  color: #008000;
-}
-
-.vscode-light .hljs-keyword,
-.vscode-light .hljs-selector-tag,
-.vscode-light .hljs-name,
-.vscode-light .hljs-tag {
-  color: #00f;
-}
-
-.vscode-light .hljs-built_in,
-.vscode-light .hljs-builtin-name {
-  color: #007acc;
-}
-
-.vscode-light .hljs-string,
-.vscode-light .hljs-section,
-.vscode-light .hljs-attribute,
-.vscode-light .hljs-literal,
-.vscode-light .hljs-template-tag,
-.vscode-light .hljs-template-variable,
-.vscode-light .hljs-type {
-  color: #a31515;
-}
-
-.vscode-light .hljs-subst,
-.vscode-light .hljs-selector-attr,
-.vscode-light .hljs-selector-pseudo,
-.vscode-light .hljs-meta,
-.vscode-light .hljs-meta-keyword {
-  color: #2b91af;
-}
-
-.vscode-light .hljs-title,
-.vscode-light .hljs-doctag {
-  color: #808080;
-}
-
-.vscode-light .hljs-attr {
-  color: #f00;
-}
-
-.vscode-light .hljs-symbol,
-.vscode-light .hljs-bullet,
-.vscode-light .hljs-link {
-  color: #00b0e8;
+  color: var(--preview-hljs-deletion);
+  background: var(--preview-hljs-deletion-background);
 }
 
 .markdown-body img,
@@ -249,12 +349,12 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-  padding: 6px 13px;
-  border: 1px solid var(--vscode-panel-border);
+  padding: var(--preview-table-cell-padding-block) var(--preview-table-cell-padding-inline);
+  border: var(--preview-heading-border-width) solid var(--vscode-panel-border);
 }
 
 @media (max-width: 600px) {
   body {
-    padding: 0 16px 28px;
+    padding: 0 var(--preview-padding-inline-narrow) var(--preview-padding-bottom-narrow);
   }
 }

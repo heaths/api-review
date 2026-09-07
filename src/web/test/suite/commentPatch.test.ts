@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { applyCommentsPatch, extractDocumentationAnchors } from '../../commentPatch';
+import { applyCommentsPatch, extractDocumentationAnchors, mapPreviewLines } from '../../commentPatch';
 
 suite('Comment patch', () => {
   test('applies inserted comments in memory', () => {
@@ -84,5 +84,31 @@ suite('Comment patch', () => {
       declaration: 'last();',
       documentation: ['/// Documents last.'],
     }]);
+  });
+
+  test('maps original lines and inserted documentation to preview lines', () => {
+    const source = [
+      '# Mock API',
+      '',
+      '```rust',
+      'pub fn hello();',
+      '```',
+    ].join('\n');
+    const patch = [
+      '--- a/API.md',
+      '+++ b/API.md',
+      '@@ -4,1 +4,2 @@',
+      '+/// Prints a greeting.',
+      ' pub fn hello();',
+    ].join('\n');
+
+    assert.deepStrictEqual(mapPreviewLines(source, patch), {
+      sourceToPreview: [0, 1, 2, 4, 5],
+      documentationGroups: [{
+        line: 3,
+        previewLine: 4,
+        documentationPreviewLines: [3],
+      }],
+    });
   });
 });
