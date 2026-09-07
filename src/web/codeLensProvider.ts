@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import { createDocumentationUri } from './documentation';
+import { createReviewLineMetadata } from './lineMetadata';
 import { ReviewModel } from './reviewModel';
 
 export const showDocumentationCommand = 'heaths.azureApiReview.showDocumentation';
 export const goToSourceCommand = 'heaths.azureApiReview.goToSource';
+export const showDocumentationTooltip = 'Click to show documentation';
+export const goToSourceTooltip = 'Navigate to declaration';
 
 export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
   private readonly changed = new vscode.EventEmitter<void>();
@@ -17,22 +20,22 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
 
   public async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
     const codeLenses: vscode.CodeLens[] = [];
-    for (const entry of await this.model.getEntries(document)) {
+    for (const entry of createReviewLineMetadata(await this.model.getEntries(document))) {
       const range = document.lineAt(entry.line).range;
       const argument = { uri: document.uri.toString(), line: entry.line };
-      if (entry.documentation) {
+      if (entry.hasDocumentation) {
         codeLenses.push(new vscode.CodeLens(range, {
           command: showDocumentationCommand,
           title: '$(file-text) Documentation',
-          tooltip: 'Click to show documentation',
+          tooltip: showDocumentationTooltip,
           arguments: [argument],
         }));
       }
-      if (entry.source) {
+      if (entry.hasSource) {
         codeLenses.push(new vscode.CodeLens(range, {
           command: goToSourceCommand,
           title: '$(go-to-file) Go to source',
-          tooltip: 'Navigate to declaration',
+          tooltip: goToSourceTooltip,
           arguments: [argument],
         }));
       }

@@ -1,6 +1,12 @@
 import hljs from 'highlight.js';
 import MarkdownIt = require('markdown-it');
 import * as vscode from 'vscode';
+import {
+  goToSourceCommand,
+  goToSourceTooltip,
+  showDocumentationTooltip,
+} from './codeLensProvider';
+import { createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
 import { ReviewModel } from './reviewModel';
 
 export const reviewMarkdownPreviewViewType = 'heaths.azureApiReview.preview';
@@ -25,23 +31,48 @@ interface MarkdownPreviewStyleExtension {
   readonly packageJSON: unknown;
 }
 
+interface PreviewWebviewMessage {
+  readonly type: 'goToSource';
+  readonly line: number;
+}
+
 export interface MarkdownPreviewStyles {
   readonly stylesheets: readonly vscode.Uri[];
   readonly roots: readonly vscode.Uri[];
+}
+
+interface PreviewLineRenderMetadata {
+  readonly sourceLine?: number;
+  readonly hasDocumentation?: true;
+  readonly hasSource?: true;
+  readonly documentationGroupId?: string;
+  readonly documentationLine?: true;
+  readonly ariaLabel?: string;
+}
+
+interface PreviewRenderEnv {
+  readonly lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>;
 }
 
 const markdownRenderer = new MarkdownIt({
   html: true,
   linkify: true,
   highlight(code, language) {
-    const normalized = normalizeLanguage(language);
-    if (normalized && hljs.getLanguage(normalized)) {
-      const highlighted = hljs.highlight(code, { language: normalized, ignoreIllegals: true }).value;
-      return wrapHighlightedLines(highlighted);
-    }
-    return wrapHighlightedLines(escapeHtml(code));
+    return highlightCode(code, language);
   },
 });
+
+markdownRenderer.renderer.rules.fence = (tokens, index, options, env) => {
+  const token = tokens[index];
+  const language = token.info.trim().split(/\s+/u, 1)[0] ?? '';
+  const normalized = normalizeLanguage(language);
+  const className = normalized.length > 0 ? `${options.langPrefix}${normalized}` : '';
+  const classAttribute = className.length > 0 ? ` class="${escapeAttribute(className)}"` : '';
+  const startLine = token.map ? token.map[0] + 1 : undefined;
+  const previewEnv = isPreviewRenderEnv(env) ? env : undefined;
+
+  return `<pre><code${classAttribute}>${highlightCode(token.content, language, startLine, previewEnv?.lineMetadata)}</code></pre>\n`;
+};
 
 export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   private readonly previews = new Set<PreviewPanel>();
@@ -81,6 +112,9 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
           this.setActivePreview(preview);
         }
       }),
+      webviewPanel.webview.onDidReceiveMessage(message => {
+        void this.handleMessage(preview, message);
+      }),
     ];
     webviewPanel.onDidDispose(() => {
       for (const disposable of disposables) {
@@ -114,6 +148,27 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     this.setCommentsVisible(false);
   }
 
+  private async handleMessage(preview: PreviewPanel, message: unknown): Promise<void> {
+    if (!isPreviewWebviewMessage(message)) {
+      return;
+    }
+
+    try {
+      switch (message.type) {
+        case 'goToSource':
+          await vscode.commands.executeCommand(goToSourceCommand, {
+            uri: preview.document.uri.toString(),
+            line: message.line,
+          });
+          break;
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Unable to navigate to source: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private setCommentsVisible(visible: boolean): void {
     const preview = this.activePreview;
     if (!preview?.hasCommentsPatch) {
@@ -136,15 +191,18 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
   private async render(preview: PreviewPanel): Promise<void> {
     const generation = ++preview.generation;
-    const content = await this.model.getPreviewContent(preview.document);
+    const snapshot = await this.model.getPreviewSnapshot(preview.document);
     if (generation !== preview.generation || !this.previews.has(preview)) {
       return;
     }
 
+    const { entries, content } = snapshot;
     preview.hasCommentsPatch = content.hasCommentsPatch;
     if (!content.hasCommentsPatch) {
       preview.commentsVisible = false;
     }
+
+    const lineMetadata = createPreviewLineMetadata(preview.document.getText(), content, entries);
     preview.panel.webview.html = getPreviewHtml(
       preview.panel.webview,
       this.extensionUri,
@@ -153,6 +211,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       preview.hasCommentsPatch,
       preview.commentsVisible,
       preview.contributedStyles.stylesheets,
+      lineMetadata,
     );
     if (this.activePreview === preview) {
       this.updateContexts(preview);
@@ -162,6 +221,10 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
 export function renderMarkdown(markdown: string): string {
   return markdownRenderer.render(markdown);
+}
+
+export function renderPreviewMarkdown(markdown: string, lineMetadata: readonly PreviewLineMetadata[]): string {
+  return markdownRenderer.render(markdown, { lineMetadata: createPreviewLineRenderMetadata(lineMetadata) });
 }
 
 export function getContributedMarkdownPreviewStyles(
@@ -213,21 +276,75 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function wrapHighlightedLines(highlighted: string): string {
+function highlightCode(
+  code: string,
+  language: string,
+  startingLine?: number,
+  lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>,
+): string {
+  const normalized = normalizeLanguage(language);
+  if (normalized && hljs.getLanguage(normalized)) {
+    const highlighted = hljs.highlight(code, { language: normalized, ignoreIllegals: true }).value;
+    return wrapHighlightedLines(highlighted, startingLine, lineMetadata);
+  }
+  return wrapHighlightedLines(escapeHtml(code), startingLine, lineMetadata);
+}
+
+function wrapHighlightedLines(
+  highlighted: string,
+  startingLine?: number,
+  lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>,
+): string {
   const parts = highlighted.split(/(<span\b[^>]*>|<\/span>)/);
   const openTags: { tag: string; comment: boolean }[] = [];
   const lines: string[] = [];
   let line = '';
   let hasContent = false;
   let hasNonCommentContent = false;
+  let currentLine = startingLine;
 
   const finishLine = (): void => {
     const closingTags = openTags.map(() => '</span>').reverse().join('');
-    const classes = hasContent && !hasNonCommentContent ? 'code-line comment-line' : 'code-line';
-    lines.push(`<span class="${classes}">${line}${closingTags}</span>`);
+    const metadata = currentLine === undefined ? undefined : lineMetadata?.get(currentLine);
+    const classes = ['code-line'];
+    if (hasContent && !hasNonCommentContent) {
+      classes.push('comment-line');
+    }
+    if (metadata?.documentationLine) {
+      classes.push('preview-documentation-line');
+    }
+    if (metadata?.sourceLine !== undefined) {
+      classes.push('preview-action-line');
+    }
+
+    const attributes = currentLine === undefined ? [] : [`data-line="${currentLine}"`];
+    if (metadata?.sourceLine !== undefined) {
+      attributes.push(`data-source-line="${metadata.sourceLine}"`);
+      attributes.push('tabindex="0"');
+      attributes.push('aria-haspopup="true"');
+      attributes.push('aria-controls="preview-hover-actions"');
+      if (metadata.ariaLabel) {
+        attributes.push(`aria-label="${escapeAttribute(metadata.ariaLabel)}"`);
+      }
+    }
+    if (metadata?.hasDocumentation) {
+      attributes.push('data-has-documentation');
+    }
+    if (metadata?.hasSource) {
+      attributes.push('data-has-source');
+    }
+    if (metadata?.documentationGroupId) {
+      attributes.push(`data-documentation-group="${escapeAttribute(metadata.documentationGroupId)}"`);
+    }
+
+    const attributeText = attributes.length > 0 ? ` ${attributes.join(' ')}` : '';
+    lines.push(`<span class="${classes.join(' ')}"${attributeText}>${line}${closingTags}</span>`);
     line = openTags.map(value => value.tag).join('');
     hasContent = false;
     hasNonCommentContent = false;
+    if (currentLine !== undefined) {
+      currentLine++;
+    }
   };
 
   for (const part of parts) {
@@ -272,6 +389,7 @@ function getPreviewHtml(
   hasCommentsPatch: boolean,
   commentsVisible: boolean,
   contributedStylesheets: readonly vscode.Uri[],
+  lineMetadata: readonly PreviewLineMetadata[],
 ): string {
   const stylesheet = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'markdownPreview.css'));
   const contributedStyles = contributedStylesheets
@@ -298,10 +416,22 @@ ${contributedStyles}
   <title>Azure API Review</title>
 </head>
 <body class="${classes}">
-  <main class="markdown-body" dir="auto">${renderMarkdown(markdown)}</main>
+  <main class="markdown-body" dir="auto">${renderPreviewMarkdown(markdown, lineMetadata)}</main>
+  <div id="preview-hover-actions" hidden role="toolbar" aria-label="Review actions">
+    <button type="button" data-action="documentation" title="${escapeAttribute(showDocumentationTooltip)}" aria-label="${escapeAttribute(showDocumentationTooltip)}"></button>
+    <button type="button" data-action="source" title="${escapeAttribute(goToSourceTooltip)}" aria-label="${escapeAttribute(goToSourceTooltip)}"></button>
+  </div>
   <script nonce="${nonce}" src="${escapeAttribute(script.toString())}"></script>
 </body>
 </html>`;
+}
+
+function isPreviewWebviewMessage(message: unknown): message is PreviewWebviewMessage {
+  return isRecord(message)
+    && message.type === 'goToSource'
+    && typeof message.line === 'number'
+    && Number.isInteger(message.line)
+    && message.line >= 0;
 }
 
 function normalizeLanguage(language: string): string {
@@ -339,4 +469,38 @@ function escapeAttribute(value: string): string {
 function createNonce(): string {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => characters[Math.floor(Math.random() * characters.length)]).join('');
+}
+
+function createPreviewLineRenderMetadata(
+  lineMetadata: readonly PreviewLineMetadata[],
+): ReadonlyMap<number, PreviewLineRenderMetadata> {
+  const renderedLineMetadata = new Map<number, PreviewLineRenderMetadata>();
+
+  for (const line of lineMetadata) {
+    renderedLineMetadata.set(line.previewLine, {
+      sourceLine: line.sourceLine,
+      hasDocumentation: line.hasDocumentation ? true : undefined,
+      hasSource: line.hasSource ? true : undefined,
+      documentationGroupId: line.documentationGroupId,
+      ariaLabel: line.ariaLabel,
+    });
+
+    if (!line.documentationGroupId) {
+      continue;
+    }
+
+    for (const documentationPreviewLine of line.documentationPreviewLines) {
+      renderedLineMetadata.set(documentationPreviewLine, {
+        ...renderedLineMetadata.get(documentationPreviewLine),
+        documentationGroupId: line.documentationGroupId,
+        documentationLine: true,
+      });
+    }
+  }
+
+  return renderedLineMetadata;
+}
+
+function isPreviewRenderEnv(value: unknown): value is PreviewRenderEnv {
+  return isRecord(value);
 }
