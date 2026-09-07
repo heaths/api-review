@@ -9,10 +9,15 @@
 - *(commentPatch)* Implement preview line mapping
 - *(lineMetadata)* Create metadata for review lines
 - *(markdownPreview)* Render preview metadata in HTML
+- *(changelog)* Add automated changelog update script and configuration
 
 ### Fixed
 
 - *(reviewModel)* Return comments patch in preview snapshot
+
+### Other
+
+- Update dependencies
 
 ## 0.2.0 (2026-09-06)
 
