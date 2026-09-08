@@ -1,6 +1,5 @@
 :root {
   color-scheme: light dark;
-  --preview-max-width: 980px;
   --preview-padding-inline: 26px;
   --preview-padding-inline-narrow: 16px;
   --preview-padding-bottom: 40px;
@@ -39,50 +38,131 @@
   --preview-hover-button-foreground: var(--preview-hover-foreground);
   --preview-hover-button-disabled-opacity: 0.6;
   --preview-focus-outline-color: var(--vscode-focusBorder);
+  --preview-body-color: var(--vscode-editor-foreground);
+  --preview-body-background: var(--vscode-editor-background);
+  --preview-heading-border-color: var(--vscode-panel-border);
+  --preview-link-color: var(--vscode-textLink-foreground);
+  --preview-link-active-color: var(--vscode-textLink-activeForeground);
+  --preview-blockquote-color: var(--vscode-descriptionForeground);
+  --preview-blockquote-border-color: var(--vscode-textBlockQuote-border);
+  --preview-inline-code-background: var(--vscode-textCodeBlock-background);
+  --preview-code-block-background: var(--vscode-textCodeBlock-background);
+  --preview-table-border-color: var(--vscode-panel-border);
+  --preview-hljs-default: #dcdcdc;
   --preview-hljs-keyword: #569cd6;
+  --preview-hljs-literal: #569cd6;
+  --preview-hljs-symbol: #569cd6;
+  --preview-hljs-name: #569cd6;
   --preview-hljs-link: #569cd6;
   --preview-hljs-built-in: #4ec9b0;
+  --preview-hljs-type: #4ec9b0;
   --preview-hljs-number: #b8d7a3;
+  --preview-hljs-class: #b8d7a3;
   --preview-hljs-string: #d69d85;
+  --preview-hljs-meta-string: #d69d85;
   --preview-hljs-regexp: #9a5334;
-  --preview-hljs-default: #dcdcdc;
+  --preview-hljs-template-tag: #9a5334;
+  --preview-hljs-subst: #dcdcdc;
+  --preview-hljs-function: #dcdcdc;
+  --preview-hljs-title: #dcdcdc;
+  --preview-hljs-params: #dcdcdc;
+  --preview-hljs-formula: #dcdcdc;
   --preview-hljs-comment: #57a64a;
   --preview-hljs-doctag: #608b4e;
   --preview-hljs-meta: #9b9b9b;
+  --preview-hljs-meta-keyword: #9b9b9b;
+  --preview-hljs-tag: #9b9b9b;
   --preview-hljs-variable: #bd63c5;
+  --preview-hljs-template-variable: #bd63c5;
+  --preview-hljs-attr: #9cdcfe;
   --preview-hljs-attribute: #9cdcfe;
+  --preview-hljs-builtin-name: #9cdcfe;
+  --preview-hljs-property: #9cdcfe;
   --preview-hljs-section: gold;
-  --preview-hljs-selector: #d7ba7d;
+  --preview-hljs-selector-tag: #d7ba7d;
+  --preview-hljs-selector-id: #d7ba7d;
+  --preview-hljs-selector-class: #d7ba7d;
+  --preview-hljs-selector-attr: #d7ba7d;
+  --preview-hljs-selector-pseudo: #d7ba7d;
+  --preview-hljs-bullet: #d7ba7d;
   --preview-hljs-addition: rgb(155 185 85);
   --preview-hljs-deletion: rgb(255 0 0);
   --preview-hljs-addition-background: var(--vscode-diffEditor-insertedTextBackground, rgb(155 185 85 / 20%));
   --preview-hljs-deletion-background: var(--vscode-diffEditor-removedTextBackground, rgb(255 0 0 / 20%));
 }
 
-.vscode-light {
-  --preview-hljs-comment: #008000;
-  --preview-hljs-number: #008000;
-  --preview-hljs-variable: #008000;
-  --preview-hljs-keyword: #00f;
-  --preview-hljs-link: #00b0e8;
-  --preview-hljs-built-in: #007acc;
+.vscode-dark,
+.vscode-high-contrast {
+  --preview-body-color: var(--vscode-editor-foreground);
+  --preview-body-background: var(--vscode-editor-background);
+  --preview-heading-border-color: var(--vscode-panel-border);
+  --preview-link-color: var(--vscode-textLink-foreground);
+  --preview-link-active-color: var(--vscode-textLink-activeForeground);
+  --preview-blockquote-color: var(--vscode-descriptionForeground);
+  --preview-blockquote-border-color: var(--vscode-textBlockQuote-border);
+  --preview-inline-code-background: var(--vscode-textCodeBlock-background);
+  --preview-code-block-background: var(--vscode-textCodeBlock-background);
+  --preview-table-border-color: var(--vscode-panel-border);
+}
+
+/* Webviews get theme classes and --vscode-* colors, but not resolved editor token colors. */
+.vscode-light,
+.vscode-high-contrast-light {
+  --preview-body-color: var(--vscode-editor-foreground);
+  --preview-body-background: var(--vscode-editor-background);
+  --preview-heading-border-color: var(--vscode-panel-border);
+  --preview-link-color: var(--vscode-textLink-foreground);
+  --preview-link-active-color: var(--vscode-textLink-activeForeground);
+  --preview-blockquote-color: var(--vscode-descriptionForeground);
+  --preview-blockquote-border-color: var(--vscode-textBlockQuote-border);
+  --preview-inline-code-background: var(--vscode-textCodeBlock-background);
+  --preview-code-block-background: var(--vscode-textCodeBlock-background);
+  --preview-table-border-color: var(--vscode-panel-border);
+  --preview-hljs-default: var(--vscode-editor-foreground);
+  --preview-hljs-keyword: #0000ff;
+  --preview-hljs-literal: #a31515;
+  --preview-hljs-symbol: #0451a5;
+  --preview-hljs-name: #0000ff;
+  --preview-hljs-link: #0451a5;
+  --preview-hljs-built-in: #267f99;
+  --preview-hljs-type: #267f99;
+  --preview-hljs-number: #098658;
+  --preview-hljs-class: #267f99;
   --preview-hljs-string: #a31515;
-  --preview-hljs-regexp: #a31515;
-  --preview-hljs-default: inherit;
-  --preview-hljs-doctag: #808080;
-  --preview-hljs-meta: #2b91af;
-  --preview-hljs-attribute: #f00;
-  --preview-hljs-section: #a31515;
-  --preview-hljs-selector: #00f;
+  --preview-hljs-meta-string: #a31515;
+  --preview-hljs-regexp: #811f3f;
+  --preview-hljs-template-tag: #a31515;
+  --preview-hljs-subst: #0451a5;
+  --preview-hljs-function: var(--vscode-editor-foreground);
+  --preview-hljs-title: #795e26;
+  --preview-hljs-params: var(--vscode-editor-foreground);
+  --preview-hljs-formula: var(--vscode-editor-foreground);
+  --preview-hljs-comment: #008000;
+  --preview-hljs-doctag: #795e26;
+  --preview-hljs-meta: #0451a5;
+  --preview-hljs-meta-keyword: #0451a5;
+  --preview-hljs-tag: #0000ff;
+  --preview-hljs-variable: #001080;
+  --preview-hljs-template-variable: #a31515;
+  --preview-hljs-attr: #001080;
+  --preview-hljs-attribute: #a31515;
+  --preview-hljs-builtin-name: #267f99;
+  --preview-hljs-property: #001080;
+  --preview-hljs-section: #795e26;
+  --preview-hljs-selector-tag: #800000;
+  --preview-hljs-selector-id: #800000;
+  --preview-hljs-selector-class: #800000;
+  --preview-hljs-selector-attr: #0451a5;
+  --preview-hljs-selector-pseudo: #0451a5;
+  --preview-hljs-bullet: #0451a5;
 }
 
 body {
   box-sizing: border-box;
-  margin: 0 auto;
-  max-width: var(--preview-max-width);
+  margin: 0;
   padding: 0 var(--preview-padding-inline) var(--preview-padding-bottom);
-  color: var(--vscode-editor-foreground);
-  background: var(--vscode-editor-background);
+  color: var(--preview-body-color);
+  background: var(--preview-body-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   line-height: var(--preview-line-height);
@@ -91,7 +171,7 @@ body {
 .markdown-body h1,
 .markdown-body h2 {
   padding-bottom: var(--preview-heading-padding-bottom);
-  border-bottom: var(--preview-heading-border-width) solid var(--vscode-panel-border);
+  border-bottom: var(--preview-heading-border-width) solid var(--preview-heading-border-color);
 }
 
 .markdown-body h1 {
@@ -103,18 +183,18 @@ body {
 }
 
 .markdown-body a {
-  color: var(--vscode-textLink-foreground);
+  color: var(--preview-link-color);
 }
 
 .markdown-body a:hover {
-  color: var(--vscode-textLink-activeForeground);
+  color: var(--preview-link-active-color);
 }
 
 .markdown-body blockquote {
   margin-left: 0;
   padding-left: var(--preview-blockquote-padding-inline-start);
-  color: var(--vscode-descriptionForeground);
-  border-left: var(--preview-blockquote-border-width) solid var(--vscode-textBlockQuote-border);
+  color: var(--preview-blockquote-color);
+  border-left: var(--preview-blockquote-border-width) solid var(--preview-blockquote-border-color);
 }
 
 .markdown-body code {
@@ -124,14 +204,14 @@ body {
 
 .markdown-body :not(pre) > code {
   padding: var(--preview-inline-code-padding-block) var(--preview-inline-code-padding-inline);
-  background: var(--vscode-textCodeBlock-background);
+  background: var(--preview-inline-code-background);
   border-radius: var(--preview-inline-code-radius);
 }
 
 .markdown-body pre {
   overflow: auto;
   padding: var(--preview-code-block-padding);
-  background: var(--vscode-textCodeBlock-background);
+  background: var(--preview-code-block-background);
 }
 
 .markdown-body pre code {
@@ -237,10 +317,20 @@ body {
 
 /* Keep this palette aligned with VS Code's Markdown preview media/highlight.css. */
 .hljs-keyword,
-.hljs-literal,
-.hljs-symbol,
-.hljs-name {
+.hljs-keyword {
   color: var(--preview-hljs-keyword);
+}
+
+.hljs-name {
+  color: var(--preview-hljs-name);
+}
+
+.hljs-literal {
+  color: var(--preview-hljs-literal);
+}
+
+.hljs-symbol {
+  color: var(--preview-hljs-symbol);
 }
 
 .hljs-link {
@@ -248,32 +338,56 @@ body {
   text-decoration: underline;
 }
 
-.hljs-built_in,
-.hljs-type {
+.hljs-built_in {
   color: var(--preview-hljs-built-in);
 }
 
-.hljs-number,
-.hljs-class {
+.hljs-type {
+  color: var(--preview-hljs-type);
+}
+
+.hljs-number {
   color: var(--preview-hljs-number);
 }
 
-.hljs-string,
-.hljs-meta-string {
+.hljs-class {
+  color: var(--preview-hljs-class);
+}
+
+.hljs-string {
   color: var(--preview-hljs-string);
 }
 
-.hljs-regexp,
-.hljs-template-tag {
+.hljs-meta-string {
+  color: var(--preview-hljs-meta-string);
+}
+
+.hljs-regexp {
   color: var(--preview-hljs-regexp);
 }
 
-.hljs-subst,
-.hljs-function,
-.hljs-title,
-.hljs-params,
+.hljs-template-tag {
+  color: var(--preview-hljs-template-tag);
+}
+
+.hljs-subst {
+  color: var(--preview-hljs-subst);
+}
+
+.hljs-function {
+  color: var(--preview-hljs-function);
+}
+
+.hljs-title {
+  color: var(--preview-hljs-title);
+}
+
+.hljs-params {
+  color: var(--preview-hljs-params);
+}
+
 .hljs-formula {
-  color: var(--preview-hljs-default);
+  color: var(--preview-hljs-formula);
 }
 
 .hljs-comment,
@@ -286,21 +400,40 @@ body {
   color: var(--preview-hljs-doctag);
 }
 
-.hljs-meta,
-.hljs-meta-keyword,
-.hljs-tag {
+.hljs-meta {
   color: var(--preview-hljs-meta);
 }
 
-.hljs-variable,
-.hljs-template-variable {
+.hljs-meta-keyword {
+  color: var(--preview-hljs-meta-keyword);
+}
+
+.hljs-tag {
+  color: var(--preview-hljs-tag);
+}
+
+.hljs-variable {
   color: var(--preview-hljs-variable);
 }
 
-.hljs-attr,
-.hljs-attribute,
-.hljs-builtin-name {
+.hljs-template-variable {
+  color: var(--preview-hljs-template-variable);
+}
+
+.hljs-attr {
+  color: var(--preview-hljs-attr);
+}
+
+.hljs-attribute {
   color: var(--preview-hljs-attribute);
+}
+
+.hljs-builtin-name {
+  color: var(--preview-hljs-builtin-name);
+}
+
+.hljs-property {
+  color: var(--preview-hljs-property);
 }
 
 .hljs-section {
@@ -316,12 +449,28 @@ body {
 }
 
 .hljs-bullet,
-.hljs-selector-tag,
-.hljs-selector-id,
-.hljs-selector-class,
-.hljs-selector-attr,
+.hljs-selector-tag {
+  color: var(--preview-hljs-selector-tag);
+}
+
+.hljs-selector-id {
+  color: var(--preview-hljs-selector-id);
+}
+
+.hljs-selector-class {
+  color: var(--preview-hljs-selector-class);
+}
+
+.hljs-selector-attr {
+  color: var(--preview-hljs-selector-attr);
+}
+
 .hljs-selector-pseudo {
-  color: var(--preview-hljs-selector);
+  color: var(--preview-hljs-selector-pseudo);
+}
+
+.hljs-bullet {
+  color: var(--preview-hljs-bullet);
 }
 
 .hljs-addition {
@@ -350,7 +499,7 @@ body {
 .markdown-body th,
 .markdown-body td {
   padding: var(--preview-table-cell-padding-block) var(--preview-table-cell-padding-inline);
-  border: var(--preview-heading-border-width) solid var(--vscode-panel-border);
+  border: var(--preview-heading-border-width) solid var(--preview-table-border-color);
 }
 
 @media (max-width: 600px) {
