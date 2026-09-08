@@ -275,4 +275,35 @@ suite('Markdown preview', () => {
     ]);
     assert.deepStrictEqual(styles.roots.map(uri => uri.toString()), [root.toString()]);
   });
+
+  test('defines separate light and dark preview palettes', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const cssUri = vscode.Uri.joinPath(folder.uri, 'assets/markdownPreview.css');
+    const css = new TextDecoder().decode(await vscode.workspace.fs.readFile(cssUri));
+
+    assert.ok(css.includes('.vscode-dark,\n.vscode-high-contrast {'));
+    assert.ok(css.includes('.vscode-light,\n.vscode-high-contrast-light {'));
+    assert.ok(css.includes('--preview-body-color: var(--vscode-editor-foreground);'));
+    assert.ok(css.includes('--preview-code-block-background: var(--vscode-textCodeBlock-background);'));
+    assert.ok(css.includes('--preview-hljs-title: #795e26;'));
+    assert.ok(css.includes('--preview-hljs-attr: #001080;'));
+    assert.ok(css.includes('--preview-hljs-property: #001080;'));
+    assert.ok(css.includes('.hljs-title {\n  color: var(--preview-hljs-title);\n}'));
+    assert.ok(css.includes('.hljs-attr {\n  color: var(--preview-hljs-attr);\n}'));
+    assert.ok(css.includes('.hljs-property {\n  color: var(--preview-hljs-property);\n}'));
+  });
+
+  test('uses the full preview width with built-in style padding', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const cssUri = vscode.Uri.joinPath(folder.uri, 'assets/markdownPreview.css');
+    const css = new TextDecoder().decode(await vscode.workspace.fs.readFile(cssUri));
+
+    assert.ok(!css.includes('--preview-max-width'));
+    assert.ok(css.includes('body {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0 var(--preview-padding-inline) var(--preview-padding-bottom);'));
+    assert.ok(!css.includes('max-width: var(--preview-max-width);'));
+  });
 });
