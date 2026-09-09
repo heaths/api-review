@@ -1,7 +1,7 @@
 {
   "publisher": "heaths",
   "name": "azure-api-review",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "preview": true,
   "displayName": "Azure API Review",
   "description": "Adds some capabilities from APIView.dev for Azure API reviews to support the new API Review Hub.",
@@ -30,10 +30,45 @@
   "activationEvents": [
     "onLanguage:markdown"
   ],
+  "extensionDependencies": [
+    "vscode.github-authentication"
+  ],
   "main": "./dist/node/extension.js",
   "browser": "./dist/web/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "heaths.azureApiReview.preview.showDiff",
+        "title": "Show Diff",
+        "shortTitle": "Diff",
+        "category": "Azure API Review",
+        "icon": "$(diff)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.diffAvailable"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.nextDiffHunk",
+        "title": "Next Diff Hunk",
+        "shortTitle": "Next Diff Hunk",
+        "category": "Azure API Review",
+        "icon": "$(arrow-down)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.diffVisible && heaths.azureApiReview.preview.canNavigateNextDiff"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.previousDiffHunk",
+        "title": "Previous Diff Hunk",
+        "shortTitle": "Previous Diff Hunk",
+        "category": "Azure API Review",
+        "icon": "$(arrow-up)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.diffVisible && heaths.azureApiReview.preview.canNavigatePreviousDiff"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.closeDiff",
+        "title": "Close Diff",
+        "shortTitle": "Close Diff",
+        "category": "Azure API Review",
+        "icon": "$(close)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.diffAvailable"
+      },
       {
         "command": "heaths.azureApiReview.preview.showComments",
         "title": "Show Comments",
@@ -68,22 +103,59 @@
     "menus": {
       "editor/title": [
         {
+          "command": "heaths.azureApiReview.preview.showDiff",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && !heaths.azureApiReview.preview.diffVisible",
+          "group": "navigation@1"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.nextDiffHunk",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
+          "group": "navigation@1"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.previousDiffHunk",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
+          "group": "navigation@2"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.closeDiff",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
+          "group": "navigation@3",
+          "toggled": "heaths.azureApiReview.preview.diffVisible"
+        },
+        {
           "command": "heaths.azureApiReview.preview.showComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && !heaths.azureApiReview.preview.commentsVisible",
-          "group": "navigation@1"
+          "group": "navigation@4"
         },
         {
           "command": "heaths.azureApiReview.preview.hideComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && heaths.azureApiReview.preview.commentsVisible",
-          "group": "navigation@1"
+          "group": "navigation@4"
         },
         {
           "command": "heaths.azureApiReview.preview.reopenAsText",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff",
-          "group": "navigation@2"
+          "group": "navigation@5"
         }
       ],
       "commandPalette": [
+        {
+          "command": "heaths.azureApiReview.preview.showDiff",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.nextDiffHunk",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.previousDiffHunk",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.closeDiff",
+          "when": "false"
+        },
         {
           "command": "heaths.azureApiReview.preview.showComments",
           "when": "false"
@@ -134,6 +206,17 @@
             "type": "string"
           },
           "description": "Ordered source map patterns resolved relative to each API Markdown file. Supports file-context variables like `${fileBasename}`."
+        },
+        "heaths.azureApiReview.git.tags": {
+          "type": "array",
+          "scope": "resource",
+          "default": [
+            "^[\\w-]+@(?<version>.+)$"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered tag regexes used to extract versions for diff history. Use named capture `version` or capture group 1, for example `^[\\\\w-]+@(?<version>.+)$` for `crate@1.2.3` tags."
         }
       }
     }
@@ -174,7 +257,7 @@
     "serialize-javascript": "^7.0.6"
   },
   "scripts": {
-    "test": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
+    "test": "node scripts/run-tests.mjs",
     "test:headless": "vscode-test-web --browserType=chromium --headless --extensionDevelopmentPath=. --extensionTestsPath=dist/web/test/suite/index.js .",
     "pretest": "pnpm run compile:web",
     "vscode:prepublish": "pnpm run compile -- --mode production --devtool hidden-source-map",

@@ -22,15 +22,21 @@ CodeLens actions appear above the declaration:
 Actions are omitted when the corresponding comment patch or source mapping is
 missing or does not map unambiguously to the declaration.
 
-[![Watch the Azure API Review demo](https://img.youtube.com/vi/U9ZKXLJRsUY/hqdefault.jpg)](https://youtu.be/U9ZKXLJRsUY)
+[![Watch the Azure API Review demo](https://img.youtube.com/vi/U9ZKXLJRsUY/hqdefault.jpg)](https://youtu.be/4nPBg77Goyg)
 
 ### Custom Markdown Preview
 
 Use **Reopen Editor With** > **Azure API Review** to render an API Markdown file
 with its configured comments patch applied in memory. Comments are hidden by
 default; use the expand-all and collapse-all actions in the editor title to show
-or hide all comments. The preview is available for any Markdown file, and the
-source Markdown file is never modified.
+or hide all comments. The preview can also show a diff against a Git tag,
+commit, pull request base, or another selected Markdown file, and while a diff
+is active the title bar adds next/previous hunk navigation plus a close action.
+The source Markdown file is never modified.
+
+Git-backed tags and commits depend on the built-in Git extension API. In a
+pure web host, that API is not currently available, so diffing there falls
+back to comparing against another selected Markdown file.
 
 The custom preview applies CSS contributed by installed extensions through
 `markdown.previewStyles`. It does not load contributed preview scripts,
@@ -55,6 +61,9 @@ adjacent patch and source-map files:
   ],
   "heaths.azureApiReview.files.sourceMaps": [
     "API.md.map"
+  ],
+  "heaths.azureApiReview.git.tags": [
+    "^[\\w-]+@(?<version>.+)$"
   ]
 }
 ```
@@ -68,6 +77,11 @@ Configure these settings at workspace or workspace-folder scope:
   to each matched API file. The first existing file is used.
 - `heaths.azureApiReview.files.sourceMaps` follows the same ordered, relative lookup
   rules for source maps.
+- `heaths.azureApiReview.git.tags` contains ordered regular expressions used to
+  extract a version from tag names for diff history. Use named capture
+  `version` or capture group 1. For example,
+  `^[\\w-]+@(?<version>.+)$` maps `azure_security_keyvault_keys@1.1.0-beta.1`
+  to `1.1.0-beta.1`.
 
 Related-file patterns support file-context variables such as `${file}`,
 `${relativeFile}`, `${fileBasename}`, `${fileBasenameNoExtension}`,

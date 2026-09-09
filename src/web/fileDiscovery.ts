@@ -9,6 +9,21 @@ export interface ApiDocumentDescriptor {
   readonly sourceMap?: vscode.Uri;
 }
 
+export async function discoverApiDocument(uri: vscode.Uri): Promise<ApiDocumentDescriptor | undefined> {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+  if (!workspaceFolder) {
+    return undefined;
+  }
+
+  const configuration = getConfiguration(uri);
+  return {
+    uri,
+    workspaceFolder,
+    comments: await findRelated(uri, workspaceFolder, configuration.comments),
+    sourceMap: await findRelated(uri, workspaceFolder, configuration.sourceMaps),
+  };
+}
+
 export async function discoverApiDocuments(): Promise<readonly ApiDocumentDescriptor[]> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   const documents = new Map<string, { uri: vscode.Uri; folder: vscode.WorkspaceFolder }>();
@@ -33,13 +48,10 @@ export async function discoverApiDocuments(): Promise<readonly ApiDocumentDescri
   }
 
   return Promise.all([...documents.values()].map(async document => {
-    const configuration = getConfiguration(document.uri);
-    return {
+    return discoverApiDocument(document.uri).then(descriptor => descriptor ?? {
       uri: document.uri,
       workspaceFolder: document.folder,
-      comments: await findRelated(document.uri, document.folder, configuration.comments),
-      sourceMap: await findRelated(document.uri, document.folder, configuration.sourceMaps),
-    };
+    });
   }));
 }
 

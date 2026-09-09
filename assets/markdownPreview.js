@@ -14,6 +14,8 @@
   const actionLines = Array.from(document.querySelectorAll('.preview-action-line'))
     .filter(line => line instanceof HTMLElement);
   const documentationGroups = collectDocumentationGroups();
+  let diffHunks = [];
+  let activeDiffHunkIndex = 0;
   let hoveredLine;
   let focusedLine;
   let activeLine;
@@ -22,17 +24,29 @@
   let showTimer;
   let hideTimer;
   let pointerActivatedButton;
+  let navigationUpdatePending = false;
 
   initializeActionLines();
+  refreshDiffHunks();
+  scheduleNavigationStateUpdate();
 
   window.addEventListener('message', event => {
-    if (event.data?.type === 'setCommentsVisible') {
-      const visible = event.data.visible === true;
-      document.body.classList.toggle('comments-visible', visible);
-      setAllDocumentationVisible(visible);
-      if (activeLine && isPopupVisible()) {
-        updatePopup(activeLine);
+    switch (event.data?.type) {
+      case 'setCommentsVisible': {
+        const visible = event.data.visible === true;
+        document.body.classList.toggle('comments-visible', visible);
+        setAllDocumentationVisible(visible);
+        refreshDiffHunks();
+        if (activeLine && isPopupVisible()) {
+          updatePopup(activeLine);
+        }
+        scheduleNavigationStateUpdate();
+        break;
       }
+
+      case 'navigateDiffHunk':
+        navigateDiffHunk(event.data.direction);
+        break;
     }
   });
 
@@ -45,7 +59,9 @@
     if (isPopupVisible() && activeLine) {
       positionPopup(activeLine, anchorPointerX);
     }
+    scheduleNavigationStateUpdate();
   }, true);
+  window.addEventListener('load', scheduleNavigationStateUpdate);
 
   popup.addEventListener('mouseenter', () => {
     clearHideTimer();
@@ -329,6 +345,100 @@
       groups.set(groupId, group);
     }
     return groups;
+  }
+
+  function collectDiffHunks() {
+    const hunks = new Map();
+
+    for (const element of document.querySelectorAll('[data-diff-hunk]')) {
+      if (!(element instanceof HTMLElement) || !isRenderedDiffHunk(element)) {
+        continue;
+      }
+
+      const index = getDiffHunkIndex(element);
+      if (index === undefined || hunks.has(index)) {
+        continue;
+      }
+
+      hunks.set(index, element);
+    }
+
+    return Array.from(hunks.keys())
+      .sort((left, right) => left - right)
+      .map(index => hunks.get(index))
+      .filter(element => element instanceof HTMLElement);
+  }
+
+  function refreshDiffHunks() {
+    diffHunks = collectDiffHunks();
+    activeDiffHunkIndex = getCurrentDiffHunkIndex();
+  }
+
+  function navigateDiffHunk(direction) {
+    if (diffHunks.length === 0) {
+      reportDiffNavigationState();
+      return;
+    }
+
+    const referenceIndex = activeDiffHunkIndex;
+    const targetIndex = direction === 'previous'
+      ? Math.max(referenceIndex - 1, -1)
+      : Math.min(referenceIndex + 1, diffHunks.length - 1);
+    if (targetIndex < 0 || targetIndex >= diffHunks.length) {
+      reportDiffNavigationState();
+      return;
+    }
+
+    activeDiffHunkIndex = targetIndex;
+    diffHunks[targetIndex].scrollIntoView({ block: 'start', inline: 'nearest' });
+    window.requestAnimationFrame(reportDiffNavigationState);
+  }
+
+  function scheduleNavigationStateUpdate() {
+    if (navigationUpdatePending) {
+      return;
+    }
+
+    navigationUpdatePending = true;
+    window.requestAnimationFrame(() => {
+      navigationUpdatePending = false;
+      activeDiffHunkIndex = getCurrentDiffHunkIndex();
+      reportDiffNavigationState();
+    });
+  }
+
+  function reportDiffNavigationState() {
+    if (!vscode) {
+      return;
+    }
+
+    const currentIndex = activeDiffHunkIndex;
+    vscode.postMessage({
+      type: 'diffNavigationState',
+      canNavigatePrevious: currentIndex > 0,
+      canNavigateNext: currentIndex < diffHunks.length - 1,
+    });
+  }
+
+  function getCurrentDiffHunkIndex() {
+    const topThreshold = 1;
+
+    for (let index = diffHunks.length - 1; index >= 0; index--) {
+      if (diffHunks[index].getBoundingClientRect().top <= topThreshold) {
+        return index;
+      }
+    }
+
+    return diffHunks.length > 0 ? -1 : 0;
+  }
+
+  function getDiffHunkIndex(element) {
+    const index = Number.parseInt(element.dataset.diffHunk ?? '', 10);
+    return Number.isInteger(index) ? index : undefined;
+  }
+
+  function isRenderedDiffHunk(element) {
+    return element.getClientRects().length > 0;
   }
 
   function requireElement(element, constructor, selector) {

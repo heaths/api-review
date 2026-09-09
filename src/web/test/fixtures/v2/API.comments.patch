@@ -1,0 +1,5 @@
+--- a/API.md
++++ b/API.md
+@@ -14,1 +14,2 @@
++/// Greets the target.
+ pub fn alpha(target: Option<String>);

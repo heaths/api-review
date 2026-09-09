@@ -6,10 +6,18 @@ export interface AzureApiReviewConfiguration {
   readonly sourceMaps: readonly string[];
 }
 
+export interface AzureApiReviewGitConfiguration {
+  readonly tags: readonly string[];
+}
+
 const defaults: AzureApiReviewConfiguration = {
   include: ['**/api/API.md'],
   comments: ['API.comments.diff', 'API.comments.patch'],
   sourceMaps: ['API.md.map'],
+};
+
+const gitDefaults: AzureApiReviewGitConfiguration = {
+  tags: ['^[\\w-]+@(?<version>.+)$'],
 };
 
 export function getConfiguration(scope?: vscode.Uri): AzureApiReviewConfiguration {
@@ -21,9 +29,16 @@ export function getConfiguration(scope?: vscode.Uri): AzureApiReviewConfiguratio
   };
 }
 
+export function getGitConfiguration(scope?: vscode.Uri): AzureApiReviewGitConfiguration {
+  const configuration = vscode.workspace.getConfiguration('heaths.azureApiReview.git', scope);
+  return {
+    tags: readArray(configuration, 'tags', gitDefaults.tags),
+  };
+}
+
 function readArray(
   configuration: vscode.WorkspaceConfiguration,
-  key: keyof AzureApiReviewConfiguration,
+  key: string,
   fallback: readonly string[],
 ): readonly string[] {
   const values = configuration.get<unknown>(key);

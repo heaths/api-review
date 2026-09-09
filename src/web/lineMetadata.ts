@@ -50,6 +50,22 @@ export function createPreviewLineMetadata(
     .sort((left, right) => left.previewLine - right.previewLine);
 }
 
+export function createDiffLineMetadata(entries: readonly ReviewEntry[]): readonly PreviewLineMetadata[] {
+  return createReviewLineMetadata(entries)
+    .map(entry => ({
+      ...entry,
+      sourceLine: entry.line,
+      previewLine: entry.line,
+      hasDocumentation: entry.hasDocumentation,
+      hasSource: entry.hasSource,
+      documentationGroupId: entry.hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
+      documentationPreviewLines: [],
+      ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource),
+    }))
+    .filter(entry => entry.hasDocumentation || entry.hasSource)
+    .sort((left, right) => left.previewLine - right.previewLine);
+}
+
 export function getDocumentationGroupId(sourceLine: number): string {
   return `line-${sourceLine}`;
 }
