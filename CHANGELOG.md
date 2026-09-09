@@ -10,14 +10,21 @@
 - *(lineMetadata)* Create metadata for review lines
 - *(markdownPreview)* Render preview metadata in HTML
 - *(changelog)* Add automated changelog update script and configuration
+- Add API preview diff baselines and navigation
+
+### Changed
+
+- *(markdownPreview)* Match preview theme and layout (#19)
+- *(plans)* Record implemented feature plans (#18)
 
 ### Fixed
 
 - *(reviewModel)* Return comments patch in preview snapshot
+- *(markdownPreview)* Match preview theme and layout (#19)
 
 ### Other
 
-- Update dependencies
+- Update dependencies (#17)
 
 ## 0.2.0 (2026-09-06)
 

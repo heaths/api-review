@@ -7,26 +7,39 @@ import {
 } from './codeLensProvider';
 import { DocumentationProvider, documentationScheme } from './documentation';
 import {
+  closePreviewDiffCommand,
   hidePreviewCommentsCommand,
+  nextPreviewDiffHunkCommand,
+  previousPreviewDiffHunkCommand,
   reopenPreviewAsTextCommand,
   ReviewMarkdownPreview,
   reviewMarkdownPreviewViewType,
+  showPreviewDiffCommand,
   showPreviewCommentsCommand,
 } from './markdownPreview';
 import { ReviewModel } from './reviewModel';
+import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+export interface AzureApiReviewExtensionApi {
+  readonly version: 1;
+  showDiff(documentUri: string, baseline: DiffBaselineSelection): Promise<void>;
+  hideDiff(documentUri: string): Promise<void>;
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<AzureApiReviewExtensionApi> {
   const output = vscode.window.createOutputChannel('Azure API Review');
   const model = new ReviewModel(output);
+  const diffService = new DisplayDiffService(output);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, output);
-  const preview = new ReviewMarkdownPreview(model, context.extensionUri);
+  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService);
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
   const refreshDiscovery = async (): Promise<void> => {
     try {
       await model.refresh();
+      diffService.invalidate();
       provider.refresh();
       documentation.refresh();
       preview.refresh();
@@ -49,6 +62,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
     vscode.commands.registerCommand(showPreviewCommentsCommand, () => preview.showComments()),
     vscode.commands.registerCommand(hidePreviewCommentsCommand, () => preview.hideComments()),
+    vscode.commands.registerCommand(showPreviewDiffCommand, () => preview.showDiffPicker()),
+    vscode.commands.registerCommand(nextPreviewDiffHunkCommand, () => preview.showNextDiffHunk()),
+    vscode.commands.registerCommand(previousPreviewDiffHunkCommand, () => preview.showPreviousDiffHunk()),
+    vscode.commands.registerCommand(closePreviewDiffCommand, () => preview.hideActiveDiff()),
     vscode.commands.registerCommand(reopenPreviewAsTextCommand, () =>
       vscode.commands.executeCommand('reopenActiveEditorWith', 'default')),
     vscode.workspace.onDidChangeConfiguration(event => {
@@ -59,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeWorkspaceFolders(() => void refreshDiscovery()),
     vscode.workspace.onDidChangeTextDocument(event => {
       model.invalidate(event.document.uri);
+      diffService.invalidate(event.document.uri);
       provider.refresh();
       documentation.refresh(event.document.uri);
       preview.refresh(event.document.uri);
@@ -69,6 +87,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await refreshDiscovery();
+
+  return {
+    version: 1,
+    showDiff(documentUri: string, baseline: DiffBaselineSelection) {
+      return preview.showDiff(documentUri, baseline);
+    },
+    hideDiff(documentUri: string) {
+      return preview.hideDiff(documentUri);
+    },
+  };
 }
 
 export function deactivate() { }

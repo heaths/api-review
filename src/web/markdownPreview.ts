@@ -6,16 +6,26 @@ import {
   goToSourceTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
-import { createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
+import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, ResolvedBaseline } from './displayDiff';
+import { renderDiffPreview } from './diffPreview';
+import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
 import { ReviewModel } from './reviewModel';
 
 export const reviewMarkdownPreviewViewType = 'heaths.azureApiReview.preview';
 export const showPreviewCommentsCommand = 'heaths.azureApiReview.preview.showComments';
 export const hidePreviewCommentsCommand = 'heaths.azureApiReview.preview.hideComments';
 export const reopenPreviewAsTextCommand = 'heaths.azureApiReview.preview.reopenAsText';
+export const showPreviewDiffCommand = 'heaths.azureApiReview.preview.showDiff';
+export const nextPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.nextDiffHunk';
+export const previousPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.previousDiffHunk';
+export const closePreviewDiffCommand = 'heaths.azureApiReview.preview.closeDiff';
 
 const hasPreviewCommentsContext = 'heaths.azureApiReview.preview.hasComments';
 const previewCommentsVisibleContext = 'heaths.azureApiReview.preview.commentsVisible';
+const previewDiffAvailableContext = 'heaths.azureApiReview.preview.diffAvailable';
+const previewDiffVisibleContext = 'heaths.azureApiReview.preview.diffVisible';
+const previewCanNavigatePreviousDiffContext = 'heaths.azureApiReview.preview.canNavigatePreviousDiff';
+const previewCanNavigateNextDiffContext = 'heaths.azureApiReview.preview.canNavigateNextDiff';
 
 interface PreviewPanel {
   readonly document: vscode.TextDocument;
@@ -23,6 +33,12 @@ interface PreviewPanel {
   readonly contributedStyles: MarkdownPreviewStyles;
   commentsVisible: boolean;
   hasCommentsPatch: boolean;
+  diffAvailable: boolean;
+  diffAvailability?: DiffAvailability;
+  diffBaseline?: DiffBaselineSelection;
+  canNavigatePreviousDiff: boolean;
+  canNavigateNextDiff: boolean;
+  diffRefreshGeneration: number;
   generation: number;
 }
 
@@ -31,10 +47,34 @@ interface MarkdownPreviewStyleExtension {
   readonly packageJSON: unknown;
 }
 
-interface PreviewWebviewMessage {
+interface GoToSourcePreviewWebviewMessage {
   readonly type: 'goToSource';
   readonly line: number;
 }
+
+interface DiffNavigationStatePreviewWebviewMessage {
+  readonly type: 'diffNavigationState';
+  readonly canNavigatePrevious: boolean;
+  readonly canNavigateNext: boolean;
+}
+
+type PreviewWebviewMessage =
+  | GoToSourcePreviewWebviewMessage
+  | DiffNavigationStatePreviewWebviewMessage;
+
+interface SetCommentsVisiblePreviewHostMessage {
+  readonly type: 'setCommentsVisible';
+  readonly visible: boolean;
+}
+
+interface NavigateDiffHunkPreviewHostMessage {
+  readonly type: 'navigateDiffHunk';
+  readonly direction: 'previous' | 'next';
+}
+
+type PreviewHostMessage =
+  | SetCommentsVisiblePreviewHostMessage
+  | NavigateDiffHunkPreviewHostMessage;
 
 export interface MarkdownPreviewStyles {
   readonly stylesheets: readonly vscode.Uri[];
@@ -52,6 +92,24 @@ interface PreviewLineRenderMetadata {
 
 interface PreviewRenderEnv {
   readonly lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>;
+}
+
+type DiffQuickPickItem =
+  | DiffBaselineQuickPickItem
+  | DiffChooseFileQuickPickItem
+  | DiffHideQuickPickItem;
+
+interface DiffBaselineQuickPickItem extends vscode.QuickPickItem {
+  readonly action: 'baseline';
+  readonly baseline: DiffBaselineSelection;
+}
+
+interface DiffChooseFileQuickPickItem extends vscode.QuickPickItem {
+  readonly action: 'chooseFile';
+}
+
+interface DiffHideQuickPickItem extends vscode.QuickPickItem {
+  readonly action: 'hide';
 }
 
 const markdownRenderer = new MarkdownIt({
@@ -81,6 +139,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   public constructor(
     private readonly model: ReviewModel,
     private readonly extensionUri: vscode.Uri,
+    private readonly diffService: DisplayDiffService,
   ) { }
 
   public async resolveCustomTextEditor(
@@ -94,6 +153,10 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       contributedStyles,
       commentsVisible: false,
       hasCommentsPatch: false,
+      diffAvailable: false,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
       generation: 0,
     };
     this.previews.add(preview);
@@ -130,12 +193,14 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       this.setActivePreview(preview);
     }
     await this.render(preview);
+    void this.refreshDiffAvailability(preview);
   }
 
   public refresh(uri?: vscode.Uri): void {
     for (const preview of this.previews) {
       if (!uri || preview.document.uri.toString() === uri.toString()) {
         void this.render(preview);
+        void this.refreshDiffAvailability(preview);
       }
     }
   }
@@ -146,6 +211,89 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
   public hideComments(): void {
     this.setCommentsVisible(false);
+  }
+
+  public async showDiffPicker(): Promise<void> {
+    const preview = this.activePreview;
+    if (!preview) {
+      return;
+    }
+
+    const availability = await this.refreshDiffAvailability(preview, true);
+    if (!availability) {
+      return;
+    }
+
+    if (!preview.diffBaseline && availability.defaultBaseline) {
+      preview.diffBaseline = availability.defaultBaseline;
+      await this.render(preview);
+    }
+
+    const item = await showDiffQuickPick(preview, availability);
+    if (!item) {
+      return;
+    }
+
+    switch (item.action) {
+      case 'hide':
+        preview.diffBaseline = undefined;
+        await this.render(preview);
+        return;
+
+      case 'chooseFile': {
+        const selected = await this.pickDiffFile(preview.document.uri);
+        if (!selected) {
+          return;
+        }
+        preview.diffBaseline = { kind: 'file', uri: selected.toString() };
+        await this.render(preview);
+        return;
+      }
+
+      case 'baseline':
+        preview.diffBaseline = item.baseline;
+        await this.render(preview);
+        return;
+    }
+  }
+
+  public async showDiff(documentUri: string, baseline: DiffBaselineSelection): Promise<void> {
+    const preview = await this.ensurePreview(vscode.Uri.parse(documentUri));
+    if (!preview) {
+      throw new Error('Unable to open the Azure API Review preview.');
+    }
+
+    preview.diffBaseline = baseline;
+    await this.render(preview);
+    await this.refreshDiffAvailability(preview);
+  }
+
+  public async hideDiff(documentUri: string): Promise<void> {
+    const preview = await this.ensurePreview(vscode.Uri.parse(documentUri));
+    if (!preview) {
+      return;
+    }
+
+    preview.diffBaseline = undefined;
+    await this.render(preview);
+  }
+
+  public async hideActiveDiff(): Promise<void> {
+    const preview = this.activePreview;
+    if (!preview?.diffBaseline) {
+      return;
+    }
+
+    preview.diffBaseline = undefined;
+    await this.render(preview);
+  }
+
+  public async showNextDiffHunk(): Promise<void> {
+    await this.navigateActiveDiffHunk('next');
+  }
+
+  public async showPreviousDiffHunk(): Promise<void> {
+    await this.navigateActiveDiffHunk('previous');
   }
 
   private async handleMessage(preview: PreviewPanel, message: unknown): Promise<void> {
@@ -161,6 +309,14 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
             line: message.line,
           });
           break;
+
+        case 'diffNavigationState':
+          preview.canNavigatePreviousDiff = message.canNavigatePrevious;
+          preview.canNavigateNextDiff = message.canNavigateNext;
+          if (this.activePreview === preview) {
+            this.updateContexts(preview);
+          }
+          break;
       }
     } catch (error) {
       void vscode.window.showErrorMessage(
@@ -175,7 +331,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
     preview.commentsVisible = visible;
-    void preview.panel.webview.postMessage({ type: 'setCommentsVisible', visible });
+    void this.postMessage(preview, { type: 'setCommentsVisible', visible });
     this.updateContexts(preview);
   }
 
@@ -187,6 +343,18 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   private updateContexts(preview: PreviewPanel | undefined): void {
     void vscode.commands.executeCommand('setContext', hasPreviewCommentsContext, preview?.hasCommentsPatch === true);
     void vscode.commands.executeCommand('setContext', previewCommentsVisibleContext, preview?.commentsVisible === true);
+    void vscode.commands.executeCommand('setContext', previewDiffAvailableContext, preview?.diffAvailable === true);
+    void vscode.commands.executeCommand('setContext', previewDiffVisibleContext, preview?.diffBaseline !== undefined);
+    void vscode.commands.executeCommand(
+      'setContext',
+      previewCanNavigatePreviousDiffContext,
+      preview?.diffBaseline !== undefined && preview.canNavigatePreviousDiff,
+    );
+    void vscode.commands.executeCommand(
+      'setContext',
+      previewCanNavigateNextDiffContext,
+      preview?.diffBaseline !== undefined && preview.canNavigateNextDiff,
+    );
   }
 
   private async render(preview: PreviewPanel): Promise<void> {
@@ -201,21 +369,137 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     if (!content.hasCommentsPatch) {
       preview.commentsVisible = false;
     }
+    preview.canNavigatePreviousDiff = false;
+    preview.canNavigateNextDiff = false;
 
-    const lineMetadata = createPreviewLineMetadata(preview.document.getText(), content, entries);
+    const sourceMarkdown = preview.document.getText();
+    const lineMetadata = createPreviewLineMetadata(sourceMarkdown, content, entries);
+    let contentHtml = renderPreviewMarkdown(content.markdown, lineMetadata);
+    let diffVisible = false;
+    if (preview.diffBaseline) {
+      try {
+        const baseline = await this.resolveBaseline(preview);
+        if (generation !== preview.generation || !this.previews.has(preview)) {
+          return;
+        }
+        const diffLineMetadata = createDiffLineMetadata(entries);
+        const renderedDiff = renderDiffPreview(baseline.markdown, sourceMarkdown, diffLineMetadata, baseline.label);
+        contentHtml = renderedDiff.html;
+        preview.canNavigateNextDiff = renderedDiff.hunkCount > 0;
+        diffVisible = true;
+      } catch (error) {
+        preview.diffBaseline = undefined;
+        void vscode.window.showErrorMessage(
+          `Unable to show diff: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     preview.panel.webview.html = getPreviewHtml(
       preview.panel.webview,
       this.extensionUri,
       preview.document.uri,
-      content.markdown,
+      contentHtml,
       preview.hasCommentsPatch,
       preview.commentsVisible,
+      diffVisible,
       preview.contributedStyles.stylesheets,
-      lineMetadata,
     );
     if (this.activePreview === preview) {
       this.updateContexts(preview);
     }
+  }
+
+  private async ensurePreview(uri: vscode.Uri): Promise<PreviewPanel | undefined> {
+    let preview = this.findPreview(uri);
+    if (preview) {
+      return preview;
+    }
+
+    await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
+    preview = this.findPreview(uri);
+    return preview;
+  }
+
+  private findPreview(uri: vscode.Uri): PreviewPanel | undefined {
+    for (const preview of this.previews) {
+      if (preview.document.uri.toString() === uri.toString()) {
+        return preview;
+      }
+    }
+    return undefined;
+  }
+
+  private async refreshDiffAvailability(
+    preview: PreviewPanel,
+    promptForGitHubAuth = false,
+  ): Promise<DiffAvailability | undefined> {
+    const generation = ++preview.diffRefreshGeneration;
+
+    try {
+      const availability = await this.diffService.getAvailability(preview.document, { promptForGitHubAuth });
+      if (generation !== preview.diffRefreshGeneration || !this.previews.has(preview)) {
+        return undefined;
+      }
+
+      preview.diffAvailability = availability;
+      preview.diffAvailable = availability.candidates.length > 0 || availability.canPickFile;
+      if (!preview.diffAvailable) {
+        preview.diffBaseline = undefined;
+      }
+      if (this.activePreview === preview) {
+        this.updateContexts(preview);
+      }
+      return availability;
+    } catch (error) {
+      preview.diffAvailability = undefined;
+      preview.diffAvailable = false;
+      preview.diffBaseline = undefined;
+      if (this.activePreview === preview) {
+        this.updateContexts(preview);
+      }
+      void vscode.window.showWarningMessage(
+        `Unable to inspect diff history: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  private async navigateActiveDiffHunk(direction: 'previous' | 'next'): Promise<void> {
+    const preview = this.activePreview;
+    if (!preview?.diffBaseline) {
+      return;
+    }
+
+    await this.postMessage(preview, { type: 'navigateDiffHunk', direction });
+  }
+
+  private async resolveBaseline(preview: PreviewPanel): Promise<ResolvedBaseline> {
+    const baseline = preview.diffBaseline;
+    if (!baseline) {
+      throw new Error('No diff baseline is active.');
+    }
+
+    return this.diffService.resolveBaseline(preview.document, baseline);
+  }
+
+  private async postMessage(preview: PreviewPanel, message: PreviewHostMessage): Promise<void> {
+    await preview.panel.webview.postMessage(message);
+  }
+
+  private async pickDiffFile(documentUri: vscode.Uri): Promise<vscode.Uri | undefined> {
+    const selection = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      defaultUri: documentUri,
+      filters: {
+        Markdown: ['md'],
+      },
+      openLabel: 'Select baseline',
+      title: 'Choose API baseline file',
+    });
+    return selection?.[0];
   }
 }
 
@@ -385,11 +669,11 @@ function getPreviewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   documentUri: vscode.Uri,
-  markdown: string,
+  contentHtml: string,
   hasCommentsPatch: boolean,
   commentsVisible: boolean,
+  diffVisible: boolean,
   contributedStylesheets: readonly vscode.Uri[],
-  lineMetadata: readonly PreviewLineMetadata[],
 ): string {
   const stylesheet = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'markdownPreview.css'));
   const contributedStyles = contributedStylesheets
@@ -402,6 +686,7 @@ function getPreviewHtml(
   const classes = [
     hasCommentsPatch ? 'has-comments-patch' : '',
     commentsVisible ? 'comments-visible' : '',
+    diffVisible ? 'diff-visible' : '',
   ].filter(Boolean).join(' ');
 
   return `<!DOCTYPE html>
@@ -416,7 +701,7 @@ ${contributedStyles}
   <title>Azure API Review</title>
 </head>
 <body class="${classes}">
-  <main class="markdown-body" dir="auto">${renderPreviewMarkdown(markdown, lineMetadata)}</main>
+  <main class="markdown-body" dir="auto">${contentHtml}</main>
   <div id="preview-hover-actions" hidden role="toolbar" aria-label="Review actions">
     <button type="button" data-action="documentation" title="${escapeAttribute(showDocumentationTooltip)}" aria-label="${escapeAttribute(showDocumentationTooltip)}"></button>
     <button type="button" data-action="source" title="${escapeAttribute(goToSourceTooltip)}" aria-label="${escapeAttribute(goToSourceTooltip)}"></button>
@@ -427,11 +712,23 @@ ${contributedStyles}
 }
 
 function isPreviewWebviewMessage(message: unknown): message is PreviewWebviewMessage {
-  return isRecord(message)
-    && message.type === 'goToSource'
-    && typeof message.line === 'number'
-    && Number.isInteger(message.line)
-    && message.line >= 0;
+  if (!isRecord(message) || typeof message.type !== 'string') {
+    return false;
+  }
+
+  switch (message.type) {
+    case 'goToSource':
+      return typeof message.line === 'number'
+        && Number.isInteger(message.line)
+        && message.line >= 0;
+
+    case 'diffNavigationState':
+      return typeof message.canNavigatePrevious === 'boolean'
+        && typeof message.canNavigateNext === 'boolean';
+
+    default:
+      return false;
+  }
 }
 
 function normalizeLanguage(language: string): string {
@@ -503,4 +800,192 @@ function createPreviewLineRenderMetadata(
 
 function isPreviewRenderEnv(value: unknown): value is PreviewRenderEnv {
   return isRecord(value);
+}
+
+async function showDiffQuickPick(
+  preview: PreviewPanel,
+  availability: DiffAvailability,
+): Promise<DiffQuickPickItem | undefined> {
+  const quickPick = vscode.window.createQuickPick<DiffQuickPickItem>();
+
+  return new Promise(resolve => {
+    const items = createDiffQuickPickItems(preview, availability);
+    quickPick.title = 'Display diff';
+    quickPick.placeholder = 'Select a baseline revision or choose a file';
+    quickPick.items = items;
+    quickPick.activeItems = getActiveQuickPickItems(items, preview, availability);
+    quickPick.matchOnDescription = true;
+    quickPick.matchOnDetail = true;
+
+    const disposables = [
+      quickPick.onDidAccept(() => {
+        const [item] = quickPick.selectedItems;
+        resolve(item);
+        dispose();
+      }),
+      quickPick.onDidHide(() => {
+        resolve(undefined);
+        dispose();
+      }),
+    ];
+
+    const dispose = (): void => {
+      while (disposables.length > 0) {
+        disposables.pop()?.dispose();
+      }
+      quickPick.dispose();
+    };
+
+    quickPick.show();
+  });
+}
+
+function createDiffQuickPickItems(
+  preview: PreviewPanel,
+  availability: DiffAvailability,
+): readonly DiffQuickPickItem[] {
+  const items: DiffQuickPickItem[] = [];
+  const duplicateTagLabels = getDuplicateTagLabels(availability.candidates);
+
+  if (preview.diffBaseline) {
+    items.push({
+      action: 'hide',
+      label: '$(close) Close diff',
+      description: 'Return to the normal preview',
+    });
+  }
+
+  const currentFileBaseline = preview.diffBaseline?.kind === 'file'
+    ? {
+      action: 'baseline',
+      baseline: preview.diffBaseline,
+      label: `$(file) ${getPathLabel(preview.diffBaseline.uri)}`,
+      description: 'Current file baseline',
+      detail: preview.diffBaseline.uri,
+    } satisfies DiffBaselineQuickPickItem
+    : undefined;
+  if (currentFileBaseline) {
+    items.push(currentFileBaseline);
+  }
+
+  const currentRevisionBaseline = preview.diffBaseline && preview.diffBaseline.kind !== 'file'
+    && !availability.candidates.some(candidate => isSameBaseline(candidate.baseline, preview.diffBaseline!))
+    ? {
+      action: 'baseline',
+      baseline: preview.diffBaseline,
+      ...createCurrentBaselineQuickPickCandidate(preview.diffBaseline, availability),
+    } satisfies DiffBaselineQuickPickItem
+    : undefined;
+  if (currentRevisionBaseline) {
+    items.push(currentRevisionBaseline);
+  }
+
+  items.push(...availability.candidates.map(candidate => ({
+    action: 'baseline',
+    baseline: candidate.baseline,
+    ...createDiffQuickPickCandidate(candidate, duplicateTagLabels),
+  } satisfies DiffBaselineQuickPickItem)));
+
+  if (availability.canPickFile) {
+    items.push({
+      action: 'chooseFile',
+      label: '$(folder-opened) Choose file...',
+      description: 'Compare against another API.md file',
+    });
+  }
+
+  return items;
+}
+
+export function createDiffQuickPickCandidate(
+  candidate: DiffAvailability['candidates'][number],
+  duplicateTagLabels: ReadonlySet<string> = new Set(),
+): vscode.QuickPickItem {
+  return {
+    label: candidate.baseline.kind === 'tag'
+      ? `$(tag) ${candidate.label}`
+      : `$(git-commit) ${candidate.label}`,
+    description: candidate.description,
+    detail: candidate.baseline.kind === 'tag' && duplicateTagLabels.has(candidate.label)
+      ? candidate.baseline.ref
+      : candidate.detail,
+  };
+}
+
+function createCurrentBaselineQuickPickCandidate(
+  baseline: Exclude<DiffBaselineSelection, { kind: 'file' }>,
+  availability: DiffAvailability,
+): vscode.QuickPickItem {
+  const isDefaultBaseline = availability.defaultBaseline !== undefined
+    && isSameBaseline(availability.defaultBaseline, baseline);
+
+  if (baseline.kind === 'tag') {
+    return {
+      label: `$(tag) ${getDisplayedTagBaselineLabel(baseline.ref)}`,
+      description: isDefaultBaseline ? 'Pull request base' : 'Current baseline',
+      detail: baseline.ref,
+    };
+  }
+
+  return {
+    label: `$(git-commit) ${baseline.ref.slice(0, 8)}`,
+    description: isDefaultBaseline ? 'Pull request base' : 'Current baseline',
+    detail: baseline.ref,
+  };
+}
+
+function getDisplayedTagBaselineLabel(ref: string): string {
+  const separator = ref.lastIndexOf('@');
+  return separator >= 0 ? ref.slice(separator + 1) : ref;
+}
+
+function getDuplicateTagLabels(candidates: readonly DiffAvailability['candidates'][number][]): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+
+  for (const candidate of candidates) {
+    if (candidate.baseline.kind !== 'tag') {
+      continue;
+    }
+    counts.set(candidate.label, (counts.get(candidate.label) ?? 0) + 1);
+  }
+
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([label]) => label),
+  );
+}
+
+function getActiveQuickPickItems(
+  items: readonly DiffQuickPickItem[],
+  preview: PreviewPanel,
+  availability: DiffAvailability,
+): readonly DiffQuickPickItem[] {
+  const currentBaseline = preview.diffBaseline;
+  const current = currentBaseline
+    ? items.find(item => item.action === 'baseline' && isSameBaseline(item.baseline, currentBaseline))
+    : undefined;
+  if (current) {
+    return [current];
+  }
+
+  if (!availability.defaultBaseline) {
+    return [];
+  }
+
+  const fallback = items.find(item =>
+    item.action === 'baseline' && availability.defaultBaseline !== undefined
+    && isSameBaseline(item.baseline, availability.defaultBaseline),
+  );
+  return fallback ? [fallback] : [];
+}
+
+function isSameBaseline(left: DiffBaselineSelection, right: DiffBaselineSelection): boolean {
+  return left.kind === right.kind
+    && ('uri' in left ? left.uri === ('uri' in right ? right.uri : undefined) : left.ref === ('ref' in right ? right.ref : undefined));
+}
+
+function getPathLabel(uri: string): string {
+  const value = vscode.Uri.parse(uri);
+  return value.path.slice(value.path.lastIndexOf('/') + 1) || value.toString();
 }

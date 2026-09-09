@@ -47,6 +47,14 @@
   --preview-blockquote-border-color: var(--vscode-textBlockQuote-border);
   --preview-inline-code-background: var(--vscode-textCodeBlock-background);
   --preview-code-block-background: var(--vscode-textCodeBlock-background);
+  --preview-diff-summary-background: var(--vscode-editorInfo-background, var(--vscode-textCodeBlock-background));
+  --preview-diff-summary-border: var(--vscode-editorInfo-border, var(--vscode-panel-border));
+  --preview-diff-summary-foreground: var(--vscode-editorInfo-foreground, var(--vscode-editor-foreground));
+  --preview-diff-added-background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground, rgb(155 185 85 / 20%)));
+  --preview-diff-removed-background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground, rgb(255 0 0 / 20%)));
+  --preview-diff-border-width: 1px;
+  --preview-diff-added-border: var(--vscode-diffEditor-insertedTextBorder, transparent);
+  --preview-diff-removed-border: var(--vscode-diffEditor-removedTextBorder, transparent);
   --preview-table-border-color: var(--vscode-panel-border);
   --preview-hljs-default: #dcdcdc;
   --preview-hljs-keyword: #569cd6;
@@ -219,25 +227,93 @@ body {
   white-space: pre;
 }
 
-.markdown-body pre code .code-line {
+.markdown-body pre code .code-line,
+.preview-diff-line {
   display: block;
   min-height: var(--preview-code-line-min-height);
 }
 
-.markdown-body pre code .preview-action-line {
+.markdown-body .preview-action-line {
   outline: none;
 }
 
-.markdown-body pre code .preview-action-line:focus-visible {
+.markdown-body .preview-action-line:focus-visible {
   outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
   outline-offset: var(--preview-hover-focus-offset);
 }
 
-.has-comments-patch .markdown-body pre code .preview-documentation-line {
+.preview-diff-summary {
+  margin: 0;
+  padding: 0;
+  color: var(--preview-diff-summary-foreground);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+}
+
+.preview-diff-body {
+  display: block;
+}
+
+.preview-diff-hunk,
+.preview-diff-block {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.preview-diff-markdown > * {
+  margin: 0;
+}
+
+.preview-diff-markdown > ul,
+.preview-diff-markdown > ol {
+  padding-inline-start: 1.5em;
+}
+
+.preview-diff-added.preview-diff-markdown {
+  background: var(--preview-diff-added-background);
+}
+
+.preview-diff-removed.preview-diff-markdown {
+  background: var(--preview-diff-removed-background);
+}
+
+.preview-diff-code {
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  background: none;
+  border: 0;
+}
+
+.preview-diff-code code {
+  display: block;
+  white-space: pre;
+}
+
+.preview-diff-line-added {
+  background: var(--preview-diff-added-background);
+}
+
+.preview-diff-line-removed {
+  background: var(--preview-diff-removed-background);
+}
+
+.preview-diff-line {
+  display: block;
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+}
+
+.has-comments-patch .markdown-body .preview-documentation-line {
   display: none;
 }
 
-.has-comments-patch .markdown-body pre code .preview-documentation-line.preview-documentation-visible {
+.has-comments-patch .markdown-body .preview-documentation-line.preview-documentation-visible {
   display: block;
 }
 
