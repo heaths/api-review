@@ -87,6 +87,9 @@ To open the extension in a browser-hosted VS Code instance:
 pnpm run run-in-browser
 ```
 
+Pass a workspace directory as the first argument to open that folder instead of
+`.`. Any additional arguments are forwarded to `vscode-test-web`.
+
 ## Build a VSIX
 
 Build an installable VSIX package for local testing:

@@ -275,6 +275,6 @@
     "package:vsix": "vsce package --no-dependencies",
     "lint": "eslint src",
     "prerun-in-browser": "pnpm run compile:web",
-    "run-in-browser": "vscode-test-web --browserType=chromium --extensionDevelopmentPath=. ."
+    "run-in-browser": "node scripts/run-in-browser.mjs"
   }
 }
