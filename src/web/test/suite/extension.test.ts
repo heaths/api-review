@@ -38,7 +38,10 @@ suite('Web Extension Test Suite', function () {
     const activeDiffCommand = extension.packageJSON.contributes.commands.find(
       (command: { command: string }) => command.command === closePreviewDiffCommand,
     );
-    assert.strictEqual(activeDiffCommand?.icon, '$(close)');
+    assert.deepStrictEqual(activeDiffCommand?.icon, {
+      light: 'assets/codicons/light/close-diff.svg',
+      dark: 'assets/codicons/dark/close-diff.svg',
+    });
     const nextDiffCommand = extension.packageJSON.contributes.commands.find(
       (command: { command: string }) => command.command === nextPreviewDiffHunkCommand,
     );
@@ -47,6 +50,22 @@ suite('Web Extension Test Suite', function () {
       (command: { command: string }) => command.command === previousPreviewDiffHunkCommand,
     );
     assert.strictEqual(previousDiffCommand?.icon, '$(arrow-up)');
+    const showCommentsCommand = extension.packageJSON.contributes.commands.find(
+      (command: { command: string }) => command.command === 'heaths.azureApiReview.preview.showComments',
+    );
+    assert.strictEqual(showCommentsCommand?.title, 'Show all documentation');
+    assert.deepStrictEqual(showCommentsCommand?.icon, {
+      light: 'assets/codicons/light/expand-all-docs.svg',
+      dark: 'assets/codicons/dark/expand-all-docs.svg',
+    });
+    const hideCommentsCommand = extension.packageJSON.contributes.commands.find(
+      (command: { command: string }) => command.command === 'heaths.azureApiReview.preview.hideComments',
+    );
+    assert.strictEqual(hideCommentsCommand?.title, 'Hide all documentation');
+    assert.deepStrictEqual(hideCommentsCommand?.icon, {
+      light: 'assets/codicons/light/collapse-all-docs.svg',
+      dark: 'assets/codicons/dark/collapse-all-docs.svg',
+    });
     const sourceMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === reopenPreviewAsTextCommand,
     );
@@ -105,10 +124,55 @@ suite('Web Extension Test Suite', function () {
       uri,
     );
 
-    assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.azureApiReview.showDocumentation'),
+    const documentation = codeLenses.find(
+      lens => lens.command?.command === 'heaths.azureApiReview.showDocumentation',
+    );
+    assert.ok(documentation,
       `Documentation CodeLens missing from ${codeLenses.length} results`);
+    assert.strictEqual(documentation.command?.title, '$(file-text) Documentation');
+    assert.strictEqual(documentation.command?.tooltip, 'Show documentation');
     assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.azureApiReview.goToSource'),
       `Source CodeLens missing from ${codeLenses.length} results`);
+  });
+
+  test('includes the generated documentation icon family', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const popupIcons = new Map([
+      ['expand-docs', undefined],
+      ['collapse-docs', 'transform="translate(8.571 6.857) scale(1.1429)"'],
+      ['go-to-file', undefined],
+    ]);
+
+    for (const [name, transform] of popupIcons) {
+      const uri = vscode.Uri.joinPath(folder.uri, `assets/codicons/${name}.svg`);
+      const svg = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+      assert.ok(svg.includes('viewBox="0 0 16 16"'), `${name}.svg should use the codicon view box`);
+      assert.strictEqual(svg.includes('transform='), transform !== undefined);
+      if (transform) {
+        assert.ok(svg.includes(transform), `${name}.svg should use the shared lower-right overlay transform`);
+        assert.ok(svg.includes('<rect x="7.5" y="7.5" width="8.5" height="8.5" fill="black"/>'));
+      }
+    }
+
+    for (const theme of ['light', 'dark']) {
+      for (const [name, overlayPath] of [
+        ['expand-all-docs', 'M15 6V11C15 13.21'],
+        ['collapse-all-docs', 'M9.5 7C9.776 7'],
+        ['close-diff', 'M5.5 2H2.5C1.673 2'],
+      ]) {
+        const uri = vscode.Uri.joinPath(folder.uri, `assets/codicons/${theme}/${name}.svg`);
+        const svg = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+        const overlayTransform = name === 'close-diff'
+          ? 'transform="translate(8.571 6.857) scale(1.1429)"'
+          : 'transform="translate(6.769 6.769) scale(0.6154)"';
+        assert.ok(svg.includes(overlayTransform));
+        assert.ok(svg.includes('<rect x="7.5" y="7.5" width="8.5" height="8.5" fill="black"/>'));
+        assert.ok(svg.includes(overlayPath), `${name}.svg should contain its matching codicon overlay`);
+        assert.ok(!svg.includes('fill="currentColor"'));
+      }
+    }
   });
 
   test('navigates from the API fixture to the mapped source file', async () => {

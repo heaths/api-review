@@ -5,7 +5,8 @@ import { ReviewModel } from './reviewModel';
 
 export const showDocumentationCommand = 'heaths.azureApiReview.showDocumentation';
 export const goToSourceCommand = 'heaths.azureApiReview.goToSource';
-export const showDocumentationTooltip = 'Click to show documentation';
+export const showDocumentationTooltip = 'Show documentation';
+export const hideDocumentationTooltip = 'Hide documentation';
 export const goToSourceTooltip = 'Navigate to declaration';
 
 export class ReviewCodeLensProvider implements vscode.CodeLensProvider {

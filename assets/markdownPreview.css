@@ -384,11 +384,26 @@ body {
   background: var(--preview-hover-button-background);
 }
 
-#preview-hover-actions button svg {
+#preview-hover-actions button::before {
+  content: "";
   inline-size: var(--preview-hover-icon-size);
   block-size: var(--preview-hover-icon-size);
   display: block;
-  fill: currentColor;
+  background: currentColor;
+  mask: var(--preview-action-icon) center / contain no-repeat;
+  -webkit-mask: var(--preview-action-icon) center / contain no-repeat;
+}
+
+#preview-hover-actions button[data-icon="expand-docs"] {
+  --preview-action-icon: var(--preview-expand-docs-icon);
+}
+
+#preview-hover-actions button[data-icon="collapse-docs"] {
+  --preview-action-icon: var(--preview-collapse-docs-icon);
+}
+
+#preview-hover-actions button[data-icon="go-to-file"] {
+  --preview-action-icon: var(--preview-go-to-file-icon);
 }
 
 /* Keep this palette aligned with VS Code's Markdown preview media/highlight.css. */
