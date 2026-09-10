@@ -1,3 +1,4 @@
+/// Greets the caller.
 pub fn alpha();
-pub fn beta();
+/// Greets the gamma audience.
 pub fn gamma();

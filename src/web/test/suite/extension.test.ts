@@ -131,7 +131,28 @@ suite('Web Extension Test Suite', function () {
     const editor = vscode.window.activeTextEditor;
     assert.ok(editor, 'Expected the source file to open');
     assert.strictEqual(editor.document.uri.path, '/src/web/test/fixtures/src/lib.rs');
-    assert.strictEqual(editor.selection.active.line, 0);
+    assert.strictEqual(editor.selection.active.line, 1);
+  });
+
+  test('maps both v2 declarations to source lines in the current fixture', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const uri = vscode.Uri.joinPath(folder.uri, fixturePath);
+    const document = await vscode.workspace.openTextDocument(uri);
+    const output = vscode.window.createOutputChannel('Azure API Review Test');
+    const model = new ReviewModel(output);
+
+    try {
+      await model.refresh();
+      const sourceLines = (await model.getEntries(document))
+        .filter(entry => entry.source)
+        .map(entry => entry.source?.range.start.line);
+
+      assert.deepStrictEqual(sourceLines, [1, 3]);
+    } finally {
+      output.dispose();
+    }
   });
 
   test('applies the configured comments patch for preview only', async () => {
@@ -148,8 +169,10 @@ suite('Web Extension Test Suite', function () {
       const preview = await model.getPreviewContent(document);
 
       assert.strictEqual(preview.hasCommentsPatch, true);
-      assert.ok(preview.markdown.includes('/// Greets the target.'));
-      assert.ok(!document.getText().includes('/// Greets the target.'));
+      assert.ok(preview.markdown.includes('/// Greets the caller.'));
+      assert.ok(preview.markdown.includes('/// Greets the gamma audience.'));
+      assert.ok(!document.getText().includes('/// Greets the caller.'));
+      assert.ok(!document.getText().includes('/// Greets the gamma audience.'));
     } finally {
       output.dispose();
     }
