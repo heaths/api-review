@@ -39,6 +39,7 @@
         refreshDiffHunks();
         if (activeLine && isPopupVisible()) {
           updatePopup(activeLine);
+          positionPopup(activeLine, anchorPointerX, true);
         }
         scheduleNavigationStateUpdate();
         break;
@@ -52,12 +53,12 @@
 
   window.addEventListener('resize', () => {
     if (isPopupVisible() && activeLine) {
-      positionPopup(activeLine, anchorPointerX);
+      positionPopup(activeLine, anchorPointerX, true);
     }
   });
   window.addEventListener('scroll', () => {
     if (isPopupVisible() && activeLine) {
-      positionPopup(activeLine, anchorPointerX);
+      positionPopup(activeLine, anchorPointerX, true);
     }
     scheduleNavigationStateUpdate();
   }, true);
@@ -90,6 +91,9 @@
 
     toggleDocumentation(activeLine);
     updatePopup(activeLine);
+    if (isPopupVisible()) {
+      positionPopup(activeLine, anchorPointerX, true);
+    }
   });
 
   bindPopupButton(sourceButton, () => {
@@ -102,6 +106,9 @@
       vscode?.postMessage({ type: 'goToSource', line: sourceLine });
     }
     updatePopup(activeLine);
+    if (isPopupVisible()) {
+      positionPopup(activeLine, anchorPointerX, true);
+    }
   });
 
   function initializeActionLines() {
