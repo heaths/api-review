@@ -1,0 +1,11 @@
+{
+  "files.readonlyInclude": {
+    "**/api/API.comments.patch": true,
+    "**/api/API.md": true,
+    "**/api/API.md.map": true,
+    "**/api/API.metadata.yml": true
+  },
+  "workbench.editorAssociations": {
+    "**/api/API.md": "heaths.azureApiReview.preview"
+  }
+}
