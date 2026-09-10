@@ -11,6 +11,6 @@
   - `bar`
 
 ```rust
-pub fn alpha(target: Option<String>);
+pub fn alpha();
 pub fn gamma();
 ```

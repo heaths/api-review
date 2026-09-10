@@ -1,5 +1,7 @@
 --- a/API.md
 +++ b/API.md
-@@ -14,1 +14,2 @@
-+/// Greets the target.
- pub fn alpha(target: Option<String>);
+@@ -14,2 +14,4 @@
++/// Greets the caller.
+ pub fn alpha();
++/// Greets the gamma audience.
+ pub fn gamma();
