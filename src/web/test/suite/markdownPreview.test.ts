@@ -1,7 +1,12 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { createPreviewLineMetadata } from '../../lineMetadata';
-import { getContributedMarkdownPreviewStyles, renderMarkdown, renderPreviewMarkdown } from '../../markdownPreview';
+import {
+  getContributedMarkdownPreviewStyles,
+  getPreviewHtml,
+  renderMarkdown,
+  renderPreviewMarkdown,
+} from '../../markdownPreview';
 
 suite('Markdown preview', () => {
   test('renders standard Markdown content', () => {
@@ -197,6 +202,32 @@ suite('Markdown preview', () => {
     assert.ok(html.includes('class="code-line comment-line preview-documentation-line" data-line="3" data-documentation-group="line-3"'));
     assert.ok(html.includes('class="code-line preview-action-line" data-line="4" data-source-line="3" tabindex="0" aria-haspopup="true" aria-controls="preview-hover-actions" aria-label="Review actions available: documentation" data-has-documentation data-documentation-group="line-3"'));
     assert.ok(html.includes('class="code-line preview-action-line" data-line="5" data-source-line="4" tabindex="0" aria-haspopup="true" aria-controls="preview-hover-actions" aria-label="Review actions available: go to source" data-has-source'));
+  });
+
+  test('wires the shared documentation icons and toggle tooltips into the popup', () => {
+    const root = vscode.Uri.parse('test-extension:/extension');
+    const webview = {
+      cspSource: 'test-webview:',
+      asWebviewUri: (uri: vscode.Uri) => uri.with({ scheme: 'test-webview' }),
+    } as vscode.Webview;
+
+    const html = getPreviewHtml(
+      webview,
+      root,
+      vscode.Uri.parse('test-workspace:/API.md'),
+      '<p>API</p>',
+      true,
+      false,
+      false,
+      [],
+    );
+
+    assert.ok(html.includes('--preview-expand-docs-icon: url("test-webview:/extension/assets/codicons/expand-docs.svg")'));
+    assert.ok(html.includes('--preview-collapse-docs-icon: url("test-webview:/extension/assets/codicons/collapse-docs.svg")'));
+    assert.ok(html.includes('--preview-go-to-file-icon: url("test-webview:/extension/assets/codicons/go-to-file.svg")'));
+    assert.ok(html.includes('data-show-tooltip="Show documentation"'));
+    assert.ok(html.includes('data-hide-tooltip="Hide documentation"'));
+    assert.ok(html.includes('data-action="source" data-icon="go-to-file"'));
   });
 
   test('resolves contributed preview styles in declaration order', () => {

@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import {
   goToSourceCommand,
   goToSourceTooltip,
+  hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
 import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, ResolvedBaseline } from './displayDiff';
@@ -665,7 +666,7 @@ function wrapHighlightedLines(
   return lines.join('');
 }
 
-function getPreviewHtml(
+export function getPreviewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   documentUri: vscode.Uri,
@@ -680,6 +681,8 @@ function getPreviewHtml(
     .map(uri => `  <link rel="stylesheet" href="${escapeAttribute(webview.asWebviewUri(uri).toString())}">`)
     .join('\n');
   const script = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'markdownPreview.js'));
+  const icon = (name: string): string =>
+    webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'codicons', `${name}.svg`)).toString();
   const documentDirectory = documentUri.with({ path: documentUri.path.slice(0, documentUri.path.lastIndexOf('/') + 1) });
   const base = webview.asWebviewUri(documentDirectory);
   const nonce = createNonce();
@@ -693,18 +696,25 @@ function getPreviewHtml(
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; media-src ${webview.cspSource} https: data:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; media-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; font-src ${webview.cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base href="${escapeAttribute(base.toString())}">
   <link rel="stylesheet" href="${escapeAttribute(stylesheet.toString())}">
 ${contributedStyles}
+  <style nonce="${nonce}">
+    :root {
+      --preview-expand-docs-icon: url(${JSON.stringify(icon('expand-docs'))});
+      --preview-collapse-docs-icon: url(${JSON.stringify(icon('collapse-docs'))});
+      --preview-go-to-file-icon: url(${JSON.stringify(icon('go-to-file'))});
+    }
+  </style>
   <title>Azure API Review</title>
 </head>
 <body class="${classes}">
   <main class="markdown-body" dir="auto">${contentHtml}</main>
   <div id="preview-hover-actions" hidden role="toolbar" aria-label="Review actions">
-    <button type="button" data-action="documentation" title="${escapeAttribute(showDocumentationTooltip)}" aria-label="${escapeAttribute(showDocumentationTooltip)}"></button>
-    <button type="button" data-action="source" title="${escapeAttribute(goToSourceTooltip)}" aria-label="${escapeAttribute(goToSourceTooltip)}"></button>
+    <button type="button" data-action="documentation" data-icon="expand-docs" data-show-tooltip="${escapeAttribute(showDocumentationTooltip)}" data-hide-tooltip="${escapeAttribute(hideDocumentationTooltip)}" title="${escapeAttribute(showDocumentationTooltip)}" aria-label="${escapeAttribute(showDocumentationTooltip)}"></button>
+    <button type="button" data-action="source" data-icon="go-to-file" title="${escapeAttribute(goToSourceTooltip)}" aria-label="${escapeAttribute(goToSourceTooltip)}"></button>
   </div>
   <script nonce="${nonce}" src="${escapeAttribute(script.toString())}"></script>
 </body>

@@ -50,7 +50,8 @@ suite('Documentation peek', function () {
     );
     const lens = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.showDocumentation');
     assert.ok(lens?.command?.arguments, 'Documentation CodeLens was not provided');
-    assert.strictEqual(lens.command.tooltip, 'Click to show documentation');
+    assert.strictEqual(lens.command.title, '$(file-text) Documentation');
+    assert.strictEqual(lens.command.tooltip, 'Show documentation');
 
     const source = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.goToSource');
     assert.strictEqual(source?.command?.tooltip, 'Navigate to declaration');

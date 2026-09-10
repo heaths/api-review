@@ -66,20 +66,29 @@
         "title": "Close Diff",
         "shortTitle": "Close Diff",
         "category": "Azure API Review",
-        "icon": "$(close)",
+        "icon": {
+          "light": "assets/codicons/light/close-diff.svg",
+          "dark": "assets/codicons/dark/close-diff.svg"
+        },
         "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.diffAvailable"
       },
       {
         "command": "heaths.azureApiReview.preview.showComments",
-        "title": "Show Comments",
+        "title": "Show all documentation",
         "category": "Azure API Review",
-        "icon": "$(expand-all)"
+        "icon": {
+          "light": "assets/codicons/light/expand-all-docs.svg",
+          "dark": "assets/codicons/dark/expand-all-docs.svg"
+        }
       },
       {
         "command": "heaths.azureApiReview.preview.hideComments",
-        "title": "Hide Comments",
+        "title": "Hide all documentation",
         "category": "Azure API Review",
-        "icon": "$(collapse-all)"
+        "icon": {
+          "light": "assets/codicons/light/collapse-all-docs.svg",
+          "dark": "assets/codicons/dark/collapse-all-docs.svg"
+        }
       },
       {
         "command": "heaths.azureApiReview.preview.reopenAsText",
