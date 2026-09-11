@@ -79,31 +79,31 @@ suite('Web Extension Test Suite', function () {
     const sourceMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === reopenPreviewAsTextCommand,
     );
-    assert.strictEqual(sourceMenu?.group, 'navigation@5');
+    assert.strictEqual(sourceMenu?.group, 'navigation@-994');
     const diffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === showPreviewDiffCommand,
     );
-    assert.strictEqual(diffMenu?.group, 'navigation@1');
+    assert.strictEqual(diffMenu?.group, 'navigation@-998');
     const approveMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === approvePreviewPullRequestCommand,
     );
-    assert.strictEqual(approveMenu?.group, 'navigation@0');
+    assert.strictEqual(approveMenu?.group, 'navigation@-1000');
     const rejectMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === rejectPreviewPullRequestCommand,
     );
-    assert.strictEqual(rejectMenu?.group, 'navigation@0.1');
+    assert.strictEqual(rejectMenu?.group, 'navigation@-999');
     const nextDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === nextPreviewDiffHunkCommand,
     );
-    assert.strictEqual(nextDiffMenu?.group, 'navigation@1');
+    assert.strictEqual(nextDiffMenu?.group, 'navigation@-998');
     const previousDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === previousPreviewDiffHunkCommand,
     );
-    assert.strictEqual(previousDiffMenu?.group, 'navigation@2');
+    assert.strictEqual(previousDiffMenu?.group, 'navigation@-997');
     const closeDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === closePreviewDiffCommand,
     );
-    assert.strictEqual(closeDiffMenu?.group, 'navigation@3');
+    assert.strictEqual(closeDiffMenu?.group, 'navigation@-996');
     const api = await extension.activate();
     assert.ok(api);
     assert.strictEqual(api.version, 1);
