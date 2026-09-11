@@ -1,4 +1,6 @@
 import { mapPreviewLines, PreviewLineMap } from './commentPatch';
+import { getFencedCodeLines } from './markdown';
+import { PullRequestLineComment } from './pullRequestReview';
 import { PreviewContent, ReviewEntry } from './reviewModel';
 
 export interface ReviewLineMetadata extends ReviewEntry {
@@ -11,6 +13,7 @@ export interface PreviewLineMetadata extends ReviewLineMetadata {
   readonly previewLine: number;
   readonly documentationGroupId?: string;
   readonly documentationPreviewLines: readonly number[];
+  readonly pullRequestComment?: PullRequestLineComment;
   readonly ariaLabel: string;
 }
 
@@ -26,13 +29,17 @@ export function createPreviewLineMetadata(
   sourceMarkdown: string,
   content: PreviewContent,
   entries: readonly ReviewEntry[],
+  pullRequestComments?: ReadonlyMap<number, PullRequestLineComment>,
 ): readonly PreviewLineMetadata[] {
   const previewLineMap = getPreviewLineMap(sourceMarkdown, content);
   const documentationGroups = new Map(
     previewLineMap.documentationGroups.map(group => [group.line, group] as const),
   );
+  const fencedCodeLanguages = new Map(
+    getFencedCodeLines(sourceMarkdown).map(line => [line.line, line.language] as const),
+  );
 
-  return createReviewLineMetadata(entries)
+  return createReviewLineMetadata(getEntriesWithPullRequestComments(entries, pullRequestComments, fencedCodeLanguages))
     .map(entry => {
       const documentationGroup = documentationGroups.get(entry.line);
       const hasDocumentation = entry.hasDocumentation && documentationGroup !== undefined;
@@ -43,15 +50,24 @@ export function createPreviewLineMetadata(
         hasDocumentation,
         documentationGroupId: hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
         documentationPreviewLines: hasDocumentation ? documentationGroup.documentationPreviewLines : [],
-        ariaLabel: describeActionLine(hasDocumentation, entry.hasSource),
+        pullRequestComment: pullRequestComments?.get(entry.line),
+        ariaLabel: describeActionLine(hasDocumentation, entry.hasSource, pullRequestComments?.has(entry.line) === true),
       };
     })
-    .filter(entry => entry.hasDocumentation || entry.hasSource)
+    .filter(entry => entry.hasDocumentation || entry.hasSource || entry.pullRequestComment !== undefined)
     .sort((left, right) => left.previewLine - right.previewLine);
 }
 
-export function createDiffLineMetadata(entries: readonly ReviewEntry[]): readonly PreviewLineMetadata[] {
-  return createReviewLineMetadata(entries)
+export function createDiffLineMetadata(
+  entries: readonly ReviewEntry[],
+  pullRequestComments?: ReadonlyMap<number, PullRequestLineComment>,
+  sourceMarkdown?: string,
+): readonly PreviewLineMetadata[] {
+  const fencedCodeLanguages = sourceMarkdown
+    ? new Map(getFencedCodeLines(sourceMarkdown).map(line => [line.line, line.language] as const))
+    : undefined;
+
+  return createReviewLineMetadata(getEntriesWithPullRequestComments(entries, pullRequestComments, fencedCodeLanguages))
     .map(entry => ({
       ...entry,
       sourceLine: entry.line,
@@ -60,9 +76,10 @@ export function createDiffLineMetadata(entries: readonly ReviewEntry[]): readonl
       hasSource: entry.hasSource,
       documentationGroupId: entry.hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
       documentationPreviewLines: [],
-      ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource),
+      pullRequestComment: pullRequestComments?.get(entry.line),
+      ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource, pullRequestComments?.has(entry.line) === true),
     }))
-    .filter(entry => entry.hasDocumentation || entry.hasSource)
+    .filter(entry => entry.hasDocumentation || entry.hasSource || entry.pullRequestComment !== undefined)
     .sort((left, right) => left.previewLine - right.previewLine);
 }
 
@@ -81,8 +98,11 @@ function getPreviewLineMap(sourceMarkdown: string, content: PreviewContent): Pre
   return mapPreviewLines(sourceMarkdown, content.commentsPatch);
 }
 
-function describeActionLine(hasDocumentation: boolean, hasSource: boolean): string {
+function describeActionLine(hasDocumentation: boolean, hasSource: boolean, hasPullRequestComment: boolean): string {
   const actions: string[] = [];
+  if (hasPullRequestComment) {
+    actions.push('pull request comment');
+  }
   if (hasDocumentation) {
     actions.push('documentation');
   }
@@ -92,4 +112,28 @@ function describeActionLine(hasDocumentation: boolean, hasSource: boolean): stri
   return actions.length > 0
     ? `Review actions available: ${actions.join(' and ')}`
     : 'Review actions available';
+}
+
+function getEntriesWithPullRequestComments(
+  entries: readonly ReviewEntry[],
+  pullRequestComments: ReadonlyMap<number, PullRequestLineComment> | undefined,
+  fencedCodeLanguages?: ReadonlyMap<number, string>,
+): readonly ReviewEntry[] {
+  if (!pullRequestComments || pullRequestComments.size === 0) {
+    return entries;
+  }
+
+  const merged = new Map(entries.map(entry => [entry.line, entry] as const));
+  for (const [line] of pullRequestComments) {
+    if (merged.has(line)) {
+      continue;
+    }
+
+    merged.set(line, {
+      line,
+      language: fencedCodeLanguages?.get(line) ?? '',
+    });
+  }
+
+  return [...merged.values()].sort((left, right) => left.line - right.line);
 }

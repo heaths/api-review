@@ -14,6 +14,7 @@ export interface GitRepositoryState {
 }
 
 export interface GitBranch {
+  readonly commit?: string;
   readonly name?: string;
   readonly upstream?: GitUpstreamRef;
 }

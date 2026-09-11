@@ -3,12 +3,21 @@ import {
   GitHubClient,
   GitHubClientOptions,
   GitHubCommit,
+  GitHubDeletePullRequestCommentRequest,
   GitHubDocumentRef,
   GitHubFileContentRequest,
   GitHubHistoryRequest,
+  GitHubPullRequest,
+  GitHubPullRequestComment,
+  GitHubPullRequestCommentsRequest,
+  GitHubPullRequestReview,
+  GitHubPullRequestReviewsRequest,
+  GitHubPullRequestRequest,
   GitHubPullRequestBaseRequest,
   GitHubRepositoryRequest,
+  GitHubSubmitPullRequestReviewRequest,
   GitHubTag,
+  GitHubUpdatePullRequestCommentRequest,
   parseGitHubDocument,
 } from './githubClient';
 
@@ -69,32 +78,140 @@ class GitHubProxyClient implements GitHubClient {
     return this.getText('/content', { ref: request.ref, path: request.path }, true);
   }
 
+  public async getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined> {
+    const resolved = await this.getJsonOrUndefined<GitHubPullRequest>('/pull-request', {
+      ref: request.ref,
+      headOwner: request.headOwner ?? '',
+    });
+    if (resolved) {
+      return resolved;
+    }
+
+    if (request.repository.owner === this.owner && request.repository.repo === this.repo && request.ref === this.ref) {
+      return {
+        number: 1,
+        title: `Pull request for ${shortRef(request.ref)}`,
+        state: 'open',
+        baseRef: 'main',
+        baseSha: this.ref,
+        headRef: this.ref,
+        headSha: this.ref,
+        headOwner: this.owner,
+      };
+    }
+
+    return undefined;
+  }
+
+  public async getPullRequestComments(
+    request: GitHubPullRequestCommentsRequest,
+  ): Promise<readonly GitHubPullRequestComment[]> {
+    return this.getJson<readonly GitHubPullRequestComment[]>('/pull-request-comments', {
+      prNumber: String(request.prNumber),
+    });
+  }
+
+  public async getPullRequestReviews(
+    request: GitHubPullRequestReviewsRequest,
+  ): Promise<readonly GitHubPullRequestReview[]> {
+    return this.getJson<readonly GitHubPullRequestReview[]>('/pull-request-reviews', {
+      prNumber: String(request.prNumber),
+    });
+  }
+
+  public async updatePullRequestComment(
+    request: GitHubUpdatePullRequestCommentRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    return this.sendJsonOrUndefined<GitHubPullRequestComment>(
+      'PATCH',
+      `/pull-request-comments/${request.commentId}`,
+      {
+        prNumber: request.prNumber,
+        body: request.body,
+      },
+    );
+  }
+
+  public async deletePullRequestComment(request: GitHubDeletePullRequestCommentRequest): Promise<boolean> {
+    return this.send('DELETE', `/pull-request-comments/${request.commentId}`, {
+      query: { prNumber: String(request.prNumber) },
+      allowNotFound: true,
+    }) !== undefined;
+  }
+
+  public async submitPullRequestReview(request: GitHubSubmitPullRequestReviewRequest): Promise<void> {
+    await this.sendJson('POST', '/pull-request-reviews', {
+      prNumber: request.prNumber,
+      commitId: request.commitId,
+      event: request.event,
+      body: request.body,
+      comments: request.comments,
+    });
+  }
+
   public async getPullRequestBase(_request: GitHubPullRequestBaseRequest): Promise<undefined> {
     return undefined;
   }
 
   private async getJson<T>(path: string, query?: Record<string, string>): Promise<T> {
-    const response = await this.fetch(path, query);
+    const response = await this.send('GET', path, { query });
     if (!response) {
       throw new Error('GitHub proxy request returned no response.');
     }
     return response.json() as Promise<T>;
   }
 
+  private async getJsonOrUndefined<T>(path: string, query?: Record<string, string>): Promise<T | undefined> {
+    const response = await this.send('GET', path, { query, allowNotFound: true });
+    return response ? response.json() as Promise<T> : undefined;
+  }
+
+  private async sendJson<T>(method: 'POST' | 'PATCH', path: string, body: unknown): Promise<T> {
+    const response = await this.send(method, path, { body });
+    if (!response) {
+      throw new Error('GitHub proxy request returned no response.');
+    }
+    return response.json() as Promise<T>;
+  }
+
+  private async sendJsonOrUndefined<T>(method: 'PATCH', path: string, body: unknown): Promise<T | undefined> {
+    const response = await this.send(method, path, { body, allowNotFound: true });
+    return response ? response.json() as Promise<T> : undefined;
+  }
+
   private async getText(path: string, query?: Record<string, string>, allowNotFound = false): Promise<string | undefined> {
-    const response = await this.fetch(path, query, allowNotFound);
+    const response = await this.send('GET', path, { query, allowNotFound });
     return response ? response.text() : undefined;
   }
 
-  private async fetch(path: string, query?: Record<string, string>, allowNotFound = false): Promise<Response | undefined> {
+  private async send(
+    method: 'DELETE' | 'GET' | 'PATCH' | 'POST',
+    path: string,
+    options: {
+      readonly query?: Record<string, string>;
+      readonly body?: unknown;
+      readonly allowNotFound?: boolean;
+    },
+  ): Promise<Response | undefined> {
     const url = new URL(path, this.url);
-    for (const [name, value] of Object.entries(query ?? {})) {
+    for (const [name, value] of Object.entries(options.query ?? {})) {
       url.searchParams.set(name, value);
     }
+
+    const headers: Record<string, string> = {
+      'X-GitHub-Proxy-Token': this.token,
+    };
+    const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const response = await fetch(url, {
-      headers: { 'X-GitHub-Proxy-Token': this.token },
+      method,
+      headers,
+      body,
     });
-    if (allowNotFound && response.status === 404) {
+    if (options.allowNotFound && response.status === 404) {
       return undefined;
     }
     if (!response.ok) {
@@ -102,4 +219,8 @@ class GitHubProxyClient implements GitHubClient {
     }
     return response;
   }
+}
+
+function shortRef(ref: string): string {
+  return ref.slice(0, 8);
 }

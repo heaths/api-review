@@ -38,6 +38,16 @@
   --preview-hover-button-foreground: var(--preview-hover-foreground);
   --preview-hover-button-disabled-opacity: 0.6;
   --preview-focus-outline-color: var(--vscode-focusBorder);
+  --comment-icon-margin: 4px;
+  --preview-comment-badge-size: 16px;
+  --preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));
+  --preview-comment-window-width: 360px;
+  --preview-comment-window-padding: 12px;
+  --preview-comment-window-footer-gap: 8px;
+  --preview-comment-window-code-gap: 8px;
+  --preview-comment-window-textarea-min-height: 96px;
+  --preview-comment-window-button-padding-block: 5px;
+  --preview-comment-window-button-padding-inline: 12px;
   --preview-body-color: var(--vscode-editor-foreground);
   --preview-body-background: var(--vscode-editor-background);
   --preview-heading-border-color: var(--vscode-panel-border);
@@ -219,6 +229,7 @@ body {
 .markdown-body pre {
   overflow: auto;
   padding: var(--preview-code-block-padding);
+  padding-inline-start: 0;
   background: var(--preview-code-block-background);
 }
 
@@ -230,10 +241,13 @@ body {
 .markdown-body pre code .code-line,
 .preview-diff-line {
   display: block;
+  box-sizing: border-box;
   min-height: var(--preview-code-line-min-height);
+  padding-inline-start: var(--preview-comment-badge-hit-size);
 }
 
 .markdown-body .preview-action-line {
+  position: relative;
   outline: none;
 }
 
@@ -305,7 +319,9 @@ body {
 .preview-diff-line {
   display: block;
   margin: 0;
-  padding: 0;
+  padding-block: 0;
+  padding-inline: 0 0;
+  padding-inline-start: var(--preview-comment-badge-hit-size);
   white-space: pre;
 }
 
@@ -404,6 +420,105 @@ body {
 
 #preview-hover-actions button[data-icon="go-to-file"] {
   --preview-action-icon: var(--preview-go-to-file-icon);
+}
+
+#preview-hover-actions button[data-icon="comment"] {
+  --preview-action-icon: var(--preview-comment-icon);
+}
+
+.markdown-body .preview-action-line[data-has-pr-comment]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--comment-icon-margin);
+  inline-size: var(--preview-comment-badge-size);
+  block-size: var(--preview-comment-badge-size);
+  background-color: currentColor;
+  mask: var(--preview-comment-icon) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
+  -webkit-mask: var(--preview-comment-icon) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
+  opacity: 0.85;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+#preview-comment-window {
+  position: fixed;
+  z-index: 11;
+  display: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  inline-size: min(var(--preview-comment-window-width), calc(100vw - (2 * var(--preview-hover-min-margin))));
+  max-block-size: calc(100vh - (2 * var(--preview-hover-min-margin)));
+  padding: var(--preview-comment-window-padding);
+  color: var(--preview-hover-foreground);
+  background: var(--preview-hover-background);
+  border: var(--preview-hover-border-width) solid var(--preview-hover-border-color);
+  border-radius: var(--preview-hover-border-radius);
+  box-shadow: var(--preview-hover-shadow);
+  gap: var(--preview-comment-window-footer-gap);
+}
+
+#preview-comment-window.visible {
+  display: flex;
+}
+
+#preview-comment-window textarea {
+  inline-size: 100%;
+  min-block-size: var(--preview-comment-window-textarea-min-height);
+  max-block-size: calc(100vh - 200px);
+  box-sizing: border-box;
+  padding: var(--preview-hover-padding);
+  color: var(--vscode-input-foreground, var(--preview-hover-foreground));
+  background: var(--vscode-input-background, var(--preview-body-background));
+  border: var(--preview-hover-border-width) solid var(--vscode-input-border, var(--preview-hover-border-color));
+  border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
+  resize: both;
+  font: inherit;
+}
+
+#preview-comment-window textarea:focus-visible {
+  outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
+  outline-offset: var(--preview-hover-focus-offset);
+}
+
+#preview-comment-window-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--preview-comment-window-footer-gap);
+  margin-top: 0;
+}
+
+#preview-comment-window-footer .preview-comment-window-spacer {
+  margin-inline-end: auto;
+}
+
+#preview-comment-window button {
+  min-inline-size: 76px;
+  padding: var(--preview-comment-window-button-padding-block) var(--preview-comment-window-button-padding-inline);
+  color: var(--vscode-button-foreground, var(--preview-hover-foreground));
+  background: var(--vscode-button-background, var(--preview-hover-button-background-hover));
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
+}
+
+#preview-comment-window button:hover {
+  background: var(--vscode-button-hoverBackground, var(--preview-hover-button-background-active));
+}
+
+#preview-comment-window button:focus-visible {
+  outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
+  outline-offset: var(--preview-hover-focus-offset);
+}
+
+#preview-comment-window button.preview-secondary {
+  color: var(--vscode-button-secondaryForeground, var(--preview-hover-foreground));
+  background: var(--vscode-button-secondaryBackground, var(--preview-hover-button-background));
+  border-color: var(--vscode-button-border, var(--preview-hover-border-color));
+}
+
+#preview-comment-window button.preview-secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--preview-hover-button-background-hover));
 }
 
 /* Keep this palette aligned with VS Code's Markdown preview media/highlight.css. */

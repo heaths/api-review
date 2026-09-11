@@ -90,9 +90,21 @@ pnpm run run-in-browser
 Pass a workspace directory as the first argument to open that folder instead of
 `.`. Any additional arguments are forwarded to `vscode-test-web`.
 
-For browser development, the command starts a small local GitHub proxy backed by
-the specified Git repository, or `.` by default, and serves history by
-enumerating its local tags and commits.
+By default, this opens the browser session without pull request simulation, so
+Markdown files render with their normal preview behavior.
+
+To simulate GitHub-backed pull request review UI in a local browser run, add
+`--pr`:
+
+```sh
+pnpm run run-in-browser --pr
+pnpm run run-in-browser ../api-review-worktree/ --pr
+```
+
+When `--pr` is present, the command starts a small local GitHub proxy backed by
+the selected Git repository and rebuilds the web bundle with the proxy-backed
+GitHub client enabled. It simulates an active pull request review and saves or
+deletes comments the way a real pull request does.
 
 ## Build a VSIX
 

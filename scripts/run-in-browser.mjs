@@ -1,33 +1,72 @@
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { startGitHubProxy } from './github-proxy.mjs';
 import { runVsCodeTestWeb } from './vscode-test-web.mjs';
 
-const [firstArg, ...remainingArgs] = process.argv.slice(2);
-const browserPath = firstArg && !firstArg.startsWith('-') ? firstArg : '.';
-const forwardedArgs = browserPath === '.' ? process.argv.slice(2) : remainingArgs;
-const repository = resolveRepository(browserPath);
-const proxy = await startGitHubProxy(repository.root);
+export function parseRunInBrowserArgs(args) {
+  let pullRequestMode = false;
+  let browserPath = '.';
+  let selectedBrowserPath = false;
+  const forwardedArgs = [];
 
-Object.assign(process.env, {
-  GITHUB_PROXY_URL: proxy.url,
-  GITHUB_PROXY_TOKEN: proxy.token,
-  GITHUB_PROXY_OWNER: repository.owner,
-  GITHUB_PROXY_REPO: repository.repo,
-  GITHUB_PROXY_REF: repository.ref,
-});
+  for (const arg of args) {
+    if (arg === '--pr') {
+      pullRequestMode = true;
+      continue;
+    }
 
-console.log(`[run-in-browser] GitHub proxy ${proxy.url} for ${repository.root} (${repository.owner}/${repository.repo}@${repository.ref})`);
-run('pnpm', ['run', 'compile:web']);
+    if (!selectedBrowserPath && !arg.startsWith('-')) {
+      browserPath = arg;
+      selectedBrowserPath = true;
+      continue;
+    }
 
-const child = runVsCodeTestWeb([
-  '--browserType=chromium',
-  '--extensionDevelopmentPath=.',
-  browserPath,
-  ...forwardedArgs,
-]);
+    forwardedArgs.push(arg);
+  }
 
-child.once('exit', () => void proxy.close());
-child.once('error', () => void proxy.close());
+  return {
+    pullRequestMode,
+    browserPath,
+    forwardedArgs,
+  };
+}
+
+async function main() {
+  const { pullRequestMode, browserPath, forwardedArgs } = parseRunInBrowserArgs(process.argv.slice(2));
+  const repository = resolveRepository(browserPath);
+  let proxy;
+
+  if (pullRequestMode) {
+    proxy = await startGitHubProxy(repository.root);
+    Object.assign(process.env, {
+      GITHUB_PROXY_URL: proxy.url,
+      GITHUB_PROXY_TOKEN: proxy.token,
+      GITHUB_PROXY_OWNER: repository.owner,
+      GITHUB_PROXY_REPO: repository.repo,
+      GITHUB_PROXY_REF: repository.ref,
+    });
+
+    console.log(`[run-in-browser] GitHub proxy ${proxy.url} for ${repository.root} (${repository.owner}/${repository.repo}@${repository.ref})`);
+  } else {
+    delete process.env.GITHUB_PROXY_URL;
+    delete process.env.GITHUB_PROXY_TOKEN;
+    delete process.env.GITHUB_PROXY_OWNER;
+    delete process.env.GITHUB_PROXY_REPO;
+    delete process.env.GITHUB_PROXY_REF;
+  }
+
+  run('pnpm', ['run', 'compile:web'], proxy);
+
+  const child = runVsCodeTestWeb([
+    '--browserType=chromium',
+    '--extensionDevelopmentPath=.',
+    browserPath,
+    ...forwardedArgs,
+  ]);
+
+  child.once('exit', () => void proxy?.close());
+  child.once('error', () => void proxy?.close());
+}
 
 function resolveRepository(browserPath) {
   const root = runGit(browserPath, ['rev-parse', '--show-toplevel']);
@@ -67,10 +106,14 @@ function runGit(cwd, args, required = true) {
   throw new Error((result.stderr || result.stdout || `git ${args.join(' ')} failed`).trim());
 }
 
-function run(command, args) {
+function run(command, args, proxy) {
   const result = spawnSync(command, args, { env: process.env, stdio: 'inherit' });
   if (result.status !== 0) {
-    void proxy.close();
+    void proxy?.close();
     process.exit(result.status ?? 1);
   }
+}
+
+if (typeof process.argv[1] === 'string' && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

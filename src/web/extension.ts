@@ -7,16 +7,19 @@ import {
 } from './codeLensProvider';
 import { DocumentationProvider, documentationScheme } from './documentation';
 import {
+  approvePreviewPullRequestCommand,
   closePreviewDiffCommand,
   hidePreviewCommentsCommand,
   nextPreviewDiffHunkCommand,
   previousPreviewDiffHunkCommand,
+  rejectPreviewPullRequestCommand,
   reopenPreviewAsTextCommand,
   ReviewMarkdownPreview,
   reviewMarkdownPreviewViewType,
   showPreviewDiffCommand,
   showPreviewCommentsCommand,
 } from './markdownPreview';
+import { PullRequestReviewController } from './pullRequestReview';
 import { ReviewModel } from './reviewModel';
 import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
 import { MemoryCache } from './cache';
@@ -36,9 +39,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
   const githubClient = createGitHubClient({ cache: githubCache, output });
   const gitClient = createGitClient();
   const diffService = new DisplayDiffService(output, githubClient, gitClient);
+  const pullRequestReview = new PullRequestReviewController(githubClient);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, output);
-  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService);
+  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService, pullRequestReview);
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
@@ -72,6 +76,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     vscode.commands.registerCommand(nextPreviewDiffHunkCommand, () => preview.showNextDiffHunk()),
     vscode.commands.registerCommand(previousPreviewDiffHunkCommand, () => preview.showPreviousDiffHunk()),
     vscode.commands.registerCommand(closePreviewDiffCommand, () => preview.hideActiveDiff()),
+    vscode.commands.registerCommand(approvePreviewPullRequestCommand, () => preview.approvePullRequest()),
+    vscode.commands.registerCommand(rejectPreviewPullRequestCommand, () => preview.rejectPullRequest()),
     vscode.commands.registerCommand(reopenPreviewAsTextCommand, () =>
       vscode.commands.executeCommand('reopenActiveEditorWith', 'default')),
     vscode.workspace.onDidChangeConfiguration(event => {

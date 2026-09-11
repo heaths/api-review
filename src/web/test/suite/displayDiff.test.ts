@@ -17,6 +17,44 @@ import { renderDiffPreview } from '../../diffPreview';
 import { createDiffLineMetadata, createPreviewLineMetadata } from '../../lineMetadata';
 import { createDiffQuickPickCandidate } from '../../markdownPreview';
 
+function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
+  return {
+    resolveDocument() {
+      return undefined;
+    },
+    async getTags() {
+      return undefined;
+    },
+    async getCommits() {
+      return undefined;
+    },
+    async getFileContent() {
+      return undefined;
+    },
+    async getPullRequest() {
+      return undefined;
+    },
+    async getPullRequestComments() {
+      return undefined;
+    },
+    async getPullRequestReviews() {
+      return undefined;
+    },
+    async updatePullRequestComment() {
+      return undefined;
+    },
+    async deletePullRequestComment() {
+      return false;
+    },
+    async submitPullRequestReview() {
+    },
+    async getPullRequestBase() {
+      return undefined;
+    },
+    ...overrides,
+  };
+}
+
 suite('Display diff', () => {
   test('uses GitHub history when local Git is unavailable', async () => {
     const document = {
@@ -29,7 +67,7 @@ suite('Display diff', () => {
         return undefined;
       },
     };
-    const githubClient: GitHubClient = {
+    const githubClient = createGitHubClient({
       resolveDocument() {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
@@ -46,10 +84,13 @@ suite('Display diff', () => {
       async getFileContent() {
         return '# Baseline';
       },
+      async getPullRequest() {
+        return undefined;
+      },
       async getPullRequestBase() {
         return undefined;
       },
-    };
+    });
     const output = { appendLine() { } } as unknown as vscode.OutputChannel;
     const service = new DisplayDiffService(output, githubClient, gitClient);
 
@@ -78,7 +119,7 @@ suite('Display diff', () => {
         return undefined;
       },
     };
-    const githubClient: GitHubClient = {
+    const githubClient = createGitHubClient({
       resolveDocument() {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
@@ -95,10 +136,13 @@ suite('Display diff', () => {
       async getFileContent() {
         return '# Baseline';
       },
+      async getPullRequest() {
+        return undefined;
+      },
       async getPullRequestBase() {
         return undefined;
       },
-    };
+    });
     const output = { appendLine() { } } as unknown as vscode.OutputChannel;
     const service = new DisplayDiffService(output, githubClient, gitClient);
 
@@ -124,7 +168,7 @@ suite('Display diff', () => {
         return undefined;
       },
     };
-    const githubClient: GitHubClient = {
+    const githubClient = createGitHubClient({
       resolveDocument() {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
@@ -141,10 +185,13 @@ suite('Display diff', () => {
       async getFileContent() {
         return '# Baseline';
       },
+      async getPullRequest() {
+        return undefined;
+      },
       async getPullRequestBase() {
         return undefined;
       },
-    };
+    });
     const output = { appendLine() { } } as unknown as vscode.OutputChannel;
     const service = new DisplayDiffService(output, githubClient, gitClient);
 
@@ -170,7 +217,7 @@ suite('Display diff', () => {
         return undefined;
       },
     };
-    const githubClient: GitHubClient = {
+    const githubClient = createGitHubClient({
       resolveDocument() {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
@@ -187,10 +234,13 @@ suite('Display diff', () => {
       async getFileContent(request) {
         return request.ref === '0.1.0' ? undefined : '# Baseline';
       },
+      async getPullRequest() {
+        return undefined;
+      },
       async getPullRequestBase() {
         return undefined;
       },
-    };
+    });
     const output = { appendLine() { } } as unknown as vscode.OutputChannel;
     const service = new DisplayDiffService(output, githubClient, gitClient);
 

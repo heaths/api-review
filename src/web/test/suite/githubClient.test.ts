@@ -3,6 +3,7 @@ import { MemoryCache } from '../../cache';
 import {
   createGitHubClient,
   GitHubAuthProvider,
+  GitHubPullRequest,
   GitHubTransport,
   GitHubTransportResponse,
   parseGitHubDocument,
@@ -111,6 +112,267 @@ suite('GitHub client', () => {
       'GET /repos/{owner}/{repo}/commits',
       'GET /repos/{owner}/{repo}/contents/{path}',
     ]);
+  });
+
+  test('resolves the open pull request associated with a commit ref', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for commit PR lookup');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            assert.strictEqual(parameters.commit_sha, 'e951fe014e6f88027561db809aba0e3e6054a3c6');
+            return createResponse([
+              createPullRequest({
+                number: 28,
+                state: 'closed',
+                title: 'Merged PR',
+                headRef: 'feature/history',
+                headSha: '1111111111111111111111111111111111111111',
+              }),
+              createPullRequest({
+                number: 42,
+                state: 'open',
+                title: 'Active PR',
+                headRef: 'feature/history',
+                headSha: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+              }),
+            ]) as unknown as GitHubTransportResponse<T>;
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    const pullRequest = await client.getPullRequest({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+    });
+
+    assert.deepStrictEqual(
+      pullRequest,
+      createExpectedPullRequest(42, 'Active PR', 'open', 'feature/history', 'e951fe014e6f88027561db809aba0e3e6054a3c6'),
+    );
+    assert.deepStrictEqual(routes, ['GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls']);
+  });
+
+  test('falls back to branch lookup when ref is not a commit sha', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for branch PR lookup');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            if (route === 'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls') {
+              assert.strictEqual(parameters.commit_sha, 'feature/history');
+              return createResponse([]) as unknown as GitHubTransportResponse<T>;
+            }
+
+            assert.strictEqual(route, 'GET /repos/{owner}/{repo}/pulls');
+            assert.strictEqual(parameters.head, 'heaths:feature/history');
+            return createResponse([
+              createPullRequest({
+                number: 43,
+                state: 'open',
+                title: 'Branch PR',
+                headRef: 'feature/history',
+                headSha: '2222222222222222222222222222222222222222',
+              }),
+            ]) as unknown as GitHubTransportResponse<T>;
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    const pullRequest = await client.getPullRequest({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'feature/history',
+    });
+
+    assert.deepStrictEqual(
+      pullRequest,
+      createExpectedPullRequest(43, 'Branch PR', 'open', 'feature/history', '2222222222222222222222222222222222222222'),
+    );
+    assert.deepStrictEqual(routes, [
+      'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls',
+      'GET /repos/{owner}/{repo}/pulls',
+    ]);
+  });
+
+  test('loads and updates pull request comments', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for review comments');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            switch (route) {
+              case 'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments':
+                assert.strictEqual(parameters.pull_number, 42);
+                return createResponse([{
+                  id: 7,
+                  body: 'Needs docs.',
+                  path: 'sdk/keyvault/api/API.md',
+                  line: 18,
+                  commit_id: 'commit-sha',
+                  user: { login: 'heaths' },
+                  updated_at: '2026-09-11T12:00:00Z',
+                }]) as unknown as GitHubTransportResponse<T>;
+              case 'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}':
+                assert.strictEqual(parameters.comment_id, 7);
+                assert.strictEqual(parameters.body, 'Updated docs.');
+                return createResponse({
+                  id: 7,
+                  body: 'Updated docs.',
+                  path: 'sdk/keyvault/api/API.md',
+                  line: 18,
+                  commit_id: 'commit-sha',
+                  user: { login: 'heaths' },
+                  updated_at: '2026-09-11T13:00:00Z',
+                }) as unknown as GitHubTransportResponse<T>;
+              default:
+                throw new Error(`Unexpected route: ${route}`);
+            }
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    const comments = await client.getPullRequestComments({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 42,
+    });
+    const updated = await client.updatePullRequestComment({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 42,
+      commentId: 7,
+      body: 'Updated docs.',
+    });
+
+    assert.deepStrictEqual(comments, [{
+      id: 7,
+      body: 'Needs docs.',
+      path: 'sdk/keyvault/api/API.md',
+      line: 18,
+      commitId: 'commit-sha',
+      author: 'heaths',
+      createdAt: undefined,
+      updatedAt: '2026-09-11T12:00:00Z',
+    }]);
+    assert.deepStrictEqual(updated, {
+      id: 7,
+      body: 'Updated docs.',
+      path: 'sdk/keyvault/api/API.md',
+      line: 18,
+      commitId: 'commit-sha',
+      author: 'heaths',
+      createdAt: undefined,
+      updatedAt: '2026-09-11T13:00:00Z',
+    });
+    assert.deepStrictEqual(routes, [
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+      'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}',
+    ]);
+  });
+
+  test('loads pull request reviews', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for pull request reviews');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            assert.strictEqual(route, 'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews');
+            assert.strictEqual(parameters.pull_number, 42);
+            return createResponse([{
+              id: 12,
+              state: 'APPROVED',
+              body: 'Ship it.',
+              commit_id: 'commit-sha',
+              user: { login: 'heaths' },
+              submitted_at: '2026-09-11T14:00:00Z',
+            }]) as unknown as GitHubTransportResponse<T>;
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    const reviews = await client.getPullRequestReviews({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 42,
+    });
+
+    assert.deepStrictEqual(reviews, [{
+      id: 12,
+      state: 'APPROVED',
+      body: 'Ship it.',
+      commitId: 'commit-sha',
+      author: 'heaths',
+      submittedAt: '2026-09-11T14:00:00Z',
+    }]);
+    assert.deepStrictEqual(routes, ['GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews']);
+  });
+
+  test('submits a pull request review with draft comments', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for review submission');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            assert.strictEqual(route, 'POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews');
+            assert.strictEqual(parameters.pull_number, 42);
+            assert.strictEqual(parameters.commit_id, 'commit-sha');
+            assert.strictEqual(parameters.event, 'APPROVE');
+            assert.deepStrictEqual(parameters.comments, [{
+              path: 'sdk/keyvault/api/API.md',
+              line: 18,
+              side: 'RIGHT',
+              body: 'Looks good.',
+            }]);
+            return createResponse({}) as unknown as GitHubTransportResponse<T>;
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    await client.submitPullRequestReview({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 42,
+      commitId: 'commit-sha',
+      event: 'APPROVE',
+      comments: [{
+        path: 'sdk/keyvault/api/API.md',
+        line: 18,
+        body: 'Looks good.',
+      }],
+    });
+
+    assert.deepStrictEqual(routes, ['POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews']);
   });
 
   test('returns undefined when GitHub auth is unavailable', async () => {
@@ -257,4 +519,43 @@ function createAuthProvider(): GitHubAuthProvider {
 
 function createResponse<T>(data: T): GitHubTransportResponse<T> {
   return { data, headers: {}, status: 200 };
+}
+
+function createPullRequest(overrides: {
+  number: number;
+  state: 'open' | 'closed';
+  title: string;
+  headRef: string;
+  headSha: string;
+}): Record<string, unknown> {
+  return {
+    number: overrides.number,
+    state: overrides.state,
+    title: overrides.title,
+    base: { ref: 'main', sha: 'base-sha' },
+    head: {
+      ref: overrides.headRef,
+      sha: overrides.headSha,
+      repo: { owner: { login: 'heaths' } },
+    },
+  };
+}
+
+function createExpectedPullRequest(
+  number: number,
+  title: string,
+  state: 'open' | 'closed',
+  headRef: string,
+  headSha: string,
+): GitHubPullRequest {
+  return {
+    number,
+    title,
+    state,
+    baseRef: 'main',
+    baseSha: 'base-sha',
+    headRef,
+    headSha,
+    headOwner: 'heaths',
+  };
 }

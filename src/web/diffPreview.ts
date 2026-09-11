@@ -37,6 +37,7 @@ interface PreviewLineRenderMetadata {
   readonly sourceLine?: number;
   readonly hasDocumentation?: true;
   readonly hasSource?: true;
+  readonly hasPullRequestComment?: true;
   readonly documentation?: readonly string[];
   readonly documentationGroupId?: string;
   readonly documentationLine?: true;
@@ -328,6 +329,7 @@ function createRenderMetadata(
       sourceLine: line.sourceLine,
       hasDocumentation: line.hasDocumentation ? true : undefined,
       hasSource: line.hasSource ? true : undefined,
+      hasPullRequestComment: line.pullRequestComment ? true : undefined,
       documentation: line.documentation,
       documentationGroupId: line.documentationGroupId,
       ariaLabel: line.ariaLabel,
@@ -392,6 +394,9 @@ function wrapHighlightedLines(
     if (metadata?.sourceLine !== undefined) {
       classes.push('preview-action-line');
     }
+    if (metadata?.hasPullRequestComment) {
+      classes.push('preview-has-pr-comment');
+    }
     if (currentLine) {
       classes.push(`preview-diff-line-${currentLine.kind}`);
     }
@@ -414,6 +419,9 @@ function wrapHighlightedLines(
     }
     if (metadata?.hasSource) {
       attributes.push('data-has-source');
+    }
+    if (metadata?.hasPullRequestComment) {
+      attributes.push('data-has-pr-comment');
     }
     if (metadata?.documentationGroupId) {
       attributes.push(`data-documentation-group="${escapeAttribute(metadata.documentationGroupId)}"`);

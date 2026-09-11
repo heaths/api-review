@@ -12,6 +12,7 @@ import {
 import {
   GitHubClient,
   GitHubDocumentRef,
+  GitHubPullRequest,
   GitHubTag,
   parseGitHubRepository,
 } from './githubClient';
@@ -58,6 +59,11 @@ export interface ResolvedBaseline {
   readonly markdown: string;
 }
 
+export interface PullRequestContext {
+  readonly document: GitHubDocumentRef;
+  readonly pullRequest: GitHubPullRequest;
+}
+
 export interface ParsedVersion {
   readonly raw: string;
   readonly normalized: string;
@@ -84,6 +90,7 @@ interface CargoPackageMetadata {
 
 export class DisplayDiffService {
   private readonly availabilityCache = new Map<string, Promise<DiffAvailability>>();
+  private readonly pullRequestCache = new Map<string, Promise<PullRequestContext | undefined>>();
 
   public constructor(
     private readonly output: vscode.OutputChannel,
@@ -94,10 +101,31 @@ export class DisplayDiffService {
   public invalidate(uri?: vscode.Uri): void {
     if (uri) {
       this.availabilityCache.delete(uri.toString());
+      this.pullRequestCache.delete(uri.toString());
       return;
     }
 
     this.availabilityCache.clear();
+    this.pullRequestCache.clear();
+  }
+
+  public async getPullRequestContext(
+    document: vscode.TextDocument,
+    options?: { readonly promptForGitHubAuth?: boolean },
+  ): Promise<PullRequestContext | undefined> {
+    const key = document.uri.toString();
+    const shouldPrompt = options?.promptForGitHubAuth === true;
+
+    if (shouldPrompt) {
+      return this.loadPullRequestContext(document, shouldPrompt);
+    }
+
+    let cached = this.pullRequestCache.get(key);
+    if (!cached) {
+      cached = this.loadPullRequestContext(document, false);
+      this.pullRequestCache.set(key, cached);
+    }
+    return cached;
   }
 
   public async getAvailability(
@@ -215,6 +243,32 @@ export class DisplayDiffService {
       ),
       canPickFile,
     };
+  }
+
+  private async loadPullRequestContext(
+    document: vscode.TextDocument,
+    promptForGitHubAuth: boolean,
+  ): Promise<PullRequestContext | undefined> {
+    const repository = await this.gitClient.getRepository(document.uri);
+    if (repository) {
+      const resolved = await this.getRepositoryPullRequestContext(repository, document.uri, promptForGitHubAuth);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    const githubDocument = this.githubClient.resolveDocument(document.uri);
+    if (!githubDocument) {
+      return undefined;
+    }
+
+    const pullRequest = await this.githubClient.getPullRequest({
+      repository: githubDocument.repository,
+      ref: githubDocument.ref,
+      headOwner: githubDocument.repository.owner,
+      promptForAuth: promptForGitHubAuth,
+    });
+    return pullRequest ? { document: githubDocument, pullRequest } : undefined;
   }
 
   private async loadGitHubAvailability(
@@ -428,6 +482,56 @@ export class DisplayDiffService {
       this.output.appendLine(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
       return undefined;
     }
+  }
+
+  private async getRepositoryPullRequestContext(
+    repository: GitRepository,
+    documentUri: vscode.Uri,
+    promptForGitHubAuth: boolean,
+  ): Promise<PullRequestContext | undefined> {
+    const remote = getPreferredRemote(repository.state);
+    const relativePath = getRepositoryRelativePath(documentUri, repository.rootUri);
+    if (!remote || !relativePath) {
+      return undefined;
+    }
+
+    const githubRepository = parseGitHubRepository(remote.fetchUrl ?? remote.pushUrl);
+    if (!githubRepository) {
+      return undefined;
+    }
+
+    const head = repository.state.HEAD;
+    const ref = head?.commit ?? head?.name;
+    if (!ref) {
+      return undefined;
+    }
+
+    let pullRequest = await this.githubClient.getPullRequest({
+      repository: githubRepository,
+      ref,
+      headOwner: githubRepository.owner,
+      promptForAuth: promptForGitHubAuth,
+    });
+    if (!pullRequest && head?.commit && head.name) {
+      pullRequest = await this.githubClient.getPullRequest({
+        repository: githubRepository,
+        ref: head.name,
+        headOwner: githubRepository.owner,
+        promptForAuth: promptForGitHubAuth,
+      });
+    }
+    if (!pullRequest) {
+      return undefined;
+    }
+
+    return {
+      document: {
+        repository: githubRepository,
+        ref,
+        path: relativePath,
+      },
+      pullRequest,
+    };
   }
 }
 
