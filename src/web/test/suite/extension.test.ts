@@ -2,8 +2,10 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { discoverApiDocuments } from '../../fileDiscovery';
 import {
+  approvePreviewPullRequestCommand,
   closePreviewDiffCommand,
   reopenPreviewAsTextCommand,
+  rejectPreviewPullRequestCommand,
   reviewMarkdownPreviewViewType,
   nextPreviewDiffHunkCommand,
   previousPreviewDiffHunkCommand,
@@ -35,6 +37,14 @@ suite('Web Extension Test Suite', function () {
       (command: { command: string }) => command.command === showPreviewDiffCommand,
     );
     assert.strictEqual(diffCommand?.icon, '$(diff)');
+    const approveCommand = extension.packageJSON.contributes.commands.find(
+      (command: { command: string }) => command.command === approvePreviewPullRequestCommand,
+    );
+    assert.strictEqual(approveCommand?.icon, '$(pass)');
+    const rejectCommand = extension.packageJSON.contributes.commands.find(
+      (command: { command: string }) => command.command === rejectPreviewPullRequestCommand,
+    );
+    assert.strictEqual(rejectCommand?.icon, '$(error)');
     const activeDiffCommand = extension.packageJSON.contributes.commands.find(
       (command: { command: string }) => command.command === closePreviewDiffCommand,
     );
@@ -74,6 +84,14 @@ suite('Web Extension Test Suite', function () {
       (menu: { command: string }) => menu.command === showPreviewDiffCommand,
     );
     assert.strictEqual(diffMenu?.group, 'navigation@1');
+    const approveMenu = extension.packageJSON.contributes.menus['editor/title'].find(
+      (menu: { command: string }) => menu.command === approvePreviewPullRequestCommand,
+    );
+    assert.strictEqual(approveMenu?.group, 'navigation@0');
+    const rejectMenu = extension.packageJSON.contributes.menus['editor/title'].find(
+      (menu: { command: string }) => menu.command === rejectPreviewPullRequestCommand,
+    );
+    assert.strictEqual(rejectMenu?.group, 'navigation@0.1');
     const nextDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
       (menu: { command: string }) => menu.command === nextPreviewDiffHunkCommand,
     );
@@ -94,6 +112,8 @@ suite('Web Extension Test Suite', function () {
 
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes(showPreviewDiffCommand));
+    assert.ok(commands.includes(approvePreviewPullRequestCommand));
+    assert.ok(commands.includes(rejectPreviewPullRequestCommand));
     assert.ok(commands.includes(nextPreviewDiffHunkCommand));
     assert.ok(commands.includes(previousPreviewDiffHunkCommand));
     assert.ok(commands.includes(closePreviewDiffCommand));
@@ -142,6 +162,7 @@ suite('Web Extension Test Suite', function () {
     const popupIcons = new Map([
       ['expand-docs', undefined],
       ['collapse-docs', 'transform="translate(8.571 6.857) scale(1.1429)"'],
+      ['comment', undefined],
       ['go-to-file', undefined],
     ]);
 

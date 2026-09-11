@@ -38,6 +38,22 @@
   "contributes": {
     "commands": [
       {
+        "command": "heaths.azureApiReview.preview.approvePullRequest",
+        "title": "Approve",
+        "shortTitle": "Approve",
+        "category": "Azure API Review",
+        "icon": "$(pass)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.inPullRequest"
+      },
+      {
+        "command": "heaths.azureApiReview.preview.rejectPullRequest",
+        "title": "Reject",
+        "shortTitle": "Reject",
+        "category": "Azure API Review",
+        "icon": "$(error)",
+        "enablement": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.inPullRequest"
+      },
+      {
         "command": "heaths.azureApiReview.preview.showDiff",
         "title": "Show Diff",
         "shortTitle": "Diff",
@@ -112,6 +128,16 @@
     "menus": {
       "editor/title": [
         {
+          "command": "heaths.azureApiReview.preview.approvePullRequest",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.inPullRequest",
+          "group": "navigation@0"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.rejectPullRequest",
+          "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.inPullRequest",
+          "group": "navigation@0.1"
+        },
+        {
           "command": "heaths.azureApiReview.preview.showDiff",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && !heaths.azureApiReview.preview.diffVisible",
           "group": "navigation@1"
@@ -151,6 +177,14 @@
       "commandPalette": [
         {
           "command": "heaths.azureApiReview.preview.showDiff",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.approvePullRequest",
+          "when": "false"
+        },
+        {
+          "command": "heaths.azureApiReview.preview.rejectPullRequest",
           "when": "false"
         },
         {

@@ -68,6 +68,37 @@ export interface GitHubPullRequestBase {
   readonly title: string;
 }
 
+export interface GitHubPullRequest {
+  readonly number: number;
+  readonly title: string;
+  readonly state: 'open' | 'closed';
+  readonly baseRef: string;
+  readonly baseSha: string;
+  readonly headRef: string;
+  readonly headSha: string;
+  readonly headOwner?: string;
+}
+
+export interface GitHubPullRequestComment {
+  readonly id: number;
+  readonly body: string;
+  readonly path: string;
+  readonly line: number;
+  readonly commitId: string;
+  readonly author?: string;
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
+}
+
+export interface GitHubPullRequestReview {
+  readonly id: number;
+  readonly state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'PENDING' | 'DISMISSED';
+  readonly body?: string;
+  readonly commitId?: string;
+  readonly author?: string;
+  readonly submittedAt?: string;
+}
+
 export interface GitHubPullRequestBaseRequest {
   readonly repository: GitHubRepositoryRef;
   readonly branch: string;
@@ -75,8 +106,48 @@ export interface GitHubPullRequestBaseRequest {
   readonly promptForAuth?: boolean;
 }
 
+export interface GitHubPullRequestRequest extends GitHubRepositoryRequest {
+  readonly ref: string;
+  readonly headOwner?: string;
+}
+
+export interface GitHubPullRequestCommentsRequest extends GitHubRepositoryRequest {
+  readonly prNumber: number;
+}
+
+export interface GitHubPullRequestReviewsRequest extends GitHubPullRequestCommentsRequest {
+}
+
+export interface GitHubUpdatePullRequestCommentRequest extends GitHubPullRequestCommentsRequest {
+  readonly commentId: number;
+  readonly body: string;
+}
+
+export interface GitHubDeletePullRequestCommentRequest extends GitHubPullRequestCommentsRequest {
+  readonly commentId: number;
+}
+
+export interface GitHubDraftPullRequestComment {
+  readonly path: string;
+  readonly line: number;
+  readonly body: string;
+}
+
+export interface GitHubSubmitPullRequestReviewRequest extends GitHubPullRequestCommentsRequest {
+  readonly commitId: string;
+  readonly event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  readonly body?: string;
+  readonly comments: readonly GitHubDraftPullRequestComment[];
+}
+
 export interface GitHubClient {
   resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined;
+  getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined>;
+  getPullRequestComments(request: GitHubPullRequestCommentsRequest): Promise<readonly GitHubPullRequestComment[] | undefined>;
+  getPullRequestReviews(request: GitHubPullRequestReviewsRequest): Promise<readonly GitHubPullRequestReview[] | undefined>;
+  updatePullRequestComment(request: GitHubUpdatePullRequestCommentRequest): Promise<GitHubPullRequestComment | undefined>;
+  deletePullRequestComment(request: GitHubDeletePullRequestCommentRequest): Promise<boolean>;
+  submitPullRequestReview(request: GitHubSubmitPullRequestReviewRequest): Promise<void>;
   getPullRequestBase(request: GitHubPullRequestBaseRequest): Promise<GitHubPullRequestBase | undefined>;
   getTags(request: GitHubRepositoryRequest): Promise<readonly GitHubTag[] | undefined>;
   getCommits(request: GitHubHistoryRequest): Promise<readonly GitHubCommit[] | undefined>;
@@ -207,6 +278,142 @@ class OctokitGitHubClient implements GitHubClient {
     return parseGitHubDocument(uri.toString(true));
   }
 
+  public async getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined> {
+    const explicitPullRequestNumber = parsePullRequestNumber(request.ref);
+    if (explicitPullRequestNumber !== undefined) {
+      return this.loadRest(
+        request,
+        `pull:${repositoryCacheKey(request.repository)}:${explicitPullRequestNumber}`,
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+        { pull_number: explicitPullRequestNumber },
+        normalizeRestPullRequest,
+      );
+    }
+
+    const associatedPullRequest = await this.loadRest(
+      request,
+      `pull-by-ref:${repositoryCacheKey(request.repository)}:${request.headOwner ?? request.repository.owner}:${request.ref}`,
+      'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls',
+      { commit_sha: request.ref, per_page: maxPullRequestSearchResults },
+      payload => normalizeAssociatedPullRequest(payload, request.ref, request.headOwner),
+    );
+    if (associatedPullRequest || looksLikeCommitSha(request.ref)) {
+      return associatedPullRequest;
+    }
+
+    return this.loadRest(
+      request,
+      `pull-by-branch:${repositoryCacheKey(request.repository)}:${request.headOwner ?? request.repository.owner}:${request.ref}`,
+      'GET /repos/{owner}/{repo}/pulls',
+      {
+        state: 'open',
+        head: `${request.headOwner ?? request.repository.owner}:${request.ref}`,
+        per_page: maxPullRequestSearchResults,
+      },
+      payload => normalizeAssociatedPullRequest(payload, request.ref, request.headOwner),
+    );
+  }
+
+  public async getPullRequestComments(
+    request: GitHubPullRequestCommentsRequest,
+  ): Promise<readonly GitHubPullRequestComment[] | undefined> {
+    return this.loadRest(
+      request,
+      pullRequestCommentsCacheKey(request.repository, request.prNumber),
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+      {
+        pull_number: request.prNumber,
+        sort: 'updated',
+        direction: 'desc',
+        per_page: 100,
+      },
+      normalizePullRequestComments,
+    );
+  }
+
+  public async getPullRequestReviews(
+    request: GitHubPullRequestReviewsRequest,
+  ): Promise<readonly GitHubPullRequestReview[] | undefined> {
+    return this.loadRest(
+      request,
+      pullRequestReviewsCacheKey(request.repository, request.prNumber),
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews',
+      {
+        pull_number: request.prNumber,
+        per_page: 100,
+      },
+      normalizePullRequestReviews,
+    );
+  }
+
+  public async updatePullRequestComment(
+    request: GitHubUpdatePullRequestCommentRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const session = await this.authProvider.getSession(request.promptForAuth === true);
+    if (!session) {
+      return undefined;
+    }
+
+    const response = await this.transportFactory(session.accessToken).request<unknown>(
+      'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}',
+      {
+        owner: request.repository.owner,
+        repo: request.repository.repo,
+        comment_id: request.commentId,
+        body: request.body,
+        headers: createRestHeaders(),
+      },
+    );
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestCommentsCacheKey(request.repository, request.prNumber)));
+    return normalizePullRequestComment(response.data);
+  }
+
+  public async deletePullRequestComment(
+    request: GitHubDeletePullRequestCommentRequest,
+  ): Promise<boolean> {
+    const session = await this.authProvider.getSession(request.promptForAuth === true);
+    if (!session) {
+      return false;
+    }
+
+    const response = await this.transportFactory(session.accessToken).request<unknown>(
+      'DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}',
+      {
+        owner: request.repository.owner,
+        repo: request.repository.repo,
+        comment_id: request.commentId,
+        headers: createRestHeaders(),
+      },
+    );
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestCommentsCacheKey(request.repository, request.prNumber)));
+    return response.status === 204;
+  }
+
+  public async submitPullRequestReview(request: GitHubSubmitPullRequestReviewRequest): Promise<void> {
+    const session = await this.authProvider.getSession(request.promptForAuth === true);
+    if (!session) {
+      return;
+    }
+
+    await this.transportFactory(session.accessToken).request<unknown>('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
+      owner: request.repository.owner,
+      repo: request.repository.repo,
+      pull_number: request.prNumber,
+      commit_id: request.commitId,
+      body: request.body,
+      event: request.event,
+      comments: request.comments.map(comment => ({
+        path: comment.path,
+        line: comment.line,
+        side: 'RIGHT',
+        body: comment.body,
+      })),
+      headers: createRestHeaders(),
+    });
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestCommentsCacheKey(request.repository, request.prNumber)));
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestReviewsCacheKey(request.repository, request.prNumber)));
+  }
+
   public async getPullRequestBase(request: GitHubPullRequestBaseRequest): Promise<GitHubPullRequestBase | undefined> {
     const session = await this.authProvider.getSession(request.promptForAuth === true);
     if (!session) {
@@ -294,16 +501,12 @@ class OctokitGitHubClient implements GitHubClient {
       return undefined;
     }
 
-    const accountCacheKey = `${session.accountId}:${cacheKey}`;
-    const cached = this.cache.get<T>(accountCacheKey);
-    const headers: Record<string, string> = {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(isRecord(parameters.headers) ? parameters.headers as Record<string, string> : {}),
-    };
-    if (cached?.etag) {
-      headers['if-none-match'] = cached.etag;
-    }
+    const scopedCacheKey = accountCacheKey(session.accountId, cacheKey);
+    const cached = this.cache.get<T>(scopedCacheKey);
+    const headers = createRestHeaders(
+      isRecord(parameters.headers) ? parameters.headers as Record<string, string> : undefined,
+      cached?.etag,
+    );
 
     try {
       const response = await this.transportFactory(session.accessToken).request<unknown>(route, {
@@ -318,11 +521,11 @@ class OctokitGitHubClient implements GitHubClient {
 
       const value = normalize(response.data);
       if (value === undefined) {
-        this.cache.delete(accountCacheKey);
+        this.cache.delete(scopedCacheKey);
         return undefined;
       }
 
-      this.cache.set(accountCacheKey, {
+      this.cache.set(scopedCacheKey, {
         value,
         etag: getHeader(response.headers, 'etag'),
         fetchedAt: this.now(),
@@ -510,6 +713,167 @@ function normalizeRestPullRequestBase(payload: unknown): GitHubPullRequestBase |
     : undefined;
 }
 
+function normalizeRestPullRequest(payload: unknown): GitHubPullRequest | undefined {
+  if (!isRecord(payload)
+    || typeof payload.number !== 'number'
+    || typeof payload.title !== 'string'
+    || typeof payload.state !== 'string'
+    || !isRecord(payload.base)
+    || !isRecord(payload.head)
+    || typeof payload.base.ref !== 'string'
+    || typeof payload.base.sha !== 'string'
+    || typeof payload.head.ref !== 'string'
+    || typeof payload.head.sha !== 'string') {
+    return undefined;
+  }
+
+  const state = payload.state.toLowerCase();
+  if (state !== 'open' && state !== 'closed') {
+    return undefined;
+  }
+
+  return {
+    number: payload.number,
+    title: payload.title,
+    state,
+    baseRef: payload.base.ref,
+    baseSha: payload.base.sha,
+    headRef: payload.head.ref,
+    headSha: payload.head.sha,
+    headOwner: isRecord(payload.head.repo) && isRecord(payload.head.repo.owner) && typeof payload.head.repo.owner.login === 'string'
+      ? payload.head.repo.owner.login
+      : undefined,
+  };
+}
+
+function normalizePullRequestComments(payload: unknown): readonly GitHubPullRequestComment[] | undefined {
+  if (!Array.isArray(payload)) {
+    return undefined;
+  }
+
+  return payload
+    .map(value => normalizePullRequestComment(value))
+    .filter((value): value is GitHubPullRequestComment => value !== undefined);
+}
+
+function normalizePullRequestReviews(payload: unknown): readonly GitHubPullRequestReview[] | undefined {
+  if (!Array.isArray(payload)) {
+    return undefined;
+  }
+
+  return payload
+    .map(value => normalizePullRequestReview(value))
+    .filter((value): value is GitHubPullRequestReview => value !== undefined);
+}
+
+function normalizePullRequestComment(payload: unknown): GitHubPullRequestComment | undefined {
+  if (!isRecord(payload)
+    || typeof payload.id !== 'number'
+    || typeof payload.body !== 'string'
+    || typeof payload.path !== 'string'
+    || typeof payload.line !== 'number'
+    || typeof payload.commit_id !== 'string') {
+    return undefined;
+  }
+
+  return {
+    id: payload.id,
+    body: payload.body,
+    path: payload.path,
+    line: payload.line,
+    commitId: payload.commit_id,
+    author: isRecord(payload.user) && typeof payload.user.login === 'string' ? payload.user.login : undefined,
+    createdAt: typeof payload.created_at === 'string' ? payload.created_at : undefined,
+    updatedAt: typeof payload.updated_at === 'string' ? payload.updated_at : undefined,
+  };
+}
+
+function normalizePullRequestReview(payload: unknown): GitHubPullRequestReview | undefined {
+  if (!isRecord(payload)
+    || typeof payload.id !== 'number'
+    || typeof payload.state !== 'string') {
+    return undefined;
+  }
+
+  switch (payload.state) {
+    case 'APPROVED':
+    case 'CHANGES_REQUESTED':
+    case 'COMMENTED':
+    case 'PENDING':
+    case 'DISMISSED':
+      return {
+        id: payload.id,
+        state: payload.state,
+        body: typeof payload.body === 'string' ? payload.body : undefined,
+        commitId: typeof payload.commit_id === 'string' ? payload.commit_id : undefined,
+        author: isRecord(payload.user) && typeof payload.user.login === 'string' ? payload.user.login : undefined,
+        submittedAt: typeof payload.submitted_at === 'string' ? payload.submitted_at : undefined,
+      };
+
+    default:
+      return undefined;
+  }
+}
+
+function normalizeAssociatedPullRequest(
+  payload: unknown,
+  ref: string,
+  headOwner: string | undefined,
+): GitHubPullRequest | undefined {
+  if (!Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const normalized = payload
+    .map(value => normalizeRestPullRequest(value))
+    .filter((value): value is GitHubPullRequest => value !== undefined);
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  const explicitPullRequestNumber = parsePullRequestNumber(ref);
+  if (explicitPullRequestNumber !== undefined) {
+    return normalized.find(value => value.number === explicitPullRequestNumber) ?? normalized[0];
+  }
+
+  const openPullRequests = normalized.filter(value => value.state === 'open');
+  const candidates = openPullRequests.length > 0 ? openPullRequests : normalized;
+  return candidates
+    .slice()
+    .sort((left, right) => scorePullRequest(right, ref, headOwner) - scorePullRequest(left, ref, headOwner))[0];
+}
+
+function scorePullRequest(pullRequest: GitHubPullRequest, ref: string, headOwner: string | undefined): number {
+  let score = 0;
+  if (pullRequest.state === 'open') {
+    score += 4;
+  }
+  if (sameIgnoreCase(pullRequest.headSha, ref)) {
+    score += 3;
+  }
+  if (pullRequest.headRef === ref) {
+    score += 2;
+  }
+  if (headOwner && pullRequest.headOwner && sameIgnoreCase(pullRequest.headOwner, headOwner)) {
+    score += 1;
+  }
+  return score;
+}
+
+function parsePullRequestNumber(ref: string): number | undefined {
+  const match = ref.match(/^(?:refs\/)?pull\/(\d+)\/(?:head|merge)$/u);
+  if (!match) {
+    return undefined;
+  }
+
+  const pullRequestNumber = Number.parseInt(match[1], 10);
+  return Number.isSafeInteger(pullRequestNumber) ? pullRequestNumber : undefined;
+}
+
+function looksLikeCommitSha(ref: string): boolean {
+  return /^[0-9a-f]{7,40}$/iu.test(ref);
+}
+
 function normalizeTags(payload: unknown): readonly GitHubTag[] | undefined {
   if (!Array.isArray(payload)) {
     return undefined;
@@ -546,6 +910,27 @@ function normalizeCommits(payload: unknown): readonly GitHubCommit[] | undefined
 
 function repositoryCacheKey(repository: GitHubRepositoryRef): string {
   return `${repository.owner.toLowerCase()}:${repository.repo.toLowerCase()}`;
+}
+
+function pullRequestCommentsCacheKey(repository: GitHubRepositoryRef, prNumber: number): string {
+  return `pull-comments:${repositoryCacheKey(repository)}:${prNumber}`;
+}
+
+function pullRequestReviewsCacheKey(repository: GitHubRepositoryRef, prNumber: number): string {
+  return `pull-reviews:${repositoryCacheKey(repository)}:${prNumber}`;
+}
+
+function accountCacheKey(accountId: string, key: string): string {
+  return `${accountId}:${key}`;
+}
+
+function createRestHeaders(headers?: Record<string, string>, etag?: string): Record<string, string> {
+  return {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    ...headers,
+    ...(etag ? { 'if-none-match': etag } : {}),
+  };
 }
 
 function getHeader(

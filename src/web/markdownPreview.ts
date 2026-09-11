@@ -7,9 +7,10 @@ import {
   hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
-import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, ResolvedBaseline } from './displayDiff';
+import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, PullRequestContext, ResolvedBaseline } from './displayDiff';
 import { renderDiffPreview } from './diffPreview';
 import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
+import { PullRequestLineComment, PullRequestReviewController } from './pullRequestReview';
 import { ReviewModel } from './reviewModel';
 
 export const reviewMarkdownPreviewViewType = 'heaths.azureApiReview.preview';
@@ -20,6 +21,8 @@ export const showPreviewDiffCommand = 'heaths.azureApiReview.preview.showDiff';
 export const nextPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.nextDiffHunk';
 export const previousPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.previousDiffHunk';
 export const closePreviewDiffCommand = 'heaths.azureApiReview.preview.closeDiff';
+export const approvePreviewPullRequestCommand = 'heaths.azureApiReview.preview.approvePullRequest';
+export const rejectPreviewPullRequestCommand = 'heaths.azureApiReview.preview.rejectPullRequest';
 
 const hasPreviewCommentsContext = 'heaths.azureApiReview.preview.hasComments';
 const previewCommentsVisibleContext = 'heaths.azureApiReview.preview.commentsVisible';
@@ -27,6 +30,7 @@ const previewDiffAvailableContext = 'heaths.azureApiReview.preview.diffAvailable
 const previewDiffVisibleContext = 'heaths.azureApiReview.preview.diffVisible';
 const previewCanNavigatePreviousDiffContext = 'heaths.azureApiReview.preview.canNavigatePreviousDiff';
 const previewCanNavigateNextDiffContext = 'heaths.azureApiReview.preview.canNavigateNextDiff';
+const previewInPullRequestContext = 'heaths.azureApiReview.preview.inPullRequest';
 
 interface PreviewPanel {
   readonly document: vscode.TextDocument;
@@ -40,6 +44,8 @@ interface PreviewPanel {
   canNavigatePreviousDiff: boolean;
   canNavigateNextDiff: boolean;
   diffRefreshGeneration: number;
+  pullRequestContext?: PullRequestContext;
+  pullRequestRefreshGeneration: number;
   generation: number;
 }
 
@@ -59,9 +65,34 @@ interface DiffNavigationStatePreviewWebviewMessage {
   readonly canNavigateNext: boolean;
 }
 
+interface UpsertPullRequestCommentPreviewWebviewMessage {
+  readonly type: 'upsertPullRequestComment';
+  readonly line: number;
+  readonly body: string;
+}
+
+interface DeletePullRequestCommentPreviewWebviewMessage {
+  readonly type: 'deletePullRequestComment';
+  readonly line: number;
+}
+
+interface RequestPullRequestCommentStatePreviewWebviewMessage {
+  readonly type: 'requestPullRequestCommentState';
+}
+
+interface SubmitPullRequestReviewPreviewWebviewMessage {
+  readonly type: 'submitPullRequestReview';
+  readonly event: 'APPROVE' | 'REQUEST_CHANGES';
+  readonly body: string;
+}
+
 type PreviewWebviewMessage =
   | GoToSourcePreviewWebviewMessage
-  | DiffNavigationStatePreviewWebviewMessage;
+  | DiffNavigationStatePreviewWebviewMessage
+  | UpsertPullRequestCommentPreviewWebviewMessage
+  | DeletePullRequestCommentPreviewWebviewMessage
+  | RequestPullRequestCommentStatePreviewWebviewMessage
+  | SubmitPullRequestReviewPreviewWebviewMessage;
 
 interface SetCommentsVisiblePreviewHostMessage {
   readonly type: 'setCommentsVisible';
@@ -73,9 +104,21 @@ interface NavigateDiffHunkPreviewHostMessage {
   readonly direction: 'previous' | 'next';
 }
 
+interface PullRequestCommentStatePreviewHostMessage {
+  readonly type: 'pullRequestCommentState';
+  readonly comments: readonly PreviewPullRequestCommentState[];
+}
+
+interface OpenPullRequestReviewDialogPreviewHostMessage {
+  readonly type: 'openPullRequestReviewDialog';
+  readonly event: 'APPROVE' | 'REQUEST_CHANGES';
+}
+
 type PreviewHostMessage =
   | SetCommentsVisiblePreviewHostMessage
-  | NavigateDiffHunkPreviewHostMessage;
+  | NavigateDiffHunkPreviewHostMessage
+  | PullRequestCommentStatePreviewHostMessage
+  | OpenPullRequestReviewDialogPreviewHostMessage;
 
 export interface MarkdownPreviewStyles {
   readonly stylesheets: readonly vscode.Uri[];
@@ -86,6 +129,7 @@ interface PreviewLineRenderMetadata {
   readonly sourceLine?: number;
   readonly hasDocumentation?: true;
   readonly hasSource?: true;
+  readonly hasPullRequestComment?: true;
   readonly documentationGroupId?: string;
   readonly documentationLine?: true;
   readonly ariaLabel?: string;
@@ -93,6 +137,13 @@ interface PreviewLineRenderMetadata {
 
 interface PreviewRenderEnv {
   readonly lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>;
+}
+
+interface PreviewPullRequestCommentState {
+  readonly line: number;
+  readonly body: string;
+  readonly isDraft: boolean;
+  readonly author?: string;
 }
 
 type DiffQuickPickItem =
@@ -141,6 +192,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     private readonly model: ReviewModel,
     private readonly extensionUri: vscode.Uri,
     private readonly diffService: DisplayDiffService,
+    private readonly pullRequestReview: PullRequestReviewController,
   ) { }
 
   public async resolveCustomTextEditor(
@@ -158,6 +210,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       canNavigatePreviousDiff: false,
       canNavigateNextDiff: false,
       diffRefreshGeneration: 0,
+      pullRequestRefreshGeneration: 0,
       generation: 0,
     };
     this.previews.add(preview);
@@ -195,6 +248,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
     await this.render(preview);
     void this.refreshDiffAvailability(preview);
+    void this.refreshPullRequestContext(preview);
   }
 
   public refresh(uri?: vscode.Uri): void {
@@ -202,6 +256,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       if (!uri || preview.document.uri.toString() === uri.toString()) {
         void this.render(preview);
         void this.refreshDiffAvailability(preview);
+        void this.refreshPullRequestContext(preview);
       }
     }
   }
@@ -297,6 +352,14 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     await this.navigateActiveDiffHunk('previous');
   }
 
+  public async approvePullRequest(): Promise<void> {
+    await this.promptPullRequestReview('APPROVE');
+  }
+
+  public async rejectPullRequest(): Promise<void> {
+    await this.promptPullRequestReview('REQUEST_CHANGES');
+  }
+
   private async handleMessage(preview: PreviewPanel, message: unknown): Promise<void> {
     if (!isPreviewWebviewMessage(message)) {
       return;
@@ -318,10 +381,26 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
             this.updateContexts(preview);
           }
           break;
+
+        case 'upsertPullRequestComment':
+          await this.upsertPullRequestComment(preview, message.line, message.body);
+          break;
+
+        case 'deletePullRequestComment':
+          await this.deletePullRequestComment(preview, message.line);
+          break;
+
+        case 'requestPullRequestCommentState':
+          await this.postPullRequestCommentState(preview);
+          break;
+
+        case 'submitPullRequestReview':
+          await this.submitPullRequestReview(message.event, message.body);
+          break;
       }
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `Unable to navigate to source: ${error instanceof Error ? error.message : String(error)}`,
+        `Unable to process preview action: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -346,6 +425,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     void vscode.commands.executeCommand('setContext', previewCommentsVisibleContext, preview?.commentsVisible === true);
     void vscode.commands.executeCommand('setContext', previewDiffAvailableContext, preview?.diffAvailable === true);
     void vscode.commands.executeCommand('setContext', previewDiffVisibleContext, preview?.diffBaseline !== undefined);
+    void vscode.commands.executeCommand('setContext', previewInPullRequestContext, preview?.pullRequestContext !== undefined);
     void vscode.commands.executeCommand(
       'setContext',
       previewCanNavigatePreviousDiffContext,
@@ -374,7 +454,11 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     preview.canNavigateNextDiff = false;
 
     const sourceMarkdown = preview.document.getText();
-    const lineMetadata = createPreviewLineMetadata(sourceMarkdown, content, entries);
+    const lineComments = await this.getLineComments(preview);
+    if (generation !== preview.generation || !this.previews.has(preview)) {
+      return;
+    }
+    const lineMetadata = createPreviewLineMetadata(sourceMarkdown, content, entries, lineComments);
     let contentHtml = renderPreviewMarkdown(content.markdown, lineMetadata);
     let diffVisible = false;
     if (preview.diffBaseline) {
@@ -383,7 +467,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
         if (generation !== preview.generation || !this.previews.has(preview)) {
           return;
         }
-        const diffLineMetadata = createDiffLineMetadata(entries);
+        const diffLineMetadata = createDiffLineMetadata(entries, lineComments, sourceMarkdown);
         const renderedDiff = renderDiffPreview(baseline.markdown, sourceMarkdown, diffLineMetadata, baseline.label);
         contentHtml = renderedDiff.html;
         preview.canNavigateNextDiff = renderedDiff.hunkCount > 0;
@@ -404,6 +488,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       preview.hasCommentsPatch,
       preview.commentsVisible,
       diffVisible,
+      preview.pullRequestContext !== undefined,
       preview.contributedStyles.stylesheets,
     );
     if (this.activePreview === preview) {
@@ -466,6 +551,40 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
   }
 
+  private async refreshPullRequestContext(
+    preview: PreviewPanel,
+    promptForGitHubAuth = false,
+  ): Promise<PullRequestContext | undefined> {
+    const generation = ++preview.pullRequestRefreshGeneration;
+
+    try {
+      const pullRequestContext = await this.diffService.getPullRequestContext(preview.document, { promptForGitHubAuth });
+      if (generation !== preview.pullRequestRefreshGeneration || !this.previews.has(preview)) {
+        return undefined;
+      }
+
+      const previousKey = getPullRequestContextKey(preview.pullRequestContext);
+      const nextKey = getPullRequestContextKey(pullRequestContext);
+      preview.pullRequestContext = pullRequestContext;
+      if (this.activePreview === preview) {
+        this.updateContexts(preview);
+      }
+      if (previousKey !== nextKey) {
+        await this.render(preview);
+      }
+      return pullRequestContext;
+    } catch (error) {
+      preview.pullRequestContext = undefined;
+      if (this.activePreview === preview) {
+        this.updateContexts(preview);
+      }
+      void vscode.window.showWarningMessage(
+        `Unable to inspect pull request context: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+  }
+
   private async navigateActiveDiffHunk(direction: 'previous' | 'next'): Promise<void> {
     const preview = this.activePreview;
     if (!preview?.diffBaseline) {
@@ -486,6 +605,101 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
   private async postMessage(preview: PreviewPanel, message: PreviewHostMessage): Promise<void> {
     await preview.panel.webview.postMessage(message);
+  }
+
+  private async postPullRequestCommentState(preview: PreviewPanel): Promise<void> {
+    const lineComments = await this.getLineComments(preview);
+    if (!this.previews.has(preview)) {
+      return;
+    }
+
+    await this.postMessage(preview, {
+      type: 'pullRequestCommentState',
+      comments: [...lineComments.values()].map(comment => ({
+        line: comment.sourceLine,
+        body: comment.body,
+        isDraft: comment.isDraft,
+        author: comment.author,
+      })),
+    });
+  }
+
+  private async promptPullRequestReview(event: 'APPROVE' | 'REQUEST_CHANGES'): Promise<void> {
+    const preview = this.activePreview;
+    if (!preview?.pullRequestContext) {
+      return;
+    }
+
+    await this.postMessage(preview, {
+      type: 'openPullRequestReviewDialog',
+      event,
+    });
+  }
+
+  private async submitPullRequestReview(event: 'APPROVE' | 'REQUEST_CHANGES', body?: string): Promise<void> {
+    const preview = this.activePreview;
+    const pullRequestContext = preview?.pullRequestContext;
+    if (!preview || !pullRequestContext) {
+      return;
+    }
+
+    const draftCount = await this.pullRequestReview.submitReview(
+      pullRequestContext.document,
+      pullRequestContext.pullRequest,
+      event,
+      body,
+    );
+    await this.refreshPullRequestContext(preview, true);
+    void vscode.window.showInformationMessage(
+      event === 'APPROVE'
+        ? `Approved pull request #${pullRequestContext.pullRequest.number}${draftCount > 0 ? ` with ${draftCount} comment${draftCount === 1 ? '' : 's'}` : ''}.`
+        : `Requested changes on pull request #${pullRequestContext.pullRequest.number}${draftCount > 0 ? ` with ${draftCount} comment${draftCount === 1 ? '' : 's'}` : ''}.`,
+    );
+  }
+
+  private async getLineComments(preview: PreviewPanel): Promise<ReadonlyMap<number, PullRequestLineComment>> {
+    const pullRequestContext = preview.pullRequestContext;
+    if (!pullRequestContext) {
+      return new Map();
+    }
+
+    return this.pullRequestReview.getLineComments(
+      pullRequestContext.document,
+      pullRequestContext.pullRequest,
+    );
+  }
+
+  private async upsertPullRequestComment(preview: PreviewPanel, line: number, body: string): Promise<void> {
+    const pullRequestContext = preview.pullRequestContext;
+    if (!pullRequestContext) {
+      return;
+    }
+
+    const existing = (await this.getLineComments(preview)).get(line);
+    await this.pullRequestReview.upsertComment(
+      pullRequestContext.document,
+      pullRequestContext.pullRequest,
+      line,
+      body,
+      existing,
+    );
+    await this.render(preview);
+  }
+
+  private async deletePullRequestComment(preview: PreviewPanel, line: number): Promise<void> {
+    const pullRequestContext = preview.pullRequestContext;
+    if (!pullRequestContext) {
+      return;
+    }
+
+    const existing = (await this.getLineComments(preview)).get(line);
+    await this.pullRequestReview.deleteComment(
+      pullRequestContext.document,
+      pullRequestContext.pullRequest,
+      line,
+      existing,
+    );
+    await this.render(preview);
   }
 
   private async pickDiffFile(documentUri: vscode.Uri): Promise<vscode.Uri | undefined> {
@@ -601,6 +815,9 @@ function wrapHighlightedLines(
     if (metadata?.sourceLine !== undefined) {
       classes.push('preview-action-line');
     }
+    if (metadata?.hasPullRequestComment) {
+      classes.push('preview-has-pr-comment');
+    }
 
     const attributes = currentLine === undefined ? [] : [`data-line="${currentLine}"`];
     if (metadata?.sourceLine !== undefined) {
@@ -617,6 +834,9 @@ function wrapHighlightedLines(
     }
     if (metadata?.hasSource) {
       attributes.push('data-has-source');
+    }
+    if (metadata?.hasPullRequestComment) {
+      attributes.push('data-has-pr-comment');
     }
     if (metadata?.documentationGroupId) {
       attributes.push(`data-documentation-group="${escapeAttribute(metadata.documentationGroupId)}"`);
@@ -674,6 +894,7 @@ export function getPreviewHtml(
   hasCommentsPatch: boolean,
   commentsVisible: boolean,
   diffVisible: boolean,
+  inPullRequest: boolean,
   contributedStylesheets: readonly vscode.Uri[],
 ): string {
   const stylesheet = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'markdownPreview.css'));
@@ -706,6 +927,7 @@ ${contributedStyles}
       --preview-expand-docs-icon: url(${JSON.stringify(icon('expand-docs'))});
       --preview-collapse-docs-icon: url(${JSON.stringify(icon('collapse-docs'))});
       --preview-go-to-file-icon: url(${JSON.stringify(icon('go-to-file'))});
+      --preview-comment-icon: url(${JSON.stringify(icon('comment'))});
     }
   </style>
   <title>Azure API Review</title>
@@ -713,6 +935,7 @@ ${contributedStyles}
 <body class="${classes}">
   <main class="markdown-body" dir="auto">${contentHtml}</main>
   <div id="preview-hover-actions" hidden role="toolbar" aria-label="Review actions">
+    ${inPullRequest ? `<button type="button" data-action="comment" data-icon="comment" title="Comment" aria-label="Comment"></button>` : ''}
     <button type="button" data-action="documentation" data-icon="expand-docs" data-show-tooltip="${escapeAttribute(showDocumentationTooltip)}" data-hide-tooltip="${escapeAttribute(hideDocumentationTooltip)}" title="${escapeAttribute(showDocumentationTooltip)}" aria-label="${escapeAttribute(showDocumentationTooltip)}"></button>
     <button type="button" data-action="source" data-icon="go-to-file" title="${escapeAttribute(goToSourceTooltip)}" aria-label="${escapeAttribute(goToSourceTooltip)}"></button>
   </div>
@@ -736,9 +959,54 @@ function isPreviewWebviewMessage(message: unknown): message is PreviewWebviewMes
       return typeof message.canNavigatePrevious === 'boolean'
         && typeof message.canNavigateNext === 'boolean';
 
+    case 'upsertPullRequestComment':
+      return typeof message.line === 'number'
+        && Number.isInteger(message.line)
+        && message.line >= 0
+        && typeof message.body === 'string';
+
+    case 'deletePullRequestComment':
+      return typeof message.line === 'number'
+        && Number.isInteger(message.line)
+        && message.line >= 0;
+
+    case 'requestPullRequestCommentState':
+      return true;
+
+    case 'submitPullRequestReview':
+      return (message.event === 'APPROVE' || message.event === 'REQUEST_CHANGES')
+        && typeof message.body === 'string';
+
     default:
       return false;
   }
+}
+
+function createPreviewLineRenderMetadata(
+  lineMetadata: readonly PreviewLineMetadata[],
+): ReadonlyMap<number, PreviewLineRenderMetadata> {
+  const lines = new Map<number, PreviewLineRenderMetadata>();
+  for (const entry of lineMetadata) {
+    lines.set(entry.previewLine, {
+      sourceLine: entry.sourceLine,
+      hasDocumentation: entry.hasDocumentation ? true : undefined,
+      hasSource: entry.hasSource ? true : undefined,
+      hasPullRequestComment: entry.pullRequestComment ? true : undefined,
+      documentationGroupId: entry.documentationGroupId,
+      ariaLabel: entry.ariaLabel,
+    });
+
+    for (const documentationPreviewLine of entry.documentationPreviewLines) {
+      const current = lines.get(documentationPreviewLine) ?? {};
+      lines.set(documentationPreviewLine, {
+        ...current,
+        documentationGroupId: entry.documentationGroupId,
+        documentationLine: true,
+      });
+    }
+  }
+
+  return lines;
 }
 
 function normalizeLanguage(language: string): string {
@@ -778,34 +1046,12 @@ function createNonce(): string {
   return Array.from({ length: 32 }, () => characters[Math.floor(Math.random() * characters.length)]).join('');
 }
 
-function createPreviewLineRenderMetadata(
-  lineMetadata: readonly PreviewLineMetadata[],
-): ReadonlyMap<number, PreviewLineRenderMetadata> {
-  const renderedLineMetadata = new Map<number, PreviewLineRenderMetadata>();
-
-  for (const line of lineMetadata) {
-    renderedLineMetadata.set(line.previewLine, {
-      sourceLine: line.sourceLine,
-      hasDocumentation: line.hasDocumentation ? true : undefined,
-      hasSource: line.hasSource ? true : undefined,
-      documentationGroupId: line.documentationGroupId,
-      ariaLabel: line.ariaLabel,
-    });
-
-    if (!line.documentationGroupId) {
-      continue;
-    }
-
-    for (const documentationPreviewLine of line.documentationPreviewLines) {
-      renderedLineMetadata.set(documentationPreviewLine, {
-        ...renderedLineMetadata.get(documentationPreviewLine),
-        documentationGroupId: line.documentationGroupId,
-        documentationLine: true,
-      });
-    }
+function getPullRequestContextKey(pullRequestContext: PullRequestContext | undefined): string | undefined {
+  if (!pullRequestContext) {
+    return undefined;
   }
 
-  return renderedLineMetadata;
+  return `${pullRequestContext.pullRequest.number}:${pullRequestContext.pullRequest.headSha}`;
 }
 
 function isPreviewRenderEnv(value: unknown): value is PreviewRenderEnv {

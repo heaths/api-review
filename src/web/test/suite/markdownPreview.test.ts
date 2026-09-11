@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { createPreviewLineMetadata } from '../../lineMetadata';
+import { PullRequestLineComment } from '../../pullRequestReview';
 import {
   getContributedMarkdownPreviewStyles,
   getPreviewHtml,
@@ -82,6 +83,7 @@ suite('Markdown preview', () => {
       hasSource: true,
       documentationGroupId: 'line-3',
       documentationPreviewLines: [3],
+      pullRequestComment: undefined,
       ariaLabel: 'Review actions available: documentation and go to source',
     }]);
   });
@@ -138,6 +140,7 @@ suite('Markdown preview', () => {
         hasSource: false,
         documentationGroupId: 'line-3',
         documentationPreviewLines: [3],
+        pullRequestComment: undefined,
         ariaLabel: 'Review actions available: documentation',
       },
       {
@@ -150,9 +153,99 @@ suite('Markdown preview', () => {
         hasSource: true,
         documentationGroupId: undefined,
         documentationPreviewLines: [],
+        pullRequestComment: undefined,
         ariaLabel: 'Review actions available: go to source',
       },
     ]);
+  });
+
+  test('adds pull request comment metadata to actionable preview lines', () => {
+    const source = [
+      '# Mock API',
+      '',
+      '```rust',
+      'pub fn docs_only();',
+      '```',
+    ].join('\n');
+    const pullRequestComments = new Map<number, PullRequestLineComment>([[3, {
+      id: 7,
+      body: 'Please rename this.',
+      sourceLine: 3,
+      author: 'heaths',
+      updatedAt: '2026-09-11T12:00:00Z',
+      isDraft: false,
+    }]]);
+
+    const lineMetadata = createPreviewLineMetadata(source, {
+      markdown: source,
+      hasCommentsPatch: false,
+    }, [{
+      line: 3,
+      language: 'rust',
+    }], pullRequestComments);
+
+    assert.deepStrictEqual(lineMetadata, [{
+      sourceLine: 3,
+      previewLine: 3,
+      line: 3,
+      language: 'rust',
+      hasDocumentation: false,
+      hasSource: false,
+      documentationGroupId: undefined,
+      documentationPreviewLines: [],
+      pullRequestComment: {
+        id: 7,
+        body: 'Please rename this.',
+        sourceLine: 3,
+        author: 'heaths',
+        updatedAt: '2026-09-11T12:00:00Z',
+        isDraft: false,
+      },
+      ariaLabel: 'Review actions available: pull request comment',
+    }]);
+  });
+
+  test('adds pull request comment metadata for comment-only lines', () => {
+    const source = [
+      '# Mock API',
+      '',
+      '```rust',
+      'pub fn docs_only();',
+      '```',
+    ].join('\n');
+    const pullRequestComments = new Map<number, PullRequestLineComment>([[3, {
+      id: 8,
+      body: 'Comment only.',
+      sourceLine: 3,
+      author: 'heaths',
+      updatedAt: '2026-09-11T12:00:00Z',
+      isDraft: false,
+    }]]);
+
+    const lineMetadata = createPreviewLineMetadata(source, {
+      markdown: source,
+      hasCommentsPatch: false,
+    }, [], pullRequestComments);
+
+    assert.deepStrictEqual(lineMetadata, [{
+      line: 3,
+      language: 'rust',
+      sourceLine: 3,
+      previewLine: 3,
+      hasDocumentation: false,
+      hasSource: false,
+      documentationGroupId: undefined,
+      documentationPreviewLines: [],
+      pullRequestComment: {
+        id: 8,
+        body: 'Comment only.',
+        sourceLine: 3,
+        author: 'heaths',
+        updatedAt: '2026-09-11T12:00:00Z',
+        isDraft: false,
+      },
+      ariaLabel: 'Review actions available: pull request comment',
+    }]);
   });
 
   test('renders preview metadata into DOM attributes', () => {
@@ -219,15 +312,20 @@ suite('Markdown preview', () => {
       true,
       false,
       false,
+      true,
       [],
     );
 
     assert.ok(html.includes('--preview-expand-docs-icon: url("test-webview:/extension/assets/codicons/expand-docs.svg")'));
     assert.ok(html.includes('--preview-collapse-docs-icon: url("test-webview:/extension/assets/codicons/collapse-docs.svg")'));
     assert.ok(html.includes('--preview-go-to-file-icon: url("test-webview:/extension/assets/codicons/go-to-file.svg")'));
+    assert.ok(html.includes('--preview-comment-icon: url("test-webview:/extension/assets/codicons/comment.svg")'));
     assert.ok(html.includes('data-show-tooltip="Show documentation"'));
     assert.ok(html.includes('data-hide-tooltip="Hide documentation"'));
+    assert.ok(html.includes('data-action="comment" data-icon="comment"'));
     assert.ok(html.includes('data-action="source" data-icon="go-to-file"'));
+    assert.ok(!html.includes('preview-initial-state'));
+    assert.ok(!html.includes('Please rename this.'));
   });
 
   test('resolves contributed preview styles in declaration order', () => {
@@ -318,6 +416,11 @@ suite('Markdown preview', () => {
     assert.ok(css.includes('.vscode-light,\n.vscode-high-contrast-light {'));
     assert.ok(css.includes('--preview-body-color: var(--vscode-editor-foreground);'));
     assert.ok(css.includes('--preview-code-block-background: var(--vscode-textCodeBlock-background);'));
+    assert.ok(css.includes('--comment-icon-margin: 4px;'));
+    assert.ok(css.includes('--preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));'));
+    assert.ok(css.includes('.markdown-body pre {\n  overflow: auto;\n  padding: var(--preview-code-block-padding);\n  padding-inline-start: 0;'));
+    assert.ok(css.includes('left: var(--comment-icon-margin);'));
+    assert.ok(!css.includes('left: calc(-1 * var(--preview-comment-badge-hit-size));'));
     assert.ok(css.includes('--preview-hljs-title: #795e26;'));
     assert.ok(css.includes('--preview-hljs-attr: #001080;'));
     assert.ok(css.includes('--preview-hljs-property: #001080;'));
@@ -336,5 +439,23 @@ suite('Markdown preview', () => {
     assert.ok(!css.includes('--preview-max-width'));
     assert.ok(css.includes('body {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0 var(--preview-padding-inline) var(--preview-padding-bottom);'));
     assert.ok(!css.includes('max-width: var(--preview-max-width);'));
+    assert.ok(css.includes('resize: both;'));
+    assert.ok(!css.includes('--preview-comment-window-min-height'));
+  });
+
+  test('uses secondary styling for non-default dialog buttons', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const scriptUri = vscode.Uri.joinPath(folder.uri, 'assets/markdownPreview.js');
+    const script = new TextDecoder().decode(await vscode.workspace.fs.readFile(scriptUri));
+
+    assert.ok(script.includes('class="preview-secondary" data-action="delete-comment"'));
+    assert.ok(script.includes('class="preview-secondary" data-action="cancel-comment"'));
+    assert.ok(script.includes("anchorMode: 'toolbar'"));
+    assert.ok(script.includes("type: 'submitPullRequestReview'"));
+    assert.ok(script.includes("case 'openPullRequestReviewDialog':"));
+    assert.ok(script.includes('navigator.userAgentData?.platform'));
+    assert.ok(script.includes("? 'Cmd+Enter' : 'Ctrl+Enter'"));
   });
 });
