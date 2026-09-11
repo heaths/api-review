@@ -99,7 +99,32 @@ export async function startGitHubProxy(repositoryRoot) {
     }
 
     const store = getPullRequestStore(pullRequests, prNumber, false);
-    response.json(store ? listReviewComments(store) : []);
+    response.json(store ? listPullRequestComments(store) : []);
+  });
+
+  app.post('/pull-request-comments', (request, response) => {
+    const prNumber = readPullRequestNumber(request.body?.prNumber);
+    const commitId = readQuery(request.body?.commitId);
+    const path = readRepositoryPath(request.body?.path);
+    const line = readPositiveInteger(request.body?.line);
+    const body = typeof request.body?.body === 'string' ? request.body.body : undefined;
+    if (!prNumber || !commitId || !path || !line || body === undefined) {
+      response.status(400).json({ error: 'prNumber, commitId, path, line, and body are required' });
+      return;
+    }
+
+    const store = getPullRequestStore(pullRequests, prNumber, true);
+    const review = createReviewRecord(store, commitId, 'COMMENTED', '', []);
+    const comment = createSubmittedComment(store, {
+      commitId,
+      path,
+      line,
+      body,
+      author: 'local',
+      reviewId: review.id,
+    });
+    review.commentIds.push(comment.id);
+    response.status(201).json(comment);
   });
 
   app.patch('/pull-request-comments/:commentId', (request, response) => {
@@ -119,6 +144,36 @@ export async function startGitHubProxy(repositoryRoot) {
     }
 
     response.json(comment);
+  });
+
+  app.post('/pull-request-comments/:commentId/replies', (request, response) => {
+    const prNumber = readPullRequestNumber(request.body?.prNumber);
+    const commentId = readPositiveInteger(request.params.commentId);
+    const body = typeof request.body?.body === 'string' ? request.body.body : undefined;
+    if (!prNumber || !commentId || body === undefined) {
+      response.status(400).json({ error: 'prNumber, commentId, and body are required' });
+      return;
+    }
+
+    const store = getPullRequestStore(pullRequests, prNumber, false);
+    const parent = store ? getTopLevelComment(store, commentId) : undefined;
+    if (!store || !parent) {
+      response.sendStatus(404);
+      return;
+    }
+
+    const review = createReviewRecord(store, parent.commit_id, 'COMMENTED', '', []);
+    const comment = createSubmittedComment(store, {
+      reviewId: review.id,
+      commitId: parent.commit_id,
+      path: parent.path,
+      line: parent.line,
+      body,
+      author: 'local',
+      inReplyToId: parent.id,
+    });
+    review.commentIds.push(comment.id);
+    response.status(201).json(comment);
   });
 
   app.delete('/pull-request-comments/:commentId', (request, response) => {
@@ -254,6 +309,7 @@ function getPullRequestStore(pullRequests, prNumber, create) {
     store = {
       nextReviewId: 1,
       nextCommentId: 1,
+      comments: [],
       reviews: [],
     };
     pullRequests.set(prNumber, store);
@@ -263,62 +319,95 @@ function getPullRequestStore(pullRequests, prNumber, create) {
 
 function createReview(store, commitId, event, body, comments) {
   const timestamp = new Date().toISOString();
+  const review = createReviewRecord(store, commitId, event, body, [], timestamp);
+  review.commentIds = comments.map(comment => createSubmittedComment(store, {
+    commitId,
+    path: comment.path,
+    line: comment.line,
+    body: comment.body,
+    author: 'local',
+    reviewId: review.id,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).id);
+  return review;
+}
+
+function listPullRequestComments(store) {
+  return store.comments
+    .slice()
+    .sort((left, right) => String(right.updated_at ?? '').localeCompare(String(left.updated_at ?? '')));
+}
+
+function updateReviewComment(store, commentId, body) {
+  const comment = store.comments.find(current => current.id === commentId);
+  if (!comment) {
+    return undefined;
+  }
+
+  comment.body = body;
+  comment.updated_at = new Date().toISOString();
+  return comment;
+}
+
+function deleteReviewComment(store, commentId) {
+  const comment = store.comments.find(current => current.id === commentId);
+  if (!comment) {
+    return false;
+  }
+
+  const threadRootId = getThreadRootId(comment);
+  const deletedCommentIds = new Set(
+    store.comments
+      .filter(current => current.id === commentId || getThreadRootId(current) === threadRootId)
+      .map(current => current.id),
+  );
+  store.comments = store.comments.filter(current => !deletedCommentIds.has(current.id));
+  for (const review of store.reviews) {
+    review.commentIds = review.commentIds.filter(currentId => !deletedCommentIds.has(currentId));
+  }
+  return true;
+}
+
+function getTopLevelComment(store, commentId) {
+  const comment = store.comments.find(current => current.id === commentId);
+  return comment && comment.in_reply_to_id === undefined ? comment : undefined;
+}
+
+function createSubmittedComment(store, options) {
+  const timestamp = options.createdAt ?? new Date().toISOString();
+  const comment = {
+    id: store.nextCommentId++,
+    body: options.body,
+    path: options.path,
+    line: options.line,
+    commit_id: options.commitId,
+    pull_request_review_id: options.reviewId,
+    in_reply_to_id: options.inReplyToId,
+    user: { login: options.author },
+    created_at: timestamp,
+    updated_at: options.updatedAt ?? timestamp,
+  };
+  store.comments.push(comment);
+  return comment;
+}
+
+function createReviewRecord(store, commitId, event, body, commentIds, submittedAt = new Date().toISOString()) {
   const review = {
     id: store.nextReviewId++,
     state: event === 'APPROVE' ? 'APPROVED' : event === 'REQUEST_CHANGES' ? 'CHANGES_REQUESTED' : 'COMMENTED',
     body,
     commitId,
     author: 'local',
-    submittedAt: timestamp,
-    comments: comments.map(comment => ({
-      id: store.nextCommentId++,
-      body: comment.body,
-      path: comment.path,
-      line: comment.line,
-      commit_id: commitId,
-      user: { login: 'local' },
-      created_at: timestamp,
-      updated_at: timestamp,
-    })),
+    submittedAt,
+    commentIds,
   };
   store.reviews.push(review);
   return review;
 }
 
-function listReviewComments(store) {
-  return store.reviews
-    .flatMap(review => review.comments)
-    .slice()
-    .sort((left, right) => String(right.updated_at ?? '').localeCompare(String(left.updated_at ?? '')));
-}
-
-function updateReviewComment(store, commentId, body) {
-  for (const review of store.reviews) {
-    const comment = review.comments.find(current => current.id === commentId);
-    if (!comment) {
-      continue;
-    }
-
-    comment.body = body;
-    comment.updated_at = new Date().toISOString();
-    return comment;
-  }
-
-  return undefined;
-}
-
-function deleteReviewComment(store, commentId) {
-  for (const review of store.reviews) {
-    const index = review.comments.findIndex(comment => comment.id === commentId);
-    if (index < 0) {
-      continue;
-    }
-
-    review.comments.splice(index, 1);
-    return true;
-  }
-
-  return false;
+function getThreadRootId(comment) {
+  return comment.in_reply_to_id ?? comment.id;
 }
 
 function toReviewPayload(review) {

@@ -208,7 +208,7 @@ suite('GitHub client', () => {
     ]);
   });
 
-  test('loads and updates pull request comments', async () => {
+  test('classifies inline pull request comments using associated review metadata', async () => {
     const routes: string[] = [];
     const client = createGitHubClient({
       cache: new MemoryCache(),
@@ -221,29 +221,82 @@ suite('GitHub client', () => {
           async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
             routes.push(route);
             switch (route) {
-              case 'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments':
-                assert.strictEqual(parameters.pull_number, 42);
+              case 'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews':
+                assert.strictEqual(parameters.pull_number, 26);
                 return createResponse([{
-                  id: 7,
-                  body: 'Needs docs.',
-                  path: 'sdk/keyvault/api/API.md',
-                  line: 18,
-                  commit_id: 'commit-sha',
+                  id: 5183174172,
+                  state: 'COMMENTED',
+                  body: 'This is the first review with 1 comment.',
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   user: { login: 'heaths' },
-                  updated_at: '2026-09-11T12:00:00Z',
+                  submitted_at: '2026-09-11T20:32:06Z',
+                }, {
+                  id: 5183181104,
+                  state: 'COMMENTED',
+                  body: '',
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  user: { login: 'heaths' },
+                  submitted_at: '2026-09-11T20:32:23Z',
+                }, {
+                  id: 5183184124,
+                  state: 'COMMENTED',
+                  body: '',
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  user: { login: 'heaths' },
+                  submitted_at: '2026-09-11T20:32:51Z',
+                }, {
+                  id: 5183188404,
+                  state: 'COMMENTED',
+                  body: 'This is the second review with 1 reply.',
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  user: { login: 'heaths' },
+                  submitted_at: '2026-09-11T20:33:47Z',
                 }]) as unknown as GitHubTransportResponse<T>;
-              case 'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}':
-                assert.strictEqual(parameters.comment_id, 7);
-                assert.strictEqual(parameters.body, 'Updated docs.');
-                return createResponse({
-                  id: 7,
-                  body: 'Updated docs.',
-                  path: 'sdk/keyvault/api/API.md',
-                  line: 18,
-                  commit_id: 'commit-sha',
+              case 'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments':
+                assert.strictEqual(parameters.pull_number, 26);
+                return createResponse([{
+                  id: 3993158275,
+                  body: 'This is a review comment.',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  line: 65,
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  pull_request_review_id: 5183174172,
                   user: { login: 'heaths' },
-                  updated_at: '2026-09-11T13:00:00Z',
-                }) as unknown as GitHubTransportResponse<T>;
+                  created_at: '2026-09-11T20:31:25Z',
+                  updated_at: '2026-09-11T20:32:06Z',
+                }, {
+                  id: 3993164859,
+                  body: 'This is an immediate review comment.',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  line: 66,
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  pull_request_review_id: 5183181104,
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T20:32:23Z',
+                  updated_at: '2026-09-11T20:32:23Z',
+                }, {
+                  id: 3993167721,
+                  body: 'This is an immediately review comment reply.',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  line: 65,
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  pull_request_review_id: 5183184124,
+                  in_reply_to_id: 3993158275,
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T20:32:51Z',
+                  updated_at: '2026-09-11T20:32:51Z',
+                }, {
+                  id: 3993171853,
+                  body: 'This is a review comment reply in a separate review.',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  line: 65,
+                  commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+                  pull_request_review_id: 5183188404,
+                  in_reply_to_id: 3993158275,
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T20:33:26Z',
+                  updated_at: '2026-09-11T20:33:47Z',
+                }]) as unknown as GitHubTransportResponse<T>;
               default:
                 throw new Error(`Unexpected route: ${route}`);
             }
@@ -254,7 +307,149 @@ suite('GitHub client', () => {
 
     const comments = await client.getPullRequestComments({
       repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 26,
+    });
+
+    assert.deepStrictEqual(comments, [{
+      id: 3993158275,
+      body: 'This is a review comment.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+      kind: 'review',
+      reviewId: 5183174172,
+      inReplyToId: undefined,
+      originalPostId: 3993158275,
+      author: 'heaths',
+      createdAt: '2026-09-11T20:31:25Z',
+      updatedAt: '2026-09-11T20:32:06Z',
+    }, {
+      id: 3993164859,
+      body: 'This is an immediate review comment.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 66,
+      commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+      kind: 'individual',
+      reviewId: 5183181104,
+      inReplyToId: undefined,
+      originalPostId: 3993164859,
+      author: 'heaths',
+      createdAt: '2026-09-11T20:32:23Z',
+      updatedAt: '2026-09-11T20:32:23Z',
+    }, {
+      id: 3993167721,
+      body: 'This is an immediately review comment reply.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+      kind: 'reply',
+      reviewId: 5183184124,
+      inReplyToId: 3993158275,
+      originalPostId: 3993158275,
+      author: 'heaths',
+      createdAt: '2026-09-11T20:32:51Z',
+      updatedAt: '2026-09-11T20:32:51Z',
+    }, {
+      id: 3993171853,
+      body: 'This is a review comment reply in a separate review.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+      kind: 'reply',
+      reviewId: 5183188404,
+      inReplyToId: 3993158275,
+      originalPostId: 3993158275,
+      author: 'heaths',
+      createdAt: '2026-09-11T20:33:26Z',
+      updatedAt: '2026-09-11T20:33:47Z',
+    }]);
+    assert.deepStrictEqual(routes, [
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews',
+      'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+    ]);
+  });
+
+  test('creates, replies to, and updates pull request comments', async () => {
+    const routes: string[] = [];
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      authProvider: createAuthProvider(),
+      transportFactory() {
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for review comments');
+          },
+          async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
+            routes.push(route);
+            switch (route) {
+              case 'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments':
+                assert.strictEqual(parameters.pull_number, 42);
+                assert.strictEqual(parameters.commit_id, 'commit-sha');
+                assert.strictEqual(parameters.path, 'sdk/keyvault/api/API.md');
+                assert.strictEqual(parameters.line, 18);
+                assert.strictEqual(parameters.side, 'RIGHT');
+                assert.strictEqual(parameters.body, 'Immediate comment');
+                return createResponse({
+                  id: 9,
+                  body: 'Immediate comment',
+                  path: 'sdk/keyvault/api/API.md',
+                  line: 18,
+                  commit_id: 'commit-sha',
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T12:45:00Z',
+                  updated_at: '2026-09-11T12:45:00Z',
+                }) as unknown as GitHubTransportResponse<T>;
+              case 'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies':
+                assert.strictEqual(parameters.pull_number, 42);
+                assert.strictEqual(parameters.comment_id, 7);
+                assert.strictEqual(parameters.body, 'Immediate reply');
+                return createResponse({
+                  id: 10,
+                  body: 'Immediate reply',
+                  path: 'sdk/keyvault/api/API.md',
+                  line: 18,
+                  commit_id: 'commit-sha',
+                  pull_request_review_id: 12,
+                  in_reply_to_id: 7,
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T12:50:00Z',
+                  updated_at: '2026-09-11T12:50:00Z',
+                }) as unknown as GitHubTransportResponse<T>;
+              case 'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}':
+                assert.strictEqual(parameters.comment_id, 7);
+                assert.strictEqual(parameters.body, 'Updated docs.');
+                return createResponse({
+                  id: 7,
+                  body: 'Updated docs.',
+                  path: 'sdk/keyvault/api/API.md',
+                  line: 18,
+                  commit_id: 'commit-sha',
+                  pull_request_review_id: 12,
+                  user: { login: 'heaths' },
+                  created_at: '2026-09-11T11:00:00Z',
+                  updated_at: '2026-09-11T13:00:00Z',
+                }) as unknown as GitHubTransportResponse<T>;
+              default:
+                throw new Error(`Unexpected route: ${route}`);
+            }
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+
+    const created = await client.createPullRequestComment({
+      repository: { owner: 'heaths', repo: 'api-review' },
       prNumber: 42,
+      commitId: 'commit-sha',
+      path: 'sdk/keyvault/api/API.md',
+      line: 18,
+      body: 'Immediate comment',
+    });
+    const reply = await client.createPullRequestCommentReply({
+      repository: { owner: 'heaths', repo: 'api-review' },
+      prNumber: 42,
+      commentId: 7,
+      body: 'Immediate reply',
     });
     const updated = await client.updatePullRequestComment({
       repository: { owner: 'heaths', repo: 'api-review' },
@@ -263,28 +458,51 @@ suite('GitHub client', () => {
       body: 'Updated docs.',
     });
 
-    assert.deepStrictEqual(comments, [{
-      id: 7,
-      body: 'Needs docs.',
+    assert.deepStrictEqual(created, {
+      id: 9,
+      body: 'Immediate comment',
       path: 'sdk/keyvault/api/API.md',
       line: 18,
       commitId: 'commit-sha',
+      kind: 'individual',
+      reviewId: undefined,
+      inReplyToId: undefined,
+      originalPostId: 9,
       author: 'heaths',
-      createdAt: undefined,
-      updatedAt: '2026-09-11T12:00:00Z',
-    }]);
+      createdAt: '2026-09-11T12:45:00Z',
+      updatedAt: '2026-09-11T12:45:00Z',
+    });
+    assert.deepStrictEqual(reply, {
+      id: 10,
+      body: 'Immediate reply',
+      path: 'sdk/keyvault/api/API.md',
+      line: 18,
+      commitId: 'commit-sha',
+      kind: 'reply',
+      reviewId: 12,
+      inReplyToId: 7,
+      originalPostId: 7,
+      author: 'heaths',
+      createdAt: '2026-09-11T12:50:00Z',
+      updatedAt: '2026-09-11T12:50:00Z',
+    });
     assert.deepStrictEqual(updated, {
       id: 7,
       body: 'Updated docs.',
       path: 'sdk/keyvault/api/API.md',
       line: 18,
       commitId: 'commit-sha',
+      kind: 'review',
+      reviewId: 12,
+      inReplyToId: undefined,
+      originalPostId: 7,
       author: 'heaths',
-      createdAt: undefined,
+      createdAt: '2026-09-11T11:00:00Z',
       updatedAt: '2026-09-11T13:00:00Z',
     });
     assert.deepStrictEqual(routes, [
-      'GET /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+      'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+      'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies',
       'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}',
     ]);
   });

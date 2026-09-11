@@ -1,12 +1,15 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { GitHubDocumentRef, GitHubPullRequest } from '../../githubClient';
 import { createPreviewLineMetadata } from '../../lineMetadata';
 import { PullRequestLineComment } from '../../pullRequestReview';
 import {
   getContributedMarkdownPreviewStyles,
   getPreviewHtml,
+  renderCommentMarkdown,
   renderMarkdown,
   renderPreviewMarkdown,
+  ReviewMarkdownPreview,
 } from '../../markdownPreview';
 
 suite('Markdown preview', () => {
@@ -36,6 +39,14 @@ suite('Markdown preview', () => {
   test('escapes code in unknown fenced languages', () => {
     const html = renderMarkdown(['```unknown-language', '<script>alert(1)</script>', '```'].join('\n'));
 
+    assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+    assert.ok(!html.includes('<script>alert(1)</script>'));
+  });
+
+  test('renders comment markdown with raw html disabled', () => {
+    const html = renderCommentMarkdown('Line with **markdown** and <script>alert(1)</script>.');
+
+    assert.ok(html.includes('<strong>markdown</strong>'));
     assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
     assert.ok(!html.includes('<script>alert(1)</script>'));
   });
@@ -83,7 +94,8 @@ suite('Markdown preview', () => {
       hasSource: true,
       documentationGroupId: 'line-3',
       documentationPreviewLines: [3],
-      pullRequestComment: undefined,
+      pullRequestComments: undefined,
+      hasPullRequestDiscussion: false,
       ariaLabel: 'Review actions available: documentation and go to source',
     }]);
   });
@@ -140,7 +152,8 @@ suite('Markdown preview', () => {
         hasSource: false,
         documentationGroupId: 'line-3',
         documentationPreviewLines: [3],
-        pullRequestComment: undefined,
+        pullRequestComments: undefined,
+        hasPullRequestDiscussion: false,
         ariaLabel: 'Review actions available: documentation',
       },
       {
@@ -153,10 +166,85 @@ suite('Markdown preview', () => {
         hasSource: true,
         documentationGroupId: undefined,
         documentationPreviewLines: [],
-        pullRequestComment: undefined,
+        pullRequestComments: undefined,
+        hasPullRequestDiscussion: false,
         ariaLabel: 'Review actions available: go to source',
       },
     ]);
+  });
+
+  test('marks lines with multiple comments as discussions', () => {
+    const source = [
+      '# Mock API',
+      '',
+      '```rust',
+      'pub fn docs_only();',
+      '```',
+    ].join('\n');
+    const pullRequestComments = new Map<number, readonly PullRequestLineComment[]>([[3, [{
+      id: 7,
+      body: 'First comment.',
+      sourceLine: 3,
+      kind: 'individual',
+      originalPostId: 7,
+      author: 'heaths',
+      updatedAt: '2026-09-11T12:00:00Z',
+      isDraft: false,
+    }, {
+      id: 8,
+      body: 'Second comment.',
+      sourceLine: 3,
+      kind: 'reply',
+      originalPostId: 7,
+      inReplyToId: 7,
+      author: 'octocat',
+      updatedAt: '2026-09-11T12:05:00Z',
+      isDraft: false,
+    }]]]);
+
+    const lineMetadata = createPreviewLineMetadata(source, {
+      markdown: source,
+      hasCommentsPatch: false,
+    }, [{
+      line: 3,
+      language: 'rust',
+    }], pullRequestComments);
+    const html = renderPreviewMarkdown(source, lineMetadata);
+
+    assert.deepStrictEqual(lineMetadata, [{
+      sourceLine: 3,
+      previewLine: 3,
+      line: 3,
+      language: 'rust',
+      hasDocumentation: false,
+      hasSource: false,
+      documentationGroupId: undefined,
+      documentationPreviewLines: [],
+      pullRequestComments: [{
+        id: 7,
+        body: 'First comment.',
+        sourceLine: 3,
+        kind: 'individual',
+        originalPostId: 7,
+        author: 'heaths',
+        updatedAt: '2026-09-11T12:00:00Z',
+        isDraft: false,
+      }, {
+        id: 8,
+        body: 'Second comment.',
+        sourceLine: 3,
+        kind: 'reply',
+        originalPostId: 7,
+        inReplyToId: 7,
+        author: 'octocat',
+        updatedAt: '2026-09-11T12:05:00Z',
+        isDraft: false,
+      }],
+      hasPullRequestDiscussion: true,
+      ariaLabel: 'Review actions available: pull request discussion',
+    }]);
+    assert.ok(html.includes('data-has-pr-discussion'));
+    assert.ok(html.includes('data-pr-comment-count="2"'));
   });
 
   test('adds pull request comment metadata to actionable preview lines', () => {
@@ -167,14 +255,16 @@ suite('Markdown preview', () => {
       'pub fn docs_only();',
       '```',
     ].join('\n');
-    const pullRequestComments = new Map<number, PullRequestLineComment>([[3, {
+    const pullRequestComments = new Map<number, readonly PullRequestLineComment[]>([[3, [{
       id: 7,
       body: 'Please rename this.',
       sourceLine: 3,
+      kind: 'individual',
+      originalPostId: 7,
       author: 'heaths',
       updatedAt: '2026-09-11T12:00:00Z',
       isDraft: false,
-    }]]);
+    }]]]);
 
     const lineMetadata = createPreviewLineMetadata(source, {
       markdown: source,
@@ -193,14 +283,17 @@ suite('Markdown preview', () => {
       hasSource: false,
       documentationGroupId: undefined,
       documentationPreviewLines: [],
-      pullRequestComment: {
+      pullRequestComments: [{
         id: 7,
         body: 'Please rename this.',
         sourceLine: 3,
+        kind: 'individual',
+        originalPostId: 7,
         author: 'heaths',
         updatedAt: '2026-09-11T12:00:00Z',
         isDraft: false,
-      },
+      }],
+      hasPullRequestDiscussion: false,
       ariaLabel: 'Review actions available: pull request comment',
     }]);
   });
@@ -213,14 +306,17 @@ suite('Markdown preview', () => {
       'pub fn docs_only();',
       '```',
     ].join('\n');
-    const pullRequestComments = new Map<number, PullRequestLineComment>([[3, {
+    const pullRequestComments = new Map<number, readonly PullRequestLineComment[]>([[3, [{
       id: 8,
       body: 'Comment only.',
       sourceLine: 3,
+      kind: 'review',
+      reviewId: 12,
+      originalPostId: 8,
       author: 'heaths',
       updatedAt: '2026-09-11T12:00:00Z',
       isDraft: false,
-    }]]);
+    }]]]);
 
     const lineMetadata = createPreviewLineMetadata(source, {
       markdown: source,
@@ -236,14 +332,18 @@ suite('Markdown preview', () => {
       hasSource: false,
       documentationGroupId: undefined,
       documentationPreviewLines: [],
-      pullRequestComment: {
+      pullRequestComments: [{
         id: 8,
         body: 'Comment only.',
         sourceLine: 3,
+        kind: 'review',
+        reviewId: 12,
+        originalPostId: 8,
         author: 'heaths',
         updatedAt: '2026-09-11T12:00:00Z',
         isDraft: false,
-      },
+      }],
+      hasPullRequestDiscussion: false,
       ariaLabel: 'Review actions available: pull request comment',
     }]);
   });
@@ -320,12 +420,25 @@ suite('Markdown preview', () => {
     assert.ok(html.includes('--preview-collapse-docs-icon: url("test-webview:/extension/assets/codicons/collapse-docs.svg")'));
     assert.ok(html.includes('--preview-go-to-file-icon: url("test-webview:/extension/assets/codicons/go-to-file.svg")'));
     assert.ok(html.includes('--preview-comment-icon: url("test-webview:/extension/assets/codicons/comment.svg")'));
+    assert.ok(html.includes('--preview-comment-discussion-icon: url("test-webview:/extension/assets/codicons/comment-discussion.svg")'));
+    assert.ok(html.includes('--preview-edit-icon: url("test-webview:/extension/assets/codicons/edit.svg")'));
+    assert.ok(!html.includes('--preview-reply-icon'));
     assert.ok(html.includes('data-show-tooltip="Show documentation"'));
     assert.ok(html.includes('data-hide-tooltip="Hide documentation"'));
     assert.ok(html.includes('data-action="comment" data-icon="comment"'));
     assert.ok(html.includes('data-action="source" data-icon="go-to-file"'));
     assert.ok(!html.includes('preview-initial-state'));
     assert.ok(!html.includes('Please rename this.'));
+  });
+
+  test('ships the generated edit icon asset for preview actions', async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    assert.ok(folder, 'Test workspace was not mounted');
+
+    const editIconUri = vscode.Uri.joinPath(folder.uri, 'assets/codicons/edit.svg');
+    const iconStat = await vscode.workspace.fs.stat(editIconUri);
+
+    assert.strictEqual(iconStat.type, vscode.FileType.File);
   });
 
   test('resolves contributed preview styles in declaration order', () => {
@@ -420,6 +533,15 @@ suite('Markdown preview', () => {
     assert.ok(css.includes('--preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));'));
     assert.ok(css.includes('.markdown-body pre {\n  overflow: auto;\n  padding: var(--preview-code-block-padding);\n  padding-inline-start: 0;'));
     assert.ok(css.includes('left: var(--comment-icon-margin);'));
+    assert.ok(css.includes('--preview-comment-history-gap: 8px;'));
+    assert.ok(css.includes('--preview-comment-history-background: color-mix(in srgb, var(--preview-hover-background) 84%, transparent);'));
+    assert.ok(css.includes('.markdown-body .preview-action-line[data-has-pr-discussion] {\n  --preview-line-comment-icon: var(--preview-comment-discussion-icon);\n}'));
+    assert.ok(css.includes(':is(#preview-hover-actions button, .preview-icon-button) {'));
+    assert.ok(css.includes('.preview-comment-thread-edit {\n  min-inline-size: 0;\n  color: var(--preview-comment-history-meta);\n  background: transparent;'));
+    assert.ok(css.includes('.preview-comment-thread-edit[data-icon="edit"] {\n  --preview-action-icon: var(--preview-edit-icon);\n}'));
+    assert.ok(css.includes('#preview-comment-window-footer button {'));
+    assert.ok(!css.includes('#preview-comment-window button {'));
+    assert.ok(!css.includes('.preview-comment-thread-reply'));
     assert.ok(!css.includes('left: calc(-1 * var(--preview-comment-badge-hit-size));'));
     assert.ok(css.includes('--preview-hljs-title: #795e26;'));
     assert.ok(css.includes('--preview-hljs-attr: #001080;'));
@@ -452,10 +574,249 @@ suite('Markdown preview', () => {
 
     assert.ok(script.includes('class="preview-secondary" data-action="delete-comment"'));
     assert.ok(script.includes('class="preview-secondary" data-action="cancel-comment"'));
+    assert.ok(script.includes('data-action="submit-comment">Comment</button>'));
+    assert.ok(script.includes('data-action="reply-comment" hidden>Reply</button>'));
+    assert.ok(script.includes("editButton.className = 'preview-icon-button preview-comment-thread-edit'"));
+    assert.ok(script.includes("editButton.dataset.action = 'edit-comment'"));
+    assert.ok(script.includes("editButton.title = 'Edit comment'"));
+    assert.ok(script.includes("editButton.setAttribute('aria-label', 'Edit comment')"));
+    assert.ok(script.includes([
+      "      '  <button type=\"button\" data-action=\"submit-comment\">Comment</button>',",
+      "      '  <button type=\"button\" data-action=\"reply-comment\" hidden>Reply</button>',",
+    ].join('\n')));
+    assert.ok(script.includes('id="preview-comment-history"'));
+    assert.ok(script.includes("submitLabel: hasPendingReview ? 'Add comment' : 'Start review'"));
+    assert.ok(script.includes('showReply: !hasPendingReview && originalPostId !== undefined'));
+    assert.ok(script.includes("submitLabel: 'Update'"));
+    assert.ok(script.includes('placeholder: `Edit this pending comment. Press ${submitShortcut} to update.`'));
+    assert.ok(script.includes("submitCommentButton.classList.toggle('preview-secondary', options.showReply)"));
+    assert.ok(script.includes('if (!replyCommentButton.hidden) {'));
+    assert.ok(script.includes('hasPendingReview = event.data.hasPendingReview === true'));
+    assert.ok(script.includes("body: ''"));
+    assert.ok(!script.includes('draftComment?.localId'));
+    assert.ok(!script.includes('preview-comment-thread-reply'));
+    assert.ok(!script.includes('comment.canReply'));
     assert.ok(script.includes("anchorMode: 'toolbar'"));
     assert.ok(script.includes("type: 'submitPullRequestReview'"));
+    assert.ok(script.includes("type: 'createPullRequestCommentReply'"));
+    assert.ok(script.includes("data-has-pr-discussion"));
     assert.ok(script.includes("case 'openPullRequestReviewDialog':"));
     assert.ok(script.includes('navigator.userAgentData?.platform'));
     assert.ok(script.includes("? 'Cmd+Enter' : 'Ctrl+Enter'"));
+  });
+
+  test('refreshes pull request comment state after review submission without changing pull request context', async () => {
+    const pullRequest = {
+      number: 42,
+      title: 'Review comments',
+      state: 'open',
+      baseRef: 'main',
+      baseSha: 'base-sha',
+      headRef: 'feature/comments',
+      headSha: 'head-sha',
+      headOwner: 'heaths',
+    } as const;
+    const documentRef = {
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'head-sha',
+      path: 'sdk/keyvault/api/API.md',
+    };
+    const pullRequestContext = {
+      document: documentRef,
+      pullRequest,
+    };
+
+    let hasPendingReview = true;
+    const messages: unknown[] = [];
+    const previewProvider = new ReviewMarkdownPreview(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        async getPullRequestContext() {
+          return pullRequestContext;
+        },
+      } as never,
+      {
+        async submitReview() {
+          hasPendingReview = false;
+          return 1;
+        },
+        hasPendingReview() {
+          return hasPendingReview;
+        },
+        async getLineComments() {
+          return new Map([[9, [{
+            id: 5,
+            body: 'Submitted comment',
+            sourceLine: 9,
+            kind: 'review',
+            reviewId: 12,
+            originalPostId: 5,
+            author: 'heaths',
+            updatedAt: '2026-09-11T12:00:00Z',
+            isDraft: hasPendingReview,
+          }]]]);
+        },
+      } as never,
+    );
+
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        getText() {
+          return '';
+        },
+      },
+      panel: {
+        webview: {
+          async postMessage(message: unknown) {
+            messages.push(message);
+            return true;
+          },
+        },
+      },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: false,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestContext,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+
+    (previewProvider as unknown as { previews: Set<unknown>; activePreview?: unknown }).previews.add(preview);
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
+
+    await (previewProvider as unknown as {
+      submitPullRequestReview(event: 'APPROVE' | 'REQUEST_CHANGES', body?: string): Promise<void>;
+    }).submitPullRequestReview('APPROVE', 'Looks good');
+
+    assert.deepStrictEqual(messages, [{
+      type: 'pullRequestCommentState',
+      hasPendingReview: false,
+      comments: [{
+        line: 9,
+        comments: [{
+          id: 5,
+          body: 'Submitted comment',
+          renderedBody: '<p>Submitted comment</p>\n',
+          kind: 'review',
+          isDraft: false,
+          author: 'heaths',
+          createdAt: undefined,
+          updatedAt: '2026-09-11T12:00:00Z',
+          originalPostId: 5,
+          localId: undefined,
+        }],
+      }],
+    }]);
+  });
+
+  test('adds a new pending comment unless a draft localId is explicitly selected for update', async () => {
+    const pullRequest = {
+      number: 42,
+      title: 'Review comments',
+      state: 'open',
+      baseRef: 'main',
+      baseSha: 'base-sha',
+      headRef: 'feature/comments',
+      headSha: 'head-sha',
+      headOwner: 'heaths',
+    } as const;
+    const documentRef = {
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'head-sha',
+      path: 'sdk/keyvault/api/API.md',
+    };
+    const pullRequestContext = {
+      document: documentRef,
+      pullRequest,
+    };
+
+    const existingCalls: unknown[] = [];
+    const previewProvider = new ReviewMarkdownPreview(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
+      {
+        async upsertComment(
+          _document: GitHubDocumentRef,
+          _pullRequest: GitHubPullRequest,
+          _line: number,
+          _body: string,
+          existing?: PullRequestLineComment,
+        ) {
+          existingCalls.push(existing);
+          return {
+            id: 5,
+            localId: typeof existing?.localId === 'string' ? existing.localId : undefined,
+            body: 'Updated comment',
+            sourceLine: 9,
+            kind: 'review',
+            originalPostId: 5,
+            isDraft: true,
+          };
+        },
+        async getLineComments() {
+          return new Map([[9, [{
+            id: 5,
+            localId: 'draft-1',
+            body: 'Pending comment',
+            sourceLine: 9,
+            kind: 'review',
+            reviewId: 12,
+            originalPostId: 5,
+            author: 'heaths',
+            updatedAt: '2026-09-11T12:00:00Z',
+            isDraft: true,
+          }]]]);
+        },
+      } as never,
+    );
+
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        getText() {
+          return '';
+        },
+      },
+      panel: { webview: { async postMessage() { return true; } } },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: false,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestContext,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+
+    (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
+
+    await (previewProvider as unknown as {
+      upsertPullRequestComment(preview: unknown, line: number, body: string, localId?: string): Promise<void>;
+    }).upsertPullRequestComment(preview, 9, 'Another pending comment');
+    await (previewProvider as unknown as {
+      upsertPullRequestComment(preview: unknown, line: number, body: string, localId?: string): Promise<void>;
+    }).upsertPullRequestComment(preview, 9, 'Edit pending comment', 'draft-1');
+
+    assert.deepStrictEqual(existingCalls, [undefined, {
+      id: 5,
+      localId: 'draft-1',
+      body: 'Pending comment',
+      sourceLine: 9,
+      kind: 'review',
+      reviewId: 12,
+      originalPostId: 5,
+      author: 'heaths',
+      updatedAt: '2026-09-11T12:00:00Z',
+      isDraft: true,
+    }]);
   });
 });

@@ -3,6 +3,8 @@ import {
   GitHubClient,
   GitHubClientOptions,
   GitHubCommit,
+  GitHubCreatePullRequestCommentReplyRequest,
+  GitHubCreatePullRequestCommentRequest,
   GitHubDeletePullRequestCommentRequest,
   GitHubDocumentRef,
   GitHubFileContentRequest,
@@ -18,6 +20,9 @@ import {
   GitHubSubmitPullRequestReviewRequest,
   GitHubTag,
   GitHubUpdatePullRequestCommentRequest,
+  normalizePullRequestCommentPayload,
+  normalizePullRequestCommentsPayload,
+  normalizePullRequestReviewsPayload,
   parseGitHubDocument,
 } from './githubClient';
 
@@ -106,23 +111,54 @@ class GitHubProxyClient implements GitHubClient {
   public async getPullRequestComments(
     request: GitHubPullRequestCommentsRequest,
   ): Promise<readonly GitHubPullRequestComment[]> {
-    return this.getJson<readonly GitHubPullRequestComment[]>('/pull-request-comments', {
+    const reviews = await this.getPullRequestReviews({
+      repository: request.repository,
+      prNumber: request.prNumber,
+      promptForAuth: request.promptForAuth,
+    });
+    const reviewsById = new Map(reviews.map(review => [review.id, review] as const));
+    const payload = await this.getJson<unknown>('/pull-request-comments', {
       prNumber: String(request.prNumber),
     });
+    return normalizePullRequestCommentsPayload(payload, reviewsById) ?? [];
   }
 
   public async getPullRequestReviews(
     request: GitHubPullRequestReviewsRequest,
   ): Promise<readonly GitHubPullRequestReview[]> {
-    return this.getJson<readonly GitHubPullRequestReview[]>('/pull-request-reviews', {
+    const payload = await this.getJson<unknown>('/pull-request-reviews', {
       prNumber: String(request.prNumber),
     });
+    return normalizePullRequestReviewsPayload(payload) ?? [];
+  }
+
+  public async createPullRequestComment(
+    request: GitHubCreatePullRequestCommentRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const payload = await this.sendJson<unknown>('POST', '/pull-request-comments', {
+      prNumber: request.prNumber,
+      commitId: request.commitId,
+      path: request.path,
+      line: request.line,
+      body: request.body,
+    });
+    return this.normalizeCommentPayload(request, payload);
+  }
+
+  public async createPullRequestCommentReply(
+    request: GitHubCreatePullRequestCommentReplyRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const payload = await this.sendJson<unknown>('POST', `/pull-request-comments/${request.commentId}/replies`, {
+      prNumber: request.prNumber,
+      body: request.body,
+    });
+    return this.normalizeCommentPayload(request, payload);
   }
 
   public async updatePullRequestComment(
     request: GitHubUpdatePullRequestCommentRequest,
   ): Promise<GitHubPullRequestComment | undefined> {
-    return this.sendJsonOrUndefined<GitHubPullRequestComment>(
+    const payload = await this.sendJsonOrUndefined<unknown>(
       'PATCH',
       `/pull-request-comments/${request.commentId}`,
       {
@@ -130,6 +166,7 @@ class GitHubProxyClient implements GitHubClient {
         body: request.body,
       },
     );
+    return payload ? this.normalizeCommentPayload(request, payload) : undefined;
   }
 
   public async deletePullRequestComment(request: GitHubDeletePullRequestCommentRequest): Promise<boolean> {
@@ -182,6 +219,21 @@ class GitHubProxyClient implements GitHubClient {
   private async getText(path: string, query?: Record<string, string>, allowNotFound = false): Promise<string | undefined> {
     const response = await this.send('GET', path, { query, allowNotFound });
     return response ? response.text() : undefined;
+  }
+
+  private async normalizeCommentPayload(
+    request: GitHubPullRequestCommentsRequest,
+    payload: unknown,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const reviews = await this.getPullRequestReviews({
+      repository: request.repository,
+      prNumber: request.prNumber,
+      promptForAuth: request.promptForAuth,
+    });
+    return normalizePullRequestCommentPayload(
+      payload,
+      new Map(reviews.map(review => [review.id, review] as const)),
+    );
   }
 
   private async send(

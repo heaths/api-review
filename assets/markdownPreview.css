@@ -45,6 +45,11 @@
   --preview-comment-window-padding: 12px;
   --preview-comment-window-footer-gap: 8px;
   --preview-comment-window-code-gap: 8px;
+  --preview-comment-history-gap: 8px;
+  --preview-comment-history-padding: 10px;
+  --preview-comment-history-border-color: var(--vscode-panel-border);
+  --preview-comment-history-background: color-mix(in srgb, var(--preview-hover-background) 84%, transparent);
+  --preview-comment-history-meta: var(--vscode-descriptionForeground, var(--preview-hover-foreground));
   --preview-comment-window-textarea-min-height: 96px;
   --preview-comment-window-button-padding-block: 5px;
   --preview-comment-window-button-padding-inline: 12px;
@@ -363,7 +368,7 @@ body {
     visibility 0s linear 0s;
 }
 
-#preview-hover-actions button {
+:is(#preview-hover-actions button, .preview-icon-button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -375,32 +380,36 @@ body {
   background: var(--preview-hover-button-background);
   border: none;
   border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
+  transition:
+    background-color var(--preview-hover-fade-duration) ease,
+    color var(--preview-hover-fade-duration) ease,
+    opacity var(--preview-hover-fade-duration) ease;
 }
 
-#preview-hover-actions button:hover {
+:is(#preview-hover-actions button, .preview-icon-button):hover {
   background: var(--preview-hover-button-background-hover);
 }
 
-#preview-hover-actions button:focus-visible {
+:is(#preview-hover-actions button, .preview-icon-button):focus-visible {
   outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
   outline-offset: var(--preview-hover-focus-offset);
 }
 
-#preview-hover-actions button:active {
+:is(#preview-hover-actions button, .preview-icon-button):active {
   background: var(--preview-hover-button-background-active);
 }
 
-#preview-hover-actions button[disabled] {
+:is(#preview-hover-actions button, .preview-icon-button)[disabled] {
   cursor: default;
   opacity: var(--preview-hover-button-disabled-opacity);
 }
 
-#preview-hover-actions button[disabled]:hover,
-#preview-hover-actions button[disabled]:active {
+:is(#preview-hover-actions button, .preview-icon-button)[disabled]:hover,
+:is(#preview-hover-actions button, .preview-icon-button)[disabled]:active {
   background: var(--preview-hover-button-background);
 }
 
-#preview-hover-actions button::before {
+:is(#preview-hover-actions button, .preview-icon-button)::before {
   content: "";
   inline-size: var(--preview-hover-icon-size);
   block-size: var(--preview-hover-icon-size);
@@ -434,11 +443,15 @@ body {
   inline-size: var(--preview-comment-badge-size);
   block-size: var(--preview-comment-badge-size);
   background-color: currentColor;
-  mask: var(--preview-comment-icon) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
-  -webkit-mask: var(--preview-comment-icon) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
+  mask: var(--preview-line-comment-icon, var(--preview-comment-icon)) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
+  -webkit-mask: var(--preview-line-comment-icon, var(--preview-comment-icon)) center / var(--preview-comment-badge-size) var(--preview-comment-badge-size) no-repeat;
   opacity: 0.85;
   cursor: pointer;
   transform: translateY(-50%);
+}
+
+.markdown-body .preview-action-line[data-has-pr-discussion] {
+  --preview-line-comment-icon: var(--preview-comment-discussion-icon);
 }
 
 #preview-comment-window {
@@ -460,6 +473,62 @@ body {
 
 #preview-comment-window.visible {
   display: flex;
+}
+
+#preview-comment-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--preview-comment-history-gap);
+  overflow: auto;
+}
+
+#preview-comment-history[hidden] {
+  display: none;
+}
+
+.preview-comment-thread-entry {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--preview-comment-history-padding);
+  background: var(--preview-comment-history-background);
+  border: 1px solid var(--preview-comment-history-border-color);
+  border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
+}
+
+.preview-comment-thread-header {
+  color: var(--preview-comment-history-meta);
+  font-size: 0.9em;
+}
+
+.preview-comment-thread-body > :first-child {
+  margin-top: 0;
+}
+
+.preview-comment-thread-body > :last-child {
+  margin-bottom: 0;
+}
+
+.preview-comment-thread-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.preview-comment-thread-edit {
+  min-inline-size: 0;
+  color: var(--preview-comment-history-meta);
+  background: transparent;
+  opacity: 0.78;
+}
+
+.preview-comment-thread-edit:hover {
+  color: var(--preview-hover-button-foreground);
+  opacity: 1;
+}
+
+.preview-comment-thread-edit[data-icon="edit"] {
+  --preview-action-icon: var(--preview-edit-icon);
 }
 
 #preview-comment-window textarea {
@@ -493,7 +562,7 @@ body {
   margin-inline-end: auto;
 }
 
-#preview-comment-window button {
+#preview-comment-window-footer button {
   min-inline-size: 76px;
   padding: var(--preview-comment-window-button-padding-block) var(--preview-comment-window-button-padding-inline);
   color: var(--vscode-button-foreground, var(--preview-hover-foreground));
@@ -502,22 +571,22 @@ body {
   border-radius: calc(var(--preview-hover-border-radius) - var(--preview-hover-border-width));
 }
 
-#preview-comment-window button:hover {
+#preview-comment-window-footer button:hover {
   background: var(--vscode-button-hoverBackground, var(--preview-hover-button-background-active));
 }
 
-#preview-comment-window button:focus-visible {
+#preview-comment-window-footer button:focus-visible {
   outline: var(--preview-hover-border-width) solid var(--preview-focus-outline-color);
   outline-offset: var(--preview-hover-focus-offset);
 }
 
-#preview-comment-window button.preview-secondary {
+#preview-comment-window-footer button.preview-secondary {
   color: var(--vscode-button-secondaryForeground, var(--preview-hover-foreground));
   background: var(--vscode-button-secondaryBackground, var(--preview-hover-button-background));
   border-color: var(--vscode-button-border, var(--preview-hover-border-color));
 }
 
-#preview-comment-window button.preview-secondary:hover {
+#preview-comment-window-footer button.preview-secondary:hover {
   background: var(--vscode-button-secondaryHoverBackground, var(--preview-hover-button-background-hover));
 }
 

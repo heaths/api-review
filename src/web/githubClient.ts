@@ -79,12 +79,22 @@ export interface GitHubPullRequest {
   readonly headOwner?: string;
 }
 
+export type GitHubPullRequestCommentKind = 'individual' | 'review' | 'reply';
+
 export interface GitHubPullRequestComment {
   readonly id: number;
   readonly body: string;
   readonly path: string;
   readonly line: number;
   readonly commitId: string;
+  readonly kind: GitHubPullRequestCommentKind;
+  readonly reviewId?: number;
+  readonly inReplyToId?: number;
+  /**
+   * The top-level review comment id for this discussion. GitHub reply APIs must
+   * target this original comment id, and replies to replies are not supported.
+   */
+  readonly originalPostId: number;
   readonly author?: string;
   readonly createdAt?: string;
   readonly updatedAt?: string;
@@ -123,6 +133,18 @@ export interface GitHubUpdatePullRequestCommentRequest extends GitHubPullRequest
   readonly body: string;
 }
 
+export interface GitHubCreatePullRequestCommentRequest extends GitHubPullRequestCommentsRequest {
+  readonly commitId: string;
+  readonly path: string;
+  readonly line: number;
+  readonly body: string;
+}
+
+export interface GitHubCreatePullRequestCommentReplyRequest extends GitHubPullRequestCommentsRequest {
+  readonly commentId: number;
+  readonly body: string;
+}
+
 export interface GitHubDeletePullRequestCommentRequest extends GitHubPullRequestCommentsRequest {
   readonly commentId: number;
 }
@@ -145,6 +167,8 @@ export interface GitHubClient {
   getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined>;
   getPullRequestComments(request: GitHubPullRequestCommentsRequest): Promise<readonly GitHubPullRequestComment[] | undefined>;
   getPullRequestReviews(request: GitHubPullRequestReviewsRequest): Promise<readonly GitHubPullRequestReview[] | undefined>;
+  createPullRequestComment(request: GitHubCreatePullRequestCommentRequest): Promise<GitHubPullRequestComment | undefined>;
+  createPullRequestCommentReply(request: GitHubCreatePullRequestCommentReplyRequest): Promise<GitHubPullRequestComment | undefined>;
   updatePullRequestComment(request: GitHubUpdatePullRequestCommentRequest): Promise<GitHubPullRequestComment | undefined>;
   deletePullRequestComment(request: GitHubDeletePullRequestCommentRequest): Promise<boolean>;
   submitPullRequestReview(request: GitHubSubmitPullRequestReviewRequest): Promise<void>;
@@ -317,6 +341,9 @@ class OctokitGitHubClient implements GitHubClient {
   public async getPullRequestComments(
     request: GitHubPullRequestCommentsRequest,
   ): Promise<readonly GitHubPullRequestComment[] | undefined> {
+    const reviews = await this.getPullRequestReviews(request);
+    const reviewsById = new Map((reviews ?? []).map(review => [review.id, review] as const));
+
     return this.loadRest(
       request,
       pullRequestCommentsCacheKey(request.repository, request.prNumber),
@@ -327,7 +354,7 @@ class OctokitGitHubClient implements GitHubClient {
         direction: 'desc',
         per_page: 100,
       },
-      normalizePullRequestComments,
+      payload => normalizePullRequestComments(payload, reviewsById),
     );
   }
 
@@ -344,6 +371,57 @@ class OctokitGitHubClient implements GitHubClient {
       },
       normalizePullRequestReviews,
     );
+  }
+
+  public async createPullRequestComment(
+    request: GitHubCreatePullRequestCommentRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const session = await this.authProvider.getSession(request.promptForAuth === true);
+    if (!session) {
+      return undefined;
+    }
+
+    const response = await this.transportFactory(session.accessToken).request<unknown>(
+      'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments',
+      {
+        owner: request.repository.owner,
+        repo: request.repository.repo,
+        pull_number: request.prNumber,
+        commit_id: request.commitId,
+        path: request.path,
+        line: request.line,
+        side: 'RIGHT',
+        body: request.body,
+        headers: createRestHeaders(),
+      },
+    );
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestCommentsCacheKey(request.repository, request.prNumber)));
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestReviewsCacheKey(request.repository, request.prNumber)));
+    return normalizePullRequestComment(response.data);
+  }
+
+  public async createPullRequestCommentReply(
+    request: GitHubCreatePullRequestCommentReplyRequest,
+  ): Promise<GitHubPullRequestComment | undefined> {
+    const session = await this.authProvider.getSession(request.promptForAuth === true);
+    if (!session) {
+      return undefined;
+    }
+
+    const response = await this.transportFactory(session.accessToken).request<unknown>(
+      'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies',
+      {
+        owner: request.repository.owner,
+        repo: request.repository.repo,
+        pull_number: request.prNumber,
+        comment_id: request.commentId,
+        body: request.body,
+        headers: createRestHeaders(),
+      },
+    );
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestCommentsCacheKey(request.repository, request.prNumber)));
+    this.cache.delete(accountCacheKey(session.accountId, pullRequestReviewsCacheKey(request.repository, request.prNumber)));
+    return normalizePullRequestComment(response.data);
   }
 
   public async updatePullRequestComment(
@@ -746,13 +824,16 @@ function normalizeRestPullRequest(payload: unknown): GitHubPullRequest | undefin
   };
 }
 
-function normalizePullRequestComments(payload: unknown): readonly GitHubPullRequestComment[] | undefined {
+function normalizePullRequestComments(
+  payload: unknown,
+  reviewsById?: ReadonlyMap<number, GitHubPullRequestReview>,
+): readonly GitHubPullRequestComment[] | undefined {
   if (!Array.isArray(payload)) {
     return undefined;
   }
 
   return payload
-    .map(value => normalizePullRequestComment(value))
+    .map(value => normalizePullRequestComment(value, reviewsById))
     .filter((value): value is GitHubPullRequestComment => value !== undefined);
 }
 
@@ -766,7 +847,10 @@ function normalizePullRequestReviews(payload: unknown): readonly GitHubPullReque
     .filter((value): value is GitHubPullRequestReview => value !== undefined);
 }
 
-function normalizePullRequestComment(payload: unknown): GitHubPullRequestComment | undefined {
+function normalizePullRequestComment(
+  payload: unknown,
+  reviewsById?: ReadonlyMap<number, GitHubPullRequestReview>,
+): GitHubPullRequestComment | undefined {
   if (!isRecord(payload)
     || typeof payload.id !== 'number'
     || typeof payload.body !== 'string'
@@ -776,12 +860,19 @@ function normalizePullRequestComment(payload: unknown): GitHubPullRequestComment
     return undefined;
   }
 
+  const reviewId = typeof payload.pull_request_review_id === 'number' ? payload.pull_request_review_id : undefined;
+  const inReplyToId = typeof payload.in_reply_to_id === 'number' ? payload.in_reply_to_id : undefined;
+  const review = reviewId !== undefined ? reviewsById?.get(reviewId) : undefined;
   return {
     id: payload.id,
     body: payload.body,
     path: payload.path,
     line: payload.line,
     commitId: payload.commit_id,
+    kind: classifyPullRequestComment(reviewId, review, inReplyToId),
+    reviewId,
+    inReplyToId,
+    originalPostId: inReplyToId ?? payload.id,
     author: isRecord(payload.user) && typeof payload.user.login === 'string' ? payload.user.login : undefined,
     createdAt: typeof payload.created_at === 'string' ? payload.created_at : undefined,
     updatedAt: typeof payload.updated_at === 'string' ? payload.updated_at : undefined,
@@ -813,6 +904,44 @@ function normalizePullRequestReview(payload: unknown): GitHubPullRequestReview |
     default:
       return undefined;
   }
+}
+
+function classifyPullRequestComment(
+  reviewId: number | undefined,
+  review: GitHubPullRequestReview | undefined,
+  inReplyToId: number | undefined,
+): GitHubPullRequestCommentKind {
+  if (inReplyToId !== undefined) {
+    return 'reply';
+  }
+
+  if (reviewId === undefined) {
+    return 'individual';
+  }
+
+  if (!review) {
+    return 'review';
+  }
+
+  return review.body?.trim().length ? 'review' : 'individual';
+}
+
+export function normalizePullRequestCommentsPayload(
+  payload: unknown,
+  reviewsById?: ReadonlyMap<number, GitHubPullRequestReview>,
+): readonly GitHubPullRequestComment[] | undefined {
+  return normalizePullRequestComments(payload, reviewsById);
+}
+
+export function normalizePullRequestCommentPayload(
+  payload: unknown,
+  reviewsById?: ReadonlyMap<number, GitHubPullRequestReview>,
+): GitHubPullRequestComment | undefined {
+  return normalizePullRequestComment(payload, reviewsById);
+}
+
+export function normalizePullRequestReviewsPayload(payload: unknown): readonly GitHubPullRequestReview[] | undefined {
+  return normalizePullRequestReviews(payload);
 }
 
 function normalizeAssociatedPullRequest(
