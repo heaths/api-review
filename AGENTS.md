@@ -55,6 +55,9 @@
 - Keep parser tests pure where possible. Web integration tests belong under
   `src/web/test/suite` and are discovered by the existing webpack context.
 - Test virtual URI schemes and multi-root behavior, not only local file paths.
+- When changing preview or diff syntax highlighting, limit language-specific
+  highlighting support to Bash/Shell, C#, C++, Go, Java, JavaScript, JSON,
+  Python, Rust, and TypeScript.
 - Keep caching policy inside `githubClient.ts`. Namespace cached GitHub results
   by authenticated account and request shape, use REST conditional requests with
   `ETag` and `If-None-Match` when the endpoint supports them, and do not push

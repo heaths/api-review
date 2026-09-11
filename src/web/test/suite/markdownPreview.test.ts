@@ -30,10 +30,10 @@ suite('Markdown preview', () => {
   });
 
   test('marks every line of a multiline comment as collapsible', () => {
-    const html = renderMarkdown(['```css', '/* First line', ' * second line', ' */', '.selector {}', '```'].join('\n'));
+    const html = renderMarkdown(['```typescript', '/* First line', ' * second line', ' */', 'const value = 1;', '```'].join('\n'));
 
     assert.strictEqual((html.match(/code-line comment-line/g) ?? []).length, 3);
-    assert.ok(html.includes('<span class="code-line" data-line="4"><span class="hljs-selector-class">.selector</span>'));
+    assert.ok(html.includes('<span class="code-line" data-line="4"><span class="hljs-keyword">const</span> value = <span class="hljs-number">1</span>;'));
   });
 
   test('escapes code in unknown fenced languages', () => {
@@ -41,6 +41,20 @@ suite('Markdown preview', () => {
 
     assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
     assert.ok(!html.includes('<script>alert(1)</script>'));
+  });
+
+  test('highlights supported json aliases in fenced code', () => {
+    const html = renderMarkdown(['```jsonc', '{"answer": 42}', '```'].join('\n'));
+
+    assert.match(html, /hljs-(attr|string|number)/u);
+    assert.ok(html.includes('answer'));
+  });
+
+  test('highlights supported shell aliases in fenced code', () => {
+    const html = renderMarkdown(['```shell', 'echo "$HOME"', '```'].join('\n'));
+
+    assert.match(html, /hljs-(built_in|string|variable)/u);
+    assert.ok(html.includes('$HOME'));
   });
 
   test('renders comment markdown with raw html disabled', () => {

@@ -1,4 +1,3 @@
-import hljs from 'highlight.js';
 import MarkdownIt = require('markdown-it');
 import * as vscode from 'vscode';
 import {
@@ -9,6 +8,7 @@ import {
 } from './codeLensProvider';
 import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, PullRequestContext, ResolvedBaseline } from './displayDiff';
 import { renderDiffPreview } from './diffPreview';
+import hljs, { normalizeHighlightLanguage } from './highlight';
 import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
 import { PullRequestLineComment, PullRequestReviewController } from './pullRequestReview';
 import { ReviewModel } from './reviewModel';
@@ -204,7 +204,7 @@ const commentMarkdownRenderer = new MarkdownIt({
 markdownRenderer.renderer.rules.fence = (tokens, index, options, env) => {
   const token = tokens[index];
   const language = token.info.trim().split(/\s+/u, 1)[0] ?? '';
-  const normalized = normalizeLanguage(language);
+  const normalized = normalizeHighlightLanguage(language);
   const className = normalized.length > 0 ? `${options.langPrefix}${normalized}` : '';
   const classAttribute = className.length > 0 ? ` class="${escapeAttribute(className)}"` : '';
   const startLine = token.map ? token.map[0] + 1 : undefined;
@@ -860,7 +860,7 @@ function highlightCode(
   startingLine?: number,
   lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>,
 ): string {
-  const normalized = normalizeLanguage(language);
+  const normalized = normalizeHighlightLanguage(language);
   if (normalized && hljs.getLanguage(normalized)) {
     const highlighted = hljs.highlight(code, { language: normalized, ignoreIllegals: true }).value;
     return wrapHighlightedLines(highlighted, startingLine, lineMetadata);
@@ -1107,26 +1107,6 @@ function createPreviewLineRenderMetadata(
   }
 
   return lines;
-}
-
-function normalizeLanguage(language: string): string {
-  switch (language.toLowerCase()) {
-    case 'c#':
-    case 'csharp':
-      return 'cs';
-    case 'json5':
-    case 'jsonc':
-      return 'json';
-    case 'py3':
-      return 'python';
-    case 'shell':
-      return 'sh';
-    case 'tsx':
-    case 'typescriptreact':
-      return 'jsx';
-    default:
-      return language;
-  }
 }
 
 function escapeHtml(value: string): string {

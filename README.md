@@ -44,6 +44,10 @@ The custom preview applies CSS contributed by installed extensions through
 `markdown.previewStyles`. It does not load contributed preview scripts,
 Markdown-it plugins, or styles from the `markdown.styles` setting.
 
+Syntax highlighting in the extension is intentionally limited to C#, C++, Go,
+Java, JavaScript, Python, Rust, and TypeScript, as well as Bash/Shell and JSON.
+Other fenced-code languages render as plain code without language-specific highlighting.
+
 The standard Markdown editor remains available and continues to provide the
 Documentation and Go to source CodeLens actions described above.
 
