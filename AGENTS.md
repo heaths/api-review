@@ -5,6 +5,15 @@
 - The extension has one browser-safe source entry point, `src/web/extension.ts`,
   bundled for both Node.js and `webworker` extension hosts. Do not add Node-only
   APIs or a separate desktop source entry point.
+- Local repository access belongs in `gitClient.ts`. Keep `displayDiff.ts` and
+  other feature code unaware of `vscode.git` activation details, and keep the
+  real Git adapter behind `gitClientFactory.ts` for Node.js hosts plus the noop
+  adapter behind `gitClientFactory.web.ts` for web hosts.
+- GitHub network access belongs in `githubClient.ts`. When a change needs GitHub
+  auth, Octokit, GitHub REST endpoints, GraphQL queries, PR metadata, GitHub
+  tags or commits, or GitHub blob content, update `githubClient.ts` rather than
+  adding GitHub transport code elsewhere or depending on another GitHub
+  extension API.
 - Use `vscode.workspace.fs`, `findFiles`, `RelativePattern`, and `Uri` for all
   workspace I/O. Never use Node `fs`, platform path helpers, or `Uri.file`.
 - `configuration.ts`, `variables.ts`, and `fileDiscovery.ts` own resource-scoped
@@ -29,6 +38,9 @@
 - Preview extensibility is CSS-only. Do not load `markdown.styles`, execute
   `markdown.previewScripts`, or activate `markdown.markdownItPlugins` in the
   custom editor.
+- Prefer local-first diff behavior: use `gitClient.ts` when a local repository is
+  available, and fall back to `githubClient.ts` only for GitHub-backed documents
+  or operations that require published GitHub state.
 - Keep the custom editor selector broad enough for all Markdown files. Repository
   `workbench.editorAssociations` settings choose which configured API files open
   in it by default; the manifest selector cannot follow resource-scoped include
@@ -43,6 +55,18 @@
 - Keep parser tests pure where possible. Web integration tests belong under
   `src/web/test/suite` and are discovered by the existing webpack context.
 - Test virtual URI schemes and multi-root behavior, not only local file paths.
+- Keep caching policy inside `githubClient.ts`. Namespace cached GitHub results
+  by authenticated account and request shape, use REST conditional requests with
+  `ETag` and `If-None-Match` when the endpoint supports them, and do not push
+  cache ownership into feature code.
+- Prefer Octokit GraphQL when the query can return a small, exact GitHub model
+  and the operation does not depend on HTTP conditional caching. Prefer Octokit
+  REST when the endpoint offers cleaner filtering, raw content responses,
+  pagination behavior, or `ETag`-based revalidation that should back the cache.
+- When adding or changing diff history behavior, update `gitClient.ts` if the
+  source of truth is the local repository, update `githubClient.ts` if the
+  source of truth is GitHub, and update `displayDiff.ts` only for orchestration,
+  baseline selection, and fallback order.
 - Write commit messages and pull request titles and descriptions as described in
   `.github/instructions/commits.instructions.md`.
 - Keep dependency and Playwright caching in sync across workflows, including

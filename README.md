@@ -34,9 +34,11 @@ commit, pull request base, or another selected Markdown file, and while a diff
 is active the title bar adds next/previous hunk navigation plus a close action.
 The source Markdown file is never modified.
 
-Git-backed tags and commits depend on the built-in Git extension API. In a
-pure web host, that API is not currently available, so diffing there falls
-back to comparing against another selected Markdown file.
+In Node.js extension hosts, tags, commits, and baseline content come from the
+built-in Git extension so local and unpublished history remains available. In
+web hosts, GitHub-backed documents use GitHub APIs for published tags, commits,
+pull request bases, and baseline content. Other documents can still be compared
+against another selected Markdown file.
 
 The custom preview applies CSS contributed by installed extensions through
 `markdown.previewStyles`. It does not load contributed preview scripts,
