@@ -26,6 +26,7 @@ const webExtensionConfig = {
   output: {
     filename: '[name].js',
     path: path.join(__dirname, './dist/web'),
+    clean: true,
     libraryTarget: 'commonjs',
     devtoolModuleFilenameTemplate: '../../[resource-path]'
   },
@@ -95,6 +96,7 @@ const nodeExtensionConfig = {
   output: {
     filename: '[name].js',
     path: path.join(__dirname, './dist/node'),
+    clean: true,
     libraryTarget: 'commonjs2',
     devtoolModuleFilenameTemplate: '../../[resource-path]',
   },

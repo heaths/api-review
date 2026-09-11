@@ -1,6 +1,6 @@
-import hljs from 'highlight.js';
 import { diffLines } from 'diff';
 import MarkdownIt = require('markdown-it');
+import hljs, { normalizeHighlightLanguage } from './highlight';
 import { PreviewLineMetadata } from './lineMetadata';
 
 interface ParsedLine {
@@ -361,7 +361,7 @@ function renderCodeLines(
   lineMetadata: ReadonlyMap<number, PreviewLineRenderMetadata>,
 ): string {
   const code = codeLines.map(line => line.text).join('\n');
-  const normalized = normalizeLanguage(language);
+  const normalized = normalizeHighlightLanguage(language);
   const highlighted = normalized && hljs.getLanguage(normalized)
     ? hljs.highlight(code, { language: normalized, ignoreIllegals: true }).value
     : escapeHtml(code);
@@ -551,26 +551,6 @@ function splitChunkLines(text: string): string[] {
     lines.pop();
   }
   return lines;
-}
-
-function normalizeLanguage(language: string): string {
-  switch (language.toLowerCase()) {
-    case 'c#':
-    case 'csharp':
-      return 'cs';
-    case 'json5':
-    case 'jsonc':
-      return 'json';
-    case 'py3':
-      return 'python';
-    case 'shell':
-      return 'sh';
-    case 'tsx':
-    case 'typescriptreact':
-      return 'jsx';
-    default:
-      return language;
-  }
 }
 
 function escapeHtml(value: string): string {
