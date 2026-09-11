@@ -16,12 +16,15 @@
     .filter(line => line instanceof HTMLElement);
   const documentationGroups = collectDocumentationGroups();
   const commentWindow = createCommentWindow();
+  const commentHistory = requireElement(commentWindow.querySelector('#preview-comment-history'), HTMLDivElement, '#preview-comment-history');
   const commentTextarea = requireElement(commentWindow.querySelector('textarea'), HTMLTextAreaElement, '#preview-comment-window textarea');
   const deleteCommentButton = requireElement(commentWindow.querySelector('[data-action="delete-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="delete-comment"]');
   const cancelCommentButton = requireElement(commentWindow.querySelector('[data-action="cancel-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="cancel-comment"]');
+  const replyCommentButton = requireElement(commentWindow.querySelector('[data-action="reply-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="reply-comment"]');
   const submitCommentButton = requireElement(commentWindow.querySelector('[data-action="submit-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="submit-comment"]');
   const pullRequestComments = new Map();
   const submitShortcut = getSubmitShortcutLabel();
+  let hasPendingReview = false;
   let diffHunks = [];
   let activeDiffHunkIndex = 0;
   let hoveredLine;
@@ -61,6 +64,7 @@
         break;
 
       case 'pullRequestCommentState':
+        hasPendingReview = event.data.hasPendingReview === true;
         applyPullRequestCommentState(event.data.comments);
         retryPendingCommentOpen();
         break;
@@ -122,7 +126,11 @@
 
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      submitComment();
+      if (!replyCommentButton.hidden) {
+        replyComment();
+      } else {
+        submitComment();
+      }
     }
   });
 
@@ -352,16 +360,20 @@
     }
 
     pendingCommentOpen = undefined;
-    const existingComment = pullRequestComments.get(sourceLine);
+    const existingComments = getLineComments(sourceLine);
+    const originalPostId = getOriginalPostId(existingComments);
     openCommentWindow({
       kind: 'line',
       sourceLine,
       anchorLine: line,
       anchorMode,
-      body: existingComment?.body ?? '',
+      comments: existingComments,
+      originalPostId,
+      body: '',
       placeholder: `Add a pull request comment. Press ${submitShortcut} to submit.`,
-      submitLabel: existingComment ? 'Update' : 'Comment',
-      showDelete: existingComment !== undefined,
+      submitLabel: hasPendingReview ? 'Add comment' : 'Start review',
+      showReply: !hasPendingReview && originalPostId !== undefined,
+      showDelete: false,
     });
   }
 
@@ -374,9 +386,11 @@
       kind: 'review',
       event,
       anchorMode: 'toolbar',
+      comments: [],
       body: '',
       placeholder: `Add an overall review comment. Press ${submitShortcut} to ${event === 'APPROVE' ? 'approve' : 'reject'}.`,
       submitLabel: event === 'APPROVE' ? 'Approve' : 'Reject',
+      showReply: false,
       showDelete: false,
     });
   }
@@ -384,9 +398,12 @@
   function openCommentWindow(options) {
     activeCommentDialog = options;
     activeCommentLine = options.anchorLine;
+    renderCommentHistory(options.comments ?? []);
     commentTextarea.value = options.body;
     commentTextarea.placeholder = options.placeholder;
     submitCommentButton.textContent = options.submitLabel;
+    submitCommentButton.classList.toggle('preview-secondary', options.showReply);
+    replyCommentButton.hidden = !options.showReply;
     deleteCommentButton.hidden = !options.showDelete;
     commentWindow.classList.add('visible');
     positionCommentWindow(options.anchorLine, options.anchorMode);
@@ -461,9 +478,41 @@
         type: 'upsertPullRequestComment',
         line: activeCommentDialog.sourceLine,
         body: commentTextarea.value,
+        localId: activeCommentDialog.draftLocalId,
       });
     }
     closeCommentWindow();
+  }
+
+  function replyComment() {
+    if (!activeCommentDialog || activeCommentDialog.kind !== 'line'
+      || !Number.isInteger(activeCommentDialog.originalPostId)) {
+      return;
+    }
+
+    vscode?.postMessage({
+      type: 'createPullRequestCommentReply',
+      line: activeCommentDialog.sourceLine,
+      originalPostId: activeCommentDialog.originalPostId,
+      body: commentTextarea.value,
+    });
+    closeCommentWindow();
+  }
+
+  function editComment(comment) {
+    if (!activeCommentDialog || activeCommentDialog.kind !== 'line' || !comment?.isDraft || typeof comment.localId !== 'string') {
+      return;
+    }
+
+    openCommentWindow({
+      ...activeCommentDialog,
+      draftLocalId: comment.localId,
+      body: comment.body,
+      placeholder: `Edit this pending comment. Press ${submitShortcut} to update.`,
+      submitLabel: 'Update',
+      showReply: false,
+      showDelete: true,
+    });
   }
 
   function deleteComment() {
@@ -471,24 +520,35 @@
       return;
     }
 
-    vscode?.postMessage({ type: 'deletePullRequestComment', line: activeCommentDialog.sourceLine });
+    vscode?.postMessage({
+      type: 'deletePullRequestComment',
+      line: activeCommentDialog.sourceLine,
+      localId: activeCommentDialog.draftLocalId,
+    });
     closeCommentWindow();
   }
 
   function applyPullRequestCommentState(comments) {
     pullRequestComments.clear();
     for (const comment of Array.isArray(comments) ? comments : []) {
-      if (!Number.isInteger(comment?.line) || typeof comment?.body !== 'string') {
+      if (!Number.isInteger(comment?.line) || !Array.isArray(comment?.comments)) {
         continue;
       }
 
-      pullRequestComments.set(comment.line, comment);
+      pullRequestComments.set(comment.line, comment.comments);
     }
 
     for (const line of actionLines) {
       const sourceLine = Number(line.dataset.sourceLine ?? line.dataset.line);
-      const hasComment = Number.isInteger(sourceLine) && pullRequestComments.has(sourceLine);
+      const commentCount = Number.isInteger(sourceLine) ? getLineComments(sourceLine).length : 0;
+      const hasComment = commentCount > 0;
       line.toggleAttribute('data-has-pr-comment', hasComment);
+      line.toggleAttribute('data-has-pr-discussion', commentCount > 1);
+      if (hasComment) {
+        line.dataset.prCommentCount = String(commentCount);
+      } else {
+        delete line.dataset.prCommentCount;
+      }
     }
   }
 
@@ -514,19 +574,99 @@
     container.id = 'preview-comment-window';
     container.hidden = true;
     container.innerHTML = [
+      '<div id="preview-comment-history" hidden></div>',
       '<textarea spellcheck="true"></textarea>',
       '<div id="preview-comment-window-footer">',
       '  <span class="preview-comment-window-spacer"></span>',
       '  <button type="button" class="preview-secondary" data-action="delete-comment" hidden>Delete</button>',
       '  <button type="button" class="preview-secondary" data-action="cancel-comment">Cancel</button>',
       '  <button type="button" data-action="submit-comment">Comment</button>',
+      '  <button type="button" data-action="reply-comment" hidden>Reply</button>',
       '</div>',
     ].join('');
     document.body.appendChild(container);
     bindPopupButton(requireElement(container.querySelector('[data-action="delete-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="delete-comment"]'), deleteComment);
     bindPopupButton(requireElement(container.querySelector('[data-action="cancel-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="cancel-comment"]'), closeCommentWindow);
+    bindPopupButton(requireElement(container.querySelector('[data-action="reply-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="reply-comment"]'), replyComment);
     bindPopupButton(requireElement(container.querySelector('[data-action="submit-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="submit-comment"]'), submitComment);
     return container;
+  }
+
+  function renderCommentHistory(comments) {
+    commentHistory.replaceChildren();
+    commentHistory.hidden = comments.length === 0;
+    for (const comment of comments) {
+      const article = document.createElement('article');
+      article.className = 'preview-comment-thread-entry';
+
+      const header = document.createElement('div');
+      header.className = 'preview-comment-thread-header';
+      header.textContent = describeComment(comment);
+      article.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'preview-comment-thread-body';
+      body.innerHTML = typeof comment?.renderedBody === 'string' ? comment.renderedBody : '';
+      article.appendChild(body);
+
+      if (comment?.isDraft && typeof comment.localId === 'string') {
+        const actions = document.createElement('div');
+        actions.className = 'preview-comment-thread-actions';
+
+        const editButton = document.createElement('button');
+        editButton.type = 'button';
+        editButton.className = 'preview-icon-button preview-comment-thread-edit';
+        editButton.dataset.action = 'edit-comment';
+        editButton.dataset.icon = 'edit';
+        editButton.title = 'Edit comment';
+        editButton.setAttribute('aria-label', 'Edit comment');
+        bindPopupButton(editButton, () => {
+          editComment(comment);
+        });
+        actions.appendChild(editButton);
+        article.appendChild(actions);
+      }
+
+      commentHistory.appendChild(article);
+    }
+  }
+
+  function getLineComments(sourceLine) {
+    const comments = pullRequestComments.get(sourceLine);
+    return Array.isArray(comments) ? comments : [];
+  }
+
+  function getOriginalPostId(comments) {
+    const topLevelComment = comments.find(comment => !comment?.isDraft
+      && Number.isInteger(comment?.id)
+      && comment.originalPostId === comment.id);
+    return topLevelComment?.originalPostId;
+  }
+
+  function describeComment(comment) {
+    const parts = [];
+    if (typeof comment?.author === 'string' && comment.author.length > 0) {
+      parts.push(comment.author);
+    }
+
+    switch (comment?.kind) {
+      case 'reply':
+        parts.push('reply');
+        break;
+      case 'individual':
+        parts.push('comment');
+        break;
+      case 'review':
+        parts.push(comment?.isDraft ? 'pending review comment' : 'review comment');
+        break;
+      default:
+        if (comment?.isDraft) {
+          parts.push('pending review comment');
+        }
+        break;
+    }
+
+    return parts.join(' • ');
   }
 
   function getInlineAnchorLeft(lineBounds) {

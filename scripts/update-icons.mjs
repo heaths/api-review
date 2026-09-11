@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 
 const codiconBaseUrl = 'https://raw.githubusercontent.com/microsoft/vscode-codicons/main/src/icons';
-const templateNames = ['file-text', 'clear-all', 'expand-all', 'collapse-all', 'diff', 'go-to-file', 'comment'];
+const templateNames = ['file-text', 'clear-all', 'expand-all', 'collapse-all', 'diff', 'go-to-file', 'comment', 'comment-discussion', 'edit'];
 const outputDirectory = new URL('../assets/codicons/', import.meta.url);
 const cornerOverlayTransform = 'translate(6.769 6.769) scale(0.6154)';
 const closeOverlayTransform = 'translate(8.571 6.857) scale(1.1429)';
@@ -23,6 +23,8 @@ const collapseAllPaths = getPaths(getTemplate('collapse-all'));
 const diffPaths = getPaths(getTemplate('diff'));
 const goToFilePaths = getPaths(getTemplate('go-to-file'));
 const commentPaths = getPaths(getTemplate('comment'));
+const commentDiscussionPaths = getPaths(getTemplate('comment-discussion'));
+const editPaths = getPaths(getTemplate('edit'));
 
 if (clearAllPaths.length !== 5) {
   throw new Error(`Expected clear-all.svg to contain 5 paths, but found ${clearAllPaths.length}`);
@@ -47,9 +49,11 @@ const icons = new Map([
     [transformPath(clearAllPaths[3], closeOverlayTransform)],
   )],
   ['comment', createSvg(commentPaths)],
+  ['comment-discussion', createSvg(commentDiscussionPaths)],
+  ['edit', createSvg(editPaths)],
   ['go-to-file', createSvg(goToFilePaths)],
 ]);
-const runtimeIconNames = ['expand-docs', 'collapse-docs', 'comment', 'go-to-file'];
+const runtimeIconNames = ['expand-docs', 'collapse-docs', 'comment', 'comment-discussion', 'edit', 'go-to-file'];
 const themedIconNames = ['expand-all-docs', 'collapse-all-docs', 'close-diff'];
 
 await rm(outputDirectory, { recursive: true, force: true });

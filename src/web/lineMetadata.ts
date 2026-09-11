@@ -13,7 +13,8 @@ export interface PreviewLineMetadata extends ReviewLineMetadata {
   readonly previewLine: number;
   readonly documentationGroupId?: string;
   readonly documentationPreviewLines: readonly number[];
-  readonly pullRequestComment?: PullRequestLineComment;
+  readonly pullRequestComments?: readonly PullRequestLineComment[];
+  readonly hasPullRequestDiscussion: boolean;
   readonly ariaLabel: string;
 }
 
@@ -29,7 +30,7 @@ export function createPreviewLineMetadata(
   sourceMarkdown: string,
   content: PreviewContent,
   entries: readonly ReviewEntry[],
-  pullRequestComments?: ReadonlyMap<number, PullRequestLineComment>,
+  pullRequestComments?: ReadonlyMap<number, readonly PullRequestLineComment[]>,
 ): readonly PreviewLineMetadata[] {
   const previewLineMap = getPreviewLineMap(sourceMarkdown, content);
   const documentationGroups = new Map(
@@ -43,6 +44,7 @@ export function createPreviewLineMetadata(
     .map(entry => {
       const documentationGroup = documentationGroups.get(entry.line);
       const hasDocumentation = entry.hasDocumentation && documentationGroup !== undefined;
+      const lineComments = pullRequestComments?.get(entry.line);
       return {
         ...entry,
         sourceLine: entry.line,
@@ -50,17 +52,18 @@ export function createPreviewLineMetadata(
         hasDocumentation,
         documentationGroupId: hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
         documentationPreviewLines: hasDocumentation ? documentationGroup.documentationPreviewLines : [],
-        pullRequestComment: pullRequestComments?.get(entry.line),
-        ariaLabel: describeActionLine(hasDocumentation, entry.hasSource, pullRequestComments?.has(entry.line) === true),
+        pullRequestComments: lineComments,
+        hasPullRequestDiscussion: (lineComments?.length ?? 0) > 1,
+        ariaLabel: describeActionLine(hasDocumentation, entry.hasSource, lineComments?.length ?? 0),
       };
     })
-    .filter(entry => entry.hasDocumentation || entry.hasSource || entry.pullRequestComment !== undefined)
+    .filter(entry => entry.hasDocumentation || entry.hasSource || (entry.pullRequestComments?.length ?? 0) > 0)
     .sort((left, right) => left.previewLine - right.previewLine);
 }
 
 export function createDiffLineMetadata(
   entries: readonly ReviewEntry[],
-  pullRequestComments?: ReadonlyMap<number, PullRequestLineComment>,
+  pullRequestComments?: ReadonlyMap<number, readonly PullRequestLineComment[]>,
   sourceMarkdown?: string,
 ): readonly PreviewLineMetadata[] {
   const fencedCodeLanguages = sourceMarkdown
@@ -76,10 +79,11 @@ export function createDiffLineMetadata(
       hasSource: entry.hasSource,
       documentationGroupId: entry.hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
       documentationPreviewLines: [],
-      pullRequestComment: pullRequestComments?.get(entry.line),
-      ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource, pullRequestComments?.has(entry.line) === true),
+      pullRequestComments: pullRequestComments?.get(entry.line),
+      hasPullRequestDiscussion: (pullRequestComments?.get(entry.line)?.length ?? 0) > 1,
+      ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource, pullRequestComments?.get(entry.line)?.length ?? 0),
     }))
-    .filter(entry => entry.hasDocumentation || entry.hasSource || entry.pullRequestComment !== undefined)
+    .filter(entry => entry.hasDocumentation || entry.hasSource || (entry.pullRequestComments?.length ?? 0) > 0)
     .sort((left, right) => left.previewLine - right.previewLine);
 }
 
@@ -98,9 +102,11 @@ function getPreviewLineMap(sourceMarkdown: string, content: PreviewContent): Pre
   return mapPreviewLines(sourceMarkdown, content.commentsPatch);
 }
 
-function describeActionLine(hasDocumentation: boolean, hasSource: boolean, hasPullRequestComment: boolean): string {
+function describeActionLine(hasDocumentation: boolean, hasSource: boolean, pullRequestCommentCount: number): string {
   const actions: string[] = [];
-  if (hasPullRequestComment) {
+  if (pullRequestCommentCount > 1) {
+    actions.push('pull request discussion');
+  } else if (pullRequestCommentCount === 1) {
     actions.push('pull request comment');
   }
   if (hasDocumentation) {
@@ -116,7 +122,7 @@ function describeActionLine(hasDocumentation: boolean, hasSource: boolean, hasPu
 
 function getEntriesWithPullRequestComments(
   entries: readonly ReviewEntry[],
-  pullRequestComments: ReadonlyMap<number, PullRequestLineComment> | undefined,
+  pullRequestComments: ReadonlyMap<number, readonly PullRequestLineComment[]> | undefined,
   fencedCodeLanguages?: ReadonlyMap<number, string>,
 ): readonly ReviewEntry[] {
   if (!pullRequestComments || pullRequestComments.size === 0) {

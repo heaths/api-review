@@ -40,6 +40,12 @@ function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
     async getPullRequestReviews() {
       return undefined;
     },
+    async createPullRequestComment() {
+      return undefined;
+    },
+    async createPullRequestCommentReply() {
+      return undefined;
+    },
     async updatePullRequestComment() {
       return undefined;
     },
