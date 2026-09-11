@@ -130,48 +130,48 @@
         {
           "command": "heaths.azureApiReview.preview.approvePullRequest",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.inPullRequest",
-          "group": "navigation@0"
+          "group": "navigation@-1000"
         },
         {
           "command": "heaths.azureApiReview.preview.rejectPullRequest",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.inPullRequest",
-          "group": "navigation@0.1"
+           "group": "navigation@-999"
         },
         {
           "command": "heaths.azureApiReview.preview.showDiff",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && !heaths.azureApiReview.preview.diffVisible",
-          "group": "navigation@1"
+           "group": "navigation@-998"
         },
         {
           "command": "heaths.azureApiReview.preview.nextDiffHunk",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-          "group": "navigation@1"
+           "group": "navigation@-998"
         },
         {
           "command": "heaths.azureApiReview.preview.previousDiffHunk",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-          "group": "navigation@2"
+           "group": "navigation@-997"
         },
         {
           "command": "heaths.azureApiReview.preview.closeDiff",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-          "group": "navigation@3",
+           "group": "navigation@-996",
           "toggled": "heaths.azureApiReview.preview.diffVisible"
         },
         {
           "command": "heaths.azureApiReview.preview.showComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && !heaths.azureApiReview.preview.commentsVisible",
-          "group": "navigation@4"
+           "group": "navigation@-995"
         },
         {
           "command": "heaths.azureApiReview.preview.hideComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && heaths.azureApiReview.preview.commentsVisible",
-          "group": "navigation@4"
+           "group": "navigation@-995"
         },
         {
           "command": "heaths.azureApiReview.preview.reopenAsText",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff",
-          "group": "navigation@5"
+           "group": "navigation@-994"
         }
       ],
       "commandPalette": [
