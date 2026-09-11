@@ -12,6 +12,8 @@
 const path = require('path');
 const webpack = require('webpack');
 
+const useGitHubProxy = Boolean(process.env.GITHUB_PROXY_URL);
+
 /** @type WebpackConfig */
 const webExtensionConfig = {
   name: 'web',
@@ -33,6 +35,10 @@ const webExtensionConfig = {
     alias: {
       // provides alternate implementation for node module and source files
       './gitClientFactory$': path.resolve(__dirname, 'src/web/gitClientFactory.web.ts'),
+      './githubClientFactory$': path.resolve(
+        __dirname,
+        useGitHubProxy ? 'src/web/githubClientFactory.proxy.ts' : 'src/web/githubClientFactory.ts'
+      ),
       'process/browser': require.resolve('process/browser.js')
     },
     fallback: {
@@ -57,6 +63,13 @@ const webExtensionConfig = {
     }),
     new webpack.ProvidePlugin({
       process: 'process/browser', // provide a shim for the global `process` variable
+    }),
+    new webpack.DefinePlugin({
+      'process.env.GITHUB_PROXY_URL': JSON.stringify(process.env.GITHUB_PROXY_URL ?? ''),
+      'process.env.GITHUB_PROXY_TOKEN': JSON.stringify(process.env.GITHUB_PROXY_TOKEN ?? ''),
+      'process.env.GITHUB_PROXY_OWNER': JSON.stringify(process.env.GITHUB_PROXY_OWNER ?? ''),
+      'process.env.GITHUB_PROXY_REPO': JSON.stringify(process.env.GITHUB_PROXY_REPO ?? ''),
+      'process.env.GITHUB_PROXY_REF': JSON.stringify(process.env.GITHUB_PROXY_REF ?? ''),
     }),
   ],
   externals: {

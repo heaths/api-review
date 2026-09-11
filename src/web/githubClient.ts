@@ -76,6 +76,7 @@ export interface GitHubPullRequestBaseRequest {
 }
 
 export interface GitHubClient {
+  resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined;
   getPullRequestBase(request: GitHubPullRequestBaseRequest): Promise<GitHubPullRequestBase | undefined>;
   getTags(request: GitHubRepositoryRequest): Promise<readonly GitHubTag[] | undefined>;
   getCommits(request: GitHubHistoryRequest): Promise<readonly GitHubCommit[] | undefined>;
@@ -201,6 +202,10 @@ class OctokitGitHubClient implements GitHubClient {
     private readonly transportFactory: (accessToken: string) => GitHubTransport,
     private readonly now: () => number,
   ) { }
+
+  public resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined {
+    return parseGitHubDocument(uri.toString(true));
+  }
 
   public async getPullRequestBase(request: GitHubPullRequestBaseRequest): Promise<GitHubPullRequestBase | undefined> {
     const session = await this.authProvider.getSession(request.promptForAuth === true);

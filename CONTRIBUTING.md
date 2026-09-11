@@ -90,6 +90,10 @@ pnpm run run-in-browser
 Pass a workspace directory as the first argument to open that folder instead of
 `.`. Any additional arguments are forwarded to `vscode-test-web`.
 
+For browser development, the command starts a small local GitHub proxy backed by
+the specified Git repository, or `.` by default, and serves history by
+enumerating its local tags and commits.
+
 ## Build a VSIX
 
 Build an installable VSIX package for local testing:

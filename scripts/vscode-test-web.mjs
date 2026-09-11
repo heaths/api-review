@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 
 export function runVsCodeTestWeb(args) {
   const child = spawn(process.execPath, [resolveVsCodeTestWebEntry(), ...args], {
+    env: process.env,
     stdio: 'inherit',
   });
 
@@ -16,6 +17,8 @@ export function runVsCodeTestWeb(args) {
     console.error(error);
     process.exitCode = 1;
   });
+
+  return child;
 }
 
 function resolveVsCodeTestWebEntry() {
