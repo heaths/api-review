@@ -13,7 +13,6 @@ import {
   GitHubClient,
   GitHubDocumentRef,
   GitHubTag,
-  parseGitHubDocument,
   parseGitHubRepository,
 } from './githubClient';
 
@@ -148,7 +147,7 @@ export class DisplayDiffService {
           }
         }
 
-        const githubDocument = parseGitHubDocument(document.uri.toString(true));
+        const githubDocument = this.githubClient.resolveDocument(document.uri);
         const markdown = githubDocument
           ? await this.githubClient.getFileContent({
             repository: githubDocument.repository,
@@ -176,7 +175,7 @@ export class DisplayDiffService {
     const repository = await this.gitClient.getRepository(document.uri);
     const canPickFile = true;
     if (!repository) {
-      const githubDocument = parseGitHubDocument(document.uri.toString(true));
+      const githubDocument = this.githubClient.resolveDocument(document.uri);
       return githubDocument
         ? this.loadGitHubAvailability(document.uri, githubDocument, promptForGitHubAuth)
         : { candidates: [], canPickFile };
@@ -223,21 +222,30 @@ export class DisplayDiffService {
     document: GitHubDocumentRef,
     promptForGitHubAuth: boolean,
   ): Promise<DiffAvailability> {
+    const [tagsResult, commitsResult] = await Promise.allSettled([
+      this.githubClient.getTags({
+        repository: document.repository,
+        promptForAuth: promptForGitHubAuth,
+      }),
+      this.githubClient.getCommits({
+        repository: document.repository,
+        ref: document.ref,
+        path: document.path,
+        maxEntries: maxLogEntries,
+        promptForAuth: promptForGitHubAuth,
+      }),
+    ]);
+
     try {
-      const [tags, commits] = await Promise.all([
-        this.githubClient.getTags({
-          repository: document.repository,
-          promptForAuth: promptForGitHubAuth,
-        }),
-        this.githubClient.getCommits({
-          repository: document.repository,
-          ref: document.ref,
-          path: document.path,
-          maxEntries: maxLogEntries,
-          promptForAuth: promptForGitHubAuth,
-        }),
-      ]);
-      const tagCandidates = this.getGitHubTagCandidates(documentUri, tags ?? []);
+      const tags = settledValue(tagsResult, error => {
+        this.output.appendLine(`Unable to load GitHub tags for ${documentUri.toString()}: ${formatError(error)}`);
+        return [];
+      });
+      const commits = settledValue(commitsResult, error => {
+        this.output.appendLine(`Unable to load GitHub commits for ${documentUri.toString()}: ${formatError(error)}`);
+        return [];
+      });
+      const tagCandidates = await this.getGitHubTagCandidates(documentUri, document, tags ?? [], promptForGitHubAuth);
       const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
       const commitCandidates = (commits ?? [])
         .filter(commit => !taggedCommits.has(commit.hash))
@@ -264,24 +272,46 @@ export class DisplayDiffService {
     }
   }
 
-  private getGitHubTagCandidates(
+  private async getGitHubTagCandidates(
     documentUri: vscode.Uri,
+    document: GitHubDocumentRef,
     tags: readonly GitHubTag[],
-  ): readonly TagCandidate[] {
+    promptForGitHubAuth: boolean,
+  ): Promise<readonly TagCandidate[]> {
     const patterns = getTagVersionPatterns(documentUri, this.output);
-    return tags.flatMap(tag => {
+    const candidates = await Promise.all(tags.map(async tag => {
       const version = parseConfiguredTagVersion(tag.name, patterns);
-      return version
-        ? [{
-          candidate: {
-            baseline: { kind: 'tag', ref: tag.name } as const,
-            label: version.raw,
-          },
-          version,
-          commit: tag.commit,
-        }]
-        : [];
-    }).sort((left, right) => compareVersions(right.version, left.version));
+      if (!version) {
+        return undefined;
+      }
+
+      try {
+        const markdown = await this.githubClient.getFileContent({
+          repository: document.repository,
+          ref: tag.name,
+          path: document.path,
+          promptForAuth: promptForGitHubAuth,
+        });
+        if (markdown === undefined) {
+          return undefined;
+        }
+      } catch {
+        return undefined;
+      }
+
+      return {
+        candidate: {
+          baseline: { kind: 'tag', ref: tag.name } as const,
+          label: version.raw,
+        },
+        version,
+        commit: tag.commit,
+      } satisfies TagCandidate;
+    }));
+
+    return candidates
+      .filter(isDefined)
+      .sort((left, right) => compareVersions(right.version, left.version));
   }
 
   private async getGitHubPullRequestBase(
@@ -702,6 +732,13 @@ function shortSha(commit: string): string {
 
 function firstLine(message: string): string {
   return message.split(/\r?\n/u, 1)[0] ?? message;
+}
+
+function settledValue<T>(
+  result: PromiseSettledResult<T>,
+  onRejected: (reason: unknown) => T,
+): T {
+  return result.status === 'fulfilled' ? result.value : onRejected(result.reason);
 }
 
 function formatCommitDate(date: Date | string): string {

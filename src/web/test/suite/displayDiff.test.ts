@@ -30,6 +30,13 @@ suite('Display diff', () => {
       },
     };
     const githubClient: GitHubClient = {
+      resolveDocument() {
+        return {
+          repository: { owner: 'heaths', repo: 'api-review' },
+          ref: 'main',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        };
+      },
       async getTags() {
         return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
       },
@@ -58,6 +65,144 @@ suite('Display diff', () => {
       ref: 'azure_security_keyvault_keys@1.0.0',
     });
     assert.strictEqual(resolved.markdown, '# Baseline');
+  });
+
+  test('keeps commit history when GitHub tags fail', async () => {
+    const document = {
+      uri: vscode.Uri.parse(
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      ),
+    } as vscode.TextDocument;
+    const gitClient: GitClient = {
+      async getRepository() {
+        return undefined;
+      },
+    };
+    const githubClient: GitHubClient = {
+      resolveDocument() {
+        return {
+          repository: { owner: 'heaths', repo: 'api-review' },
+          ref: 'main',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        };
+      },
+      async getTags() {
+        throw new Error('tags failed');
+      },
+      async getCommits() {
+        return [{ hash: 'newer-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
+      },
+      async getFileContent() {
+        return '# Baseline';
+      },
+      async getPullRequestBase() {
+        return undefined;
+      },
+    };
+    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
+    const service = new DisplayDiffService(output, githubClient, gitClient);
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
+      { kind: 'commit', ref: 'newer-commit' },
+    ]);
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'commit',
+      ref: 'newer-commit',
+    });
+  });
+
+  test('keeps tag history when GitHub commits fail', async () => {
+    const document = {
+      uri: vscode.Uri.parse(
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      ),
+    } as vscode.TextDocument;
+    const gitClient: GitClient = {
+      async getRepository() {
+        return undefined;
+      },
+    };
+    const githubClient: GitHubClient = {
+      resolveDocument() {
+        return {
+          repository: { owner: 'heaths', repo: 'api-review' },
+          ref: 'main',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        };
+      },
+      async getTags() {
+        return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
+      },
+      async getCommits() {
+        throw new Error('commits failed');
+      },
+      async getFileContent() {
+        return '# Baseline';
+      },
+      async getPullRequestBase() {
+        return undefined;
+      },
+    };
+    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
+    const service = new DisplayDiffService(output, githubClient, gitClient);
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
+      { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+    ]);
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'tag',
+      ref: 'azure_security_keyvault_keys@1.0.0',
+    });
+  });
+
+  test('skips GitHub tags that do not contain the current API file', async () => {
+    const document = {
+      uri: vscode.Uri.parse(
+        'https://github.dev/heaths/api-review/blob/main/src/web/test/fixtures/v2/API.md',
+      ),
+    } as vscode.TextDocument;
+    const gitClient: GitClient = {
+      async getRepository() {
+        return undefined;
+      },
+    };
+    const githubClient: GitHubClient = {
+      resolveDocument() {
+        return {
+          repository: { owner: 'heaths', repo: 'api-review' },
+          ref: 'main',
+          path: 'src/web/test/fixtures/v2/API.md',
+        };
+      },
+      async getTags() {
+        return [{ name: '0.1.0', commit: 'tagged-commit' }];
+      },
+      async getCommits() {
+        return [{ hash: 'newer-commit', message: 'Add fixture API', committedAt: '2026-09-10T12:00:00Z' }];
+      },
+      async getFileContent(request) {
+        return request.ref === '0.1.0' ? undefined : '# Baseline';
+      },
+      async getPullRequestBase() {
+        return undefined;
+      },
+    };
+    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
+    const service = new DisplayDiffService(output, githubClient, gitClient);
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
+      { kind: 'commit', ref: 'newer-commit' },
+    ]);
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'commit',
+      ref: 'newer-commit',
+    });
   });
 
   test('parses Cargo package versions', () => {

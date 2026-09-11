@@ -20,7 +20,7 @@ import {
 import { ReviewModel } from './reviewModel';
 import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
 import { MemoryCache } from './cache';
-import { createGitHubClient } from './githubClient';
+import { createGitHubClient } from './githubClientFactory';
 import { createGitClient } from './gitClientFactory';
 
 export interface AzureApiReviewExtensionApi {

@@ -250,6 +250,7 @@
     "@vscode/vsce": "^3.9.2",
     "assert": "^2.1.0",
     "eslint": "^10.10.0",
+    "express": "^5.2.1",
     "git-cliff": "^2.13.1",
     "markdownlint-cli2": "^0.23.2",
     "mocha": "^11.8.0",
@@ -284,7 +285,6 @@
     "watch:web": "webpack --config-name web --watch",
     "package:vsix": "vsce package --no-dependencies",
     "lint": "eslint src",
-    "prerun-in-browser": "pnpm run compile:web",
     "run-in-browser": "node scripts/run-in-browser.mjs"
   }
 }
