@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
   DiffCandidate,
+  DisplayDiffService,
   compareVersions,
   getFileBaselineLabel,
   parseConfiguredTagVersion,
@@ -10,11 +11,55 @@ import {
   selectDefaultBaseline,
   TagCandidate,
 } from '../../displayDiff';
+import { GitClient } from '../../gitClient';
+import { GitHubClient } from '../../githubClient';
 import { renderDiffPreview } from '../../diffPreview';
 import { createDiffLineMetadata, createPreviewLineMetadata } from '../../lineMetadata';
 import { createDiffQuickPickCandidate } from '../../markdownPreview';
 
 suite('Display diff', () => {
+  test('uses GitHub history when local Git is unavailable', async () => {
+    const document = {
+      uri: vscode.Uri.parse(
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      ),
+    } as vscode.TextDocument;
+    const gitClient: GitClient = {
+      async getRepository() {
+        return undefined;
+      },
+    };
+    const githubClient: GitHubClient = {
+      async getTags() {
+        return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
+      },
+      async getCommits() {
+        return [{ hash: 'newer-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
+      },
+      async getFileContent() {
+        return '# Baseline';
+      },
+      async getPullRequestBase() {
+        return undefined;
+      },
+    };
+    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
+    const service = new DisplayDiffService(output, githubClient, gitClient);
+
+    const availability = await service.getAvailability(document);
+    const resolved = await service.resolveBaseline(document, { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' });
+
+    assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
+      { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+      { kind: 'commit', ref: 'newer-commit' },
+    ]);
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'tag',
+      ref: 'azure_security_keyvault_keys@1.0.0',
+    });
+    assert.strictEqual(resolved.markdown, '# Baseline');
+  });
+
   test('parses Cargo package versions', () => {
     const version = parseCargoVersion([
       '[workspace]',

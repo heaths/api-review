@@ -1,11 +1,23 @@
 import * as vscode from 'vscode';
 import { getGitConfiguration } from './configuration';
+import {
+  GitClient,
+  GitCommit,
+  GitRef,
+  GitRemote,
+  GitRepository,
+  GitRepositoryState,
+  getRepositoryRelativePath,
+} from './gitClient';
+import {
+  GitHubClient,
+  GitHubDocumentRef,
+  GitHubTag,
+  parseGitHubDocument,
+  parseGitHubRepository,
+} from './githubClient';
 
-const gitApiVersion = 1;
 const gitTagRefType = 2;
-const githubAuthenticationProvider = 'github';
-const githubAuthenticationExtension = 'vscode.github-authentication';
-const githubAuthScopes = ['repo'];
 const maxLogEntries = 64;
 
 export type DiffBaselineSelection =
@@ -47,56 +59,6 @@ export interface ResolvedBaseline {
   readonly markdown: string;
 }
 
-interface GitExtension {
-  readonly enabled: boolean;
-  getAPI(version: 1): GitApi;
-}
-
-interface GitApi {
-  getRepository(uri: vscode.Uri): GitRepository | null;
-}
-
-interface GitRepository {
-  readonly rootUri: vscode.Uri;
-  readonly state: GitRepositoryState;
-  getRefs(query: { pattern?: string | string[]; sort?: 'alphabetically' | 'committerdate' | 'creatordate' }): Promise<GitRef[]>;
-  log(options?: { readonly maxEntries?: number; readonly path?: string }): Promise<GitCommit[]>;
-  show(ref: string, path: string): Promise<string>;
-}
-
-interface GitRepositoryState {
-  readonly HEAD: GitBranch | undefined;
-  readonly remotes: readonly GitRemote[];
-}
-
-interface GitBranch {
-  readonly name?: string;
-  readonly upstream?: GitUpstreamRef;
-}
-
-interface GitUpstreamRef {
-  readonly remote: string;
-  readonly name: string;
-}
-
-interface GitRemote {
-  readonly name: string;
-  readonly fetchUrl?: string;
-  readonly pushUrl?: string;
-}
-
-interface GitRef {
-  readonly type: number;
-  readonly name?: string;
-  readonly commit?: string;
-}
-
-interface GitCommit {
-  readonly hash: string;
-  readonly message: string;
-  readonly commitDate?: Date;
-}
-
 export interface ParsedVersion {
   readonly raw: string;
   readonly normalized: string;
@@ -116,12 +78,6 @@ interface TagVersionPattern {
   readonly expression: RegExp;
 }
 
-interface PullRequestBase {
-  readonly sha: string;
-  readonly baseRef: string;
-  readonly title: string;
-}
-
 interface CargoPackageMetadata {
   readonly name?: string;
   readonly version?: string;
@@ -130,7 +86,11 @@ interface CargoPackageMetadata {
 export class DisplayDiffService {
   private readonly availabilityCache = new Map<string, Promise<DiffAvailability>>();
 
-  public constructor(private readonly output: vscode.OutputChannel) { }
+  public constructor(
+    private readonly output: vscode.OutputChannel,
+    private readonly githubClient: GitHubClient,
+    private readonly gitClient: GitClient,
+  ) { }
 
   public invalidate(uri?: vscode.Uri): void {
     if (uri) {
@@ -176,20 +136,34 @@ export class DisplayDiffService {
 
       case 'tag':
       case 'commit': {
-        const repository = await getGitRepository(document.uri);
-        if (!repository) {
+        const repository = await this.gitClient.getRepository(document.uri);
+        if (repository) {
+          const relativePath = getRepositoryRelativePath(document.uri, repository.rootUri);
+          if (relativePath) {
+            return {
+              baseline,
+              label: formatBaselineLabel(document.uri, baseline),
+              markdown: await repository.show(baseline.ref, relativePath),
+            };
+          }
+        }
+
+        const githubDocument = parseGitHubDocument(document.uri.toString(true));
+        const markdown = githubDocument
+          ? await this.githubClient.getFileContent({
+            repository: githubDocument.repository,
+            ref: baseline.ref,
+            path: githubDocument.path,
+            promptForAuth: true,
+          })
+          : undefined;
+        if (markdown === undefined) {
           throw new Error('Git history is unavailable for this document.');
         }
-
-        const relativePath = getRepositoryRelativePath(document.uri, repository.rootUri);
-        if (!relativePath) {
-          throw new Error('The current document is not located under the repository root.');
-        }
-
         return {
           baseline,
           label: formatBaselineLabel(document.uri, baseline),
-          markdown: await repository.show(baseline.ref, relativePath),
+          markdown,
         };
       }
     }
@@ -199,10 +173,13 @@ export class DisplayDiffService {
     document: vscode.TextDocument,
     promptForGitHubAuth: boolean,
   ): Promise<DiffAvailability> {
-    const repository = await getGitRepository(document.uri);
+    const repository = await this.gitClient.getRepository(document.uri);
     const canPickFile = true;
     if (!repository) {
-      return { candidates: [], canPickFile };
+      const githubDocument = parseGitHubDocument(document.uri.toString(true));
+      return githubDocument
+        ? this.loadGitHubAvailability(document.uri, githubDocument, promptForGitHubAuth)
+        : { candidates: [], canPickFile };
     }
 
     const relativePath = getRepositoryRelativePath(document.uri, repository.rootUri);
@@ -239,6 +216,105 @@ export class DisplayDiffService {
       ),
       canPickFile,
     };
+  }
+
+  private async loadGitHubAvailability(
+    documentUri: vscode.Uri,
+    document: GitHubDocumentRef,
+    promptForGitHubAuth: boolean,
+  ): Promise<DiffAvailability> {
+    try {
+      const [tags, commits] = await Promise.all([
+        this.githubClient.getTags({
+          repository: document.repository,
+          promptForAuth: promptForGitHubAuth,
+        }),
+        this.githubClient.getCommits({
+          repository: document.repository,
+          ref: document.ref,
+          path: document.path,
+          maxEntries: maxLogEntries,
+          promptForAuth: promptForGitHubAuth,
+        }),
+      ]);
+      const tagCandidates = this.getGitHubTagCandidates(documentUri, tags ?? []);
+      const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
+      const commitCandidates = (commits ?? [])
+        .filter(commit => !taggedCommits.has(commit.hash))
+        .map(commit => ({
+          baseline: { kind: 'commit', ref: commit.hash } as const,
+          label: shortSha(commit.hash),
+          description: commit.committedAt ? formatCommitDate(commit.committedAt) : undefined,
+          detail: firstLine(commit.message),
+        }));
+      const pullRequestBase = await this.getGitHubPullRequestBase(
+        document,
+        tagCandidates,
+        promptForGitHubAuth,
+      );
+
+      return {
+        candidates: [...tagCandidates.map(candidate => candidate.candidate), ...commitCandidates],
+        defaultBaseline: selectDefaultBaseline(tagCandidates, commitCandidates, undefined, pullRequestBase),
+        canPickFile: true,
+      };
+    } catch (error) {
+      this.output.appendLine(`Unable to load GitHub history for ${documentUri.toString()}: ${formatError(error)}`);
+      return { candidates: [], canPickFile: true };
+    }
+  }
+
+  private getGitHubTagCandidates(
+    documentUri: vscode.Uri,
+    tags: readonly GitHubTag[],
+  ): readonly TagCandidate[] {
+    const patterns = getTagVersionPatterns(documentUri, this.output);
+    return tags.flatMap(tag => {
+      const version = parseConfiguredTagVersion(tag.name, patterns);
+      return version
+        ? [{
+          candidate: {
+            baseline: { kind: 'tag', ref: tag.name } as const,
+            label: version.raw,
+          },
+          version,
+          commit: tag.commit,
+        }]
+        : [];
+    }).sort((left, right) => compareVersions(right.version, left.version));
+  }
+
+  private async getGitHubPullRequestBase(
+    document: GitHubDocumentRef,
+    tagCandidates: readonly TagCandidate[],
+    promptForGitHubAuth: boolean,
+  ): Promise<DiffBaselineSelection | undefined> {
+    if (/^[0-9a-f]{40}$/iu.test(document.ref)) {
+      return undefined;
+    }
+
+    const pullRequest = await this.githubClient.getPullRequestBase({
+      repository: document.repository,
+      branch: document.ref,
+      headOwner: document.repository.owner,
+      promptForAuth: promptForGitHubAuth,
+    });
+    if (!pullRequest) {
+      return undefined;
+    }
+
+    const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequest.baseSha);
+    if (taggedBase) {
+      return taggedBase.candidate.baseline;
+    }
+
+    const markdown = await this.githubClient.getFileContent({
+      repository: document.repository,
+      ref: pullRequest.baseSha,
+      path: document.path,
+      promptForAuth: promptForGitHubAuth,
+    });
+    return markdown === undefined ? undefined : { kind: 'commit', ref: pullRequest.baseSha };
   }
 
   private async getTagCandidates(
@@ -300,24 +376,24 @@ export class DisplayDiffService {
       return undefined;
     }
 
-    const session = await getGitHubSession(promptForGitHubAuth);
-    if (!session) {
-      return undefined;
-    }
-
     try {
-      const pullRequest = await loadPullRequestBase(session.accessToken, githubRepository.owner, githubRepository.repo, branch);
+      const pullRequest = await this.githubClient.getPullRequestBase({
+        repository: githubRepository,
+        branch,
+        headOwner: githubRepository.owner,
+        promptForAuth: promptForGitHubAuth,
+      });
       if (!pullRequest) {
         return undefined;
       }
 
-      const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequest.sha);
+      const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequest.baseSha);
       if (taggedBase) {
         return taggedBase.candidate.baseline;
       }
 
-      await repository.show(pullRequest.sha, relativePath);
-      return { kind: 'commit', ref: pullRequest.sha };
+      await repository.show(pullRequest.baseSha, relativePath);
+      return { kind: 'commit', ref: pullRequest.baseSha };
     } catch (error) {
       this.output.appendLine(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
       return undefined;
@@ -335,76 +411,6 @@ function getPreferredRemote(state: GitRepositoryState): GitRemote | undefined {
   }
 
   return state.remotes.find(remote => parseGitHubRepository(remote.fetchUrl ?? remote.pushUrl) !== undefined);
-}
-
-async function getGitRepository(uri: vscode.Uri): Promise<GitRepository | undefined> {
-  const extension = vscode.extensions.getExtension<GitExtension>('vscode.git');
-  if (!extension) {
-    return undefined;
-  }
-
-  if (!extension.isActive) {
-    await extension.activate();
-  }
-
-  const exports = extension.exports;
-  if (!exports?.enabled) {
-    return undefined;
-  }
-
-  return exports.getAPI(gitApiVersion).getRepository(uri) ?? undefined;
-}
-
-async function getGitHubSession(prompt: boolean): Promise<vscode.AuthenticationSession | undefined> {
-  try {
-    return await vscode.authentication.getSession(
-      githubAuthenticationProvider,
-      githubAuthScopes,
-      { createIfNone: prompt },
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-async function loadPullRequestBase(
-  accessToken: string,
-  owner: string,
-  repo: string,
-  branch: string,
-): Promise<PullRequestBase | undefined> {
-  const request = new Request(
-    `https://api.github.com/repos/${owner}/${repo}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branch}`)}`,
-    {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${accessToken}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    },
-  );
-  const response = await fetch(request);
-  if (!response.ok) {
-    throw new Error(`GitHub returned ${response.status} ${response.statusText}`);
-  }
-
-  const payload = await response.json() as unknown;
-  if (!Array.isArray(payload) || payload.length === 0) {
-    return undefined;
-  }
-
-  const pullRequest = payload[0];
-  if (!isRecord(pullRequest) || !isRecord(pullRequest.base) || typeof pullRequest.title !== 'string') {
-    return undefined;
-  }
-
-  return typeof pullRequest.base.sha === 'string' && typeof pullRequest.base.ref === 'string'
-    ? {
-      sha: pullRequest.base.sha,
-      baseRef: pullRequest.base.ref,
-      title: pullRequest.title,
-    }
-    : undefined;
 }
 
 async function getCurrentPackageMetadata(
@@ -664,33 +670,6 @@ export function isUnstableVersion(version: ParsedVersion): boolean {
   return version.major === 0;
 }
 
-function parseGitHubRepository(url: string | undefined): { owner: string; repo: string } | undefined {
-  if (!url) {
-    return undefined;
-  }
-
-  const httpsMatch = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/.]+?)(?:\.git)?$/iu);
-  if (httpsMatch) {
-    return { owner: httpsMatch[1], repo: httpsMatch[2] };
-  }
-
-  const sshMatch = url.match(/^git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/iu);
-  if (sshMatch) {
-    return { owner: sshMatch[1], repo: sshMatch[2] };
-  }
-
-  return undefined;
-}
-
-function getRepositoryRelativePath(uri: vscode.Uri, rootUri: vscode.Uri): string | undefined {
-  const rootPath = rootUri.path.replace(/\/$/, '');
-  if (!uri.path.startsWith(`${rootPath}/`)) {
-    return undefined;
-  }
-
-  return uri.path.slice(rootPath.length + 1);
-}
-
 async function readText(uri: vscode.Uri): Promise<string> {
   return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
 }
@@ -725,8 +704,8 @@ function firstLine(message: string): string {
   return message.split(/\r?\n/u, 1)[0] ?? message;
 }
 
-function formatCommitDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function formatCommitDate(date: Date | string): string {
+  return (typeof date === 'string' ? date : date.toISOString()).slice(0, 10);
 }
 
 function formatError(error: unknown): string {
@@ -736,12 +715,6 @@ function formatError(error: unknown): string {
 function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-export const githubAuthenticationDependency = githubAuthenticationExtension;
 
 function getTagVersionPatterns(
   scope: vscode.Uri,

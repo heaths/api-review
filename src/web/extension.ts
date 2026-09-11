@@ -19,6 +19,9 @@ import {
 } from './markdownPreview';
 import { ReviewModel } from './reviewModel';
 import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
+import { MemoryCache } from './cache';
+import { createGitHubClient } from './githubClient';
+import { createGitClient } from './gitClientFactory';
 
 export interface AzureApiReviewExtensionApi {
   readonly version: 1;
@@ -29,7 +32,10 @@ export interface AzureApiReviewExtensionApi {
 export async function activate(context: vscode.ExtensionContext): Promise<AzureApiReviewExtensionApi> {
   const output = vscode.window.createOutputChannel('Azure API Review');
   const model = new ReviewModel(output);
-  const diffService = new DisplayDiffService(output);
+  const githubCache = new MemoryCache();
+  const githubClient = createGitHubClient({ cache: githubCache, output });
+  const gitClient = createGitClient();
+  const diffService = new DisplayDiffService(output, githubClient, gitClient);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, output);
   const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService);
