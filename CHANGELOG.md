@@ -1,6 +1,28 @@
 # Change Log
 
-## Unreleased
+## 0.4.0 (2026-09-11)
+
+### Added
+
+- *(preview)* Unify review action icons (#27)
+- *(githubClient)* Implement GitHub client for repository interactions
+- *(github-proxy)* Implement GitHub proxy server for repository access
+- *(pullRequestReview)* Implement pull request review controller (#31)
+- *(pullRequest)* Enhance pull request comment handling and metadata (#32)
+- *(highlight)* Implement syntax highlighting for supported languages (#34)
+- *(pullRequest)* Adjust command group priorities for navigation (#33)
+- *(logging)* Replace output channel with logger for improved logging (#35)
+
+### Changed
+
+- *(scripts)* Launch vscode-test-web with node (#24)
+
+### Fixed
+
+- *(markdownPreview)* Keep preview popup horizontally fixed (#22)
+- *(tests)* Make test fixtures more realistic (#25)
+
+## 0.3.0 (2026-09-09)
 
 ### Added
 
@@ -10,7 +32,7 @@
 - *(lineMetadata)* Create metadata for review lines
 - *(markdownPreview)* Render preview metadata in HTML
 - *(changelog)* Add automated changelog update script and configuration
-- Add API preview diff baselines and navigation
+- Add API preview diff baselines and navigation (#20)
 
 ### Changed
 
