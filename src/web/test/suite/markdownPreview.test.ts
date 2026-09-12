@@ -5,12 +5,35 @@ import { createPreviewLineMetadata } from '../../lineMetadata';
 import { PullRequestLineComment } from '../../pullRequestReview';
 import {
   getContributedMarkdownPreviewStyles,
+  getPathLabel,
   getPreviewHtml,
   renderCommentMarkdown,
   renderMarkdown,
   renderPreviewMarkdown,
   ReviewMarkdownPreview,
 } from '../../markdownPreview';
+
+function createLogger(calls?: { info: string[] }): vscode.LogOutputChannel {
+  return {
+    logLevel: vscode.LogLevel.Debug,
+    onDidChangeLogLevel: () => ({ dispose() { } }),
+    trace() { },
+    debug() { },
+    info(message: string | Error) {
+      calls?.info.push(String(message));
+    },
+    warn() { },
+    error() { },
+    append() { },
+    appendLine() { },
+    replace() { },
+    clear() { },
+    show() { },
+    hide() { },
+    dispose() { },
+    name: 'test',
+  } as unknown as vscode.LogOutputChannel;
+}
 
 suite('Markdown preview', () => {
   test('renders standard Markdown content', () => {
@@ -63,6 +86,12 @@ suite('Markdown preview', () => {
     assert.ok(html.includes('<strong>markdown</strong>'));
     assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
     assert.ok(!html.includes('<script>alert(1)</script>'));
+  });
+
+  test('extracts labels from file paths and versioned file specs', () => {
+    assert.strictEqual(getPathLabel('/sdk/keyvault/API.md'), 'API.md');
+    assert.strictEqual(getPathLabel('my_crate@1.2.3:/sdk/keyvault/API.md'), 'API.md');
+    assert.strictEqual(getPathLabel('file:///sdk/keyvault/API.md'), 'API.md');
   });
 
   test('maps actionable preview lines to patched markdown lines', () => {
@@ -672,6 +701,7 @@ suite('Markdown preview', () => {
           }]]]);
         },
       } as never,
+      createLogger(),
     );
 
     const preview = {
@@ -727,6 +757,147 @@ suite('Markdown preview', () => {
         }],
       }],
     }]);
+  });
+
+  test('logs diff open and close for versioned file baselines', async () => {
+    const loggerCalls = { info: [] as string[] };
+    const previewProvider = new ReviewMarkdownPreview(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
+      {} as never,
+      createLogger(loggerCalls),
+    );
+
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        getText() {
+          return '';
+        },
+      },
+      panel: { webview: { async postMessage() { return true; } } },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: false,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+
+    (previewProvider as unknown as { ensurePreview(uri: vscode.Uri): Promise<unknown> }).ensurePreview = async () => preview;
+    (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
+    (previewProvider as unknown as { refreshDiffAvailability(preview: unknown): Promise<void> }).refreshDiffAvailability = async () => {};
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
+
+    await previewProvider.showDiff('test-workspace:/API.md', {
+      kind: 'file',
+      uri: 'my_crate@1.2.3:/sdk/keyvault/API.md',
+    });
+    await previewProvider.hideDiff('test-workspace:/API.md');
+
+    assert.deepStrictEqual(loggerCalls.info, [
+      'Opening diff for test-workspace:/API.md against file "my_crate@1.2.3:/sdk/keyvault/API.md"',
+      'Closed diff for test-workspace:/API.md against file "my_crate@1.2.3:/sdk/keyvault/API.md"',
+    ]);
+  });
+
+  test('logs review start and completion actions', async () => {
+    const loggerCalls = { info: [] as string[] };
+    const pullRequest = {
+      number: 42,
+      title: 'Review comments',
+      state: 'open',
+      baseRef: 'main',
+      baseSha: 'base-sha',
+      headRef: 'feature/comments',
+      headSha: 'head-sha',
+      headOwner: 'heaths',
+    } as const;
+    const documentRef = {
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'head-sha',
+      path: 'sdk/keyvault/api/API.md',
+    };
+    const pullRequestContext = {
+      document: documentRef,
+      pullRequest,
+    };
+
+    const messages: unknown[] = [];
+    const previewProvider = new ReviewMarkdownPreview(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        async getPullRequestContext() {
+          return pullRequestContext;
+        },
+      } as never,
+      {
+        async submitReview() {
+          return 0;
+        },
+        hasPendingReview() {
+          return false;
+        },
+        async getLineComments() {
+          return new Map();
+        },
+      } as never,
+      createLogger(loggerCalls),
+    );
+
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        getText() {
+          return '';
+        },
+      },
+      panel: {
+        webview: {
+          async postMessage(message: unknown) {
+            messages.push(message);
+            return true;
+          },
+        },
+      },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: false,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestContext,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+
+    (previewProvider as unknown as { previews: Set<unknown>; activePreview?: unknown }).previews.add(preview);
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
+
+    await (previewProvider as unknown as {
+      promptPullRequestReview(event: 'APPROVE' | 'REQUEST_CHANGES'): Promise<void>;
+    }).promptPullRequestReview('REQUEST_CHANGES');
+    await (previewProvider as unknown as {
+      submitPullRequestReview(event: 'APPROVE' | 'REQUEST_CHANGES', body?: string): Promise<void>;
+    }).submitPullRequestReview('REQUEST_CHANGES', 'Needs work');
+
+    assert.deepStrictEqual(loggerCalls.info, [
+      'Started reject review for pull request #42',
+      'Submitting reject review for pull request #42',
+      'Completed reject review for pull request #42',
+    ]);
+    assert.ok(messages.some(message => {
+      return typeof message === 'object'
+        && message !== null
+        && 'type' in message
+        && message.type === 'openPullRequestReviewDialog';
+    }));
   });
 
   test('adds a new pending comment unless a draft localId is explicitly selected for update', async () => {
@@ -789,6 +960,7 @@ suite('Markdown preview', () => {
           }]]]);
         },
       } as never,
+      createLogger(),
     );
 
     const preview = {

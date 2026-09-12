@@ -93,7 +93,7 @@ export class DisplayDiffService {
   private readonly pullRequestCache = new Map<string, Promise<PullRequestContext | undefined>>();
 
   public constructor(
-    private readonly output: vscode.OutputChannel,
+    private readonly logger: vscode.LogOutputChannel,
     private readonly githubClient: GitHubClient,
     private readonly gitClient: GitClient,
   ) { }
@@ -292,11 +292,11 @@ export class DisplayDiffService {
 
     try {
       const tags = settledValue(tagsResult, error => {
-        this.output.appendLine(`Unable to load GitHub tags for ${documentUri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to load GitHub tags for ${documentUri.toString()}: ${formatError(error)}`);
         return [];
       });
       const commits = settledValue(commitsResult, error => {
-        this.output.appendLine(`Unable to load GitHub commits for ${documentUri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to load GitHub commits for ${documentUri.toString()}: ${formatError(error)}`);
         return [];
       });
       const tagCandidates = await this.getGitHubTagCandidates(documentUri, document, tags ?? [], promptForGitHubAuth);
@@ -321,7 +321,7 @@ export class DisplayDiffService {
         canPickFile: true,
       };
     } catch (error) {
-      this.output.appendLine(`Unable to load GitHub history for ${documentUri.toString()}: ${formatError(error)}`);
+      this.logger.warn(`Unable to load GitHub history for ${documentUri.toString()}: ${formatError(error)}`);
       return { candidates: [], canPickFile: true };
     }
   }
@@ -332,7 +332,7 @@ export class DisplayDiffService {
     tags: readonly GitHubTag[],
     promptForGitHubAuth: boolean,
   ): Promise<readonly TagCandidate[]> {
-    const patterns = getTagVersionPatterns(documentUri, this.output);
+    const patterns = getTagVersionPatterns(documentUri, this.logger);
     const candidates = await Promise.all(tags.map(async tag => {
       const version = parseConfiguredTagVersion(tag.name, patterns);
       if (!version) {
@@ -408,7 +408,7 @@ export class DisplayDiffService {
     packageName: string | undefined,
   ): Promise<readonly TagCandidate[]> {
     const refs = await repository.getRefs({ sort: 'creatordate' });
-    const patterns = getTagVersionPatterns(documentUri, this.output);
+    const patterns = getTagVersionPatterns(documentUri, this.logger);
     const candidates: TagCandidate[] = [];
 
     for (const ref of refs) {
@@ -479,7 +479,7 @@ export class DisplayDiffService {
       await repository.show(pullRequest.baseSha, relativePath);
       return { kind: 'commit', ref: pullRequest.baseSha };
     } catch (error) {
-      this.output.appendLine(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
+      this.logger.warn(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
       return undefined;
     }
   }
@@ -859,7 +859,7 @@ function isDefined<T>(value: T | undefined): value is T {
 
 function getTagVersionPatterns(
   scope: vscode.Uri,
-  output?: vscode.OutputChannel,
+  output?: vscode.LogOutputChannel,
 ): readonly TagVersionPattern[] {
   const patterns: TagVersionPattern[] = [];
 
@@ -867,7 +867,7 @@ function getTagVersionPatterns(
     try {
       patterns.push({ expression: new RegExp(value, 'u') });
     } catch (error) {
-      output?.appendLine(`Ignoring invalid tag regex "${value}": ${formatError(error)}`);
+      output?.warn(`Ignoring invalid tag regex "${value}": ${formatError(error)}`);
     }
   }
 

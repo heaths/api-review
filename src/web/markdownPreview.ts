@@ -222,6 +222,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly diffService: DisplayDiffService,
     private readonly pullRequestReview: PullRequestReviewController,
+    private readonly logger: vscode.LogOutputChannel,
   ) { }
 
   public async resolveCustomTextEditor(
@@ -310,8 +311,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
 
     if (!preview.diffBaseline && availability.defaultBaseline) {
-      preview.diffBaseline = availability.defaultBaseline;
-      await this.render(preview);
+      await this.openDiff(preview, availability.defaultBaseline);
     }
 
     const item = await showDiffQuickPick(preview, availability);
@@ -321,8 +321,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
     switch (item.action) {
       case 'hide':
-        preview.diffBaseline = undefined;
-        await this.render(preview);
+        await this.closeDiff(preview);
         return;
 
       case 'chooseFile': {
@@ -330,14 +329,12 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
         if (!selected) {
           return;
         }
-        preview.diffBaseline = { kind: 'file', uri: selected.toString() };
-        await this.render(preview);
+        await this.openDiff(preview, { kind: 'file', uri: selected.toString() });
         return;
       }
 
       case 'baseline':
-        preview.diffBaseline = item.baseline;
-        await this.render(preview);
+        await this.openDiff(preview, item.baseline);
         return;
     }
   }
@@ -348,8 +345,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       throw new Error('Unable to open the Azure API Review preview.');
     }
 
-    preview.diffBaseline = baseline;
-    await this.render(preview);
+    await this.openDiff(preview, baseline);
     await this.refreshDiffAvailability(preview);
   }
 
@@ -359,8 +355,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
 
-    preview.diffBaseline = undefined;
-    await this.render(preview);
+    await this.closeDiff(preview);
   }
 
   public async hideActiveDiff(): Promise<void> {
@@ -369,8 +364,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
 
-    preview.diffBaseline = undefined;
-    await this.render(preview);
+    await this.closeDiff(preview);
   }
 
   public async showNextDiffHunk(): Promise<void> {
@@ -627,6 +621,21 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     await this.postMessage(preview, { type: 'navigateDiffHunk', direction });
   }
 
+  private async openDiff(preview: PreviewPanel, baseline: DiffBaselineSelection): Promise<void> {
+    this.logger.info(`Opening diff for ${preview.document.uri.toString()} against ${describeDiffBaseline(baseline)}`);
+    preview.diffBaseline = baseline;
+    await this.render(preview);
+  }
+
+  private async closeDiff(preview: PreviewPanel): Promise<void> {
+    const baseline = preview.diffBaseline;
+    preview.diffBaseline = undefined;
+    await this.render(preview);
+    if (baseline) {
+      this.logger.info(`Closed diff for ${preview.document.uri.toString()} against ${describeDiffBaseline(baseline)}`);
+    }
+  }
+
   private async resolveBaseline(preview: PreviewPanel): Promise<ResolvedBaseline> {
     const baseline = preview.diffBaseline;
     if (!baseline) {
@@ -676,6 +685,8 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
 
+    this.logger.info(`Started ${getReviewActionLabel(event)} review for pull request #${preview.pullRequestContext.pullRequest.number}`);
+
     await this.postMessage(preview, {
       type: 'openPullRequestReviewDialog',
       event,
@@ -689,6 +700,9 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
 
+    const action = getReviewActionLabel(event);
+    this.logger.info(`Submitting ${action} review for pull request #${pullRequestContext.pullRequest.number}`);
+
     const draftCount = await this.pullRequestReview.submitReview(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
@@ -697,6 +711,10 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     );
     await this.refreshPullRequestContext(preview, true);
     await this.postPullRequestCommentState(preview);
+    this.logger.info(
+      `Completed ${action} review for pull request #${pullRequestContext.pullRequest.number}`,
+      { draftCount },
+    );
     void vscode.window.showInformationMessage(
       event === 'APPROVE'
         ? `Approved pull request #${pullRequestContext.pullRequest.number}${draftCount > 0 ? ` with ${draftCount} comment${draftCount === 1 ? '' : 's'}` : ''}.`
@@ -789,7 +807,11 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       openLabel: 'Select baseline',
       title: 'Choose API baseline file',
     });
-    return selection?.[0];
+    const diffFile = selection?.[0];
+    if (diffFile) {
+      this.logger.info(`Selected diff file ${getFileSpecForLog(diffFile.toString())}`);
+    }
+    return diffFile;
   }
 }
 
@@ -1138,6 +1160,21 @@ function isPreviewRenderEnv(value: unknown): value is PreviewRenderEnv {
   return isRecord(value);
 }
 
+function getReviewActionLabel(event: 'APPROVE' | 'REQUEST_CHANGES'): 'approve' | 'reject' {
+  return event === 'APPROVE' ? 'approve' : 'reject';
+}
+
+function describeDiffBaseline(baseline: DiffBaselineSelection): string {
+  switch (baseline.kind) {
+    case 'file':
+      return `file "${getFileSpecForLog(baseline.uri)}"`;
+    case 'tag':
+      return `tag "${baseline.ref}"`;
+    case 'commit':
+      return `commit "${baseline.ref.slice(0, 8)}"`;
+  }
+}
+
 async function showDiffQuickPick(
   preview: PreviewPanel,
   availability: DiffAvailability,
@@ -1321,7 +1358,33 @@ function isSameBaseline(left: DiffBaselineSelection, right: DiffBaselineSelectio
     && ('uri' in left ? left.uri === ('uri' in right ? right.uri : undefined) : left.ref === ('ref' in right ? right.ref : undefined));
 }
 
-function getPathLabel(uri: string): string {
-  const value = vscode.Uri.parse(uri);
-  return value.path.slice(value.path.lastIndexOf('/') + 1) || value.toString();
+export function getPathLabel(uri: string): string {
+  const path = getFileSpecPath(uri);
+  const value = path ?? tryGetUriPath(uri) ?? uri;
+  return value.slice(value.lastIndexOf('/') + 1) || value;
+}
+
+function getFileSpecForLog(uri: string): string {
+  return getFileSpecPath(uri) ? uri : (tryGetUriPath(uri) ?? uri);
+}
+
+function getFileSpecPath(uri: string): string | undefined {
+  if (uri.startsWith('/')) {
+    return uri;
+  }
+
+  const versionedFileMatch = uri.match(/^([^/][^:]*):(?=\/.*$)(\/.*)$/u);
+  if (versionedFileMatch && !/^[a-z][a-z\d+.-]*$/iu.test(versionedFileMatch[1])) {
+    return versionedFileMatch[2];
+  }
+
+  return undefined;
+}
+
+function tryGetUriPath(value: string): string | undefined {
+  try {
+    return vscode.Uri.parse(value).path;
+  } catch {
+    return undefined;
+  }
 }

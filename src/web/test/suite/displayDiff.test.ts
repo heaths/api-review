@@ -17,6 +17,26 @@ import { renderDiffPreview } from '../../diffPreview';
 import { createDiffLineMetadata, createPreviewLineMetadata } from '../../lineMetadata';
 import { createDiffQuickPickCandidate } from '../../markdownPreview';
 
+function createLogger(): vscode.LogOutputChannel {
+  return {
+    logLevel: vscode.LogLevel.Debug,
+    onDidChangeLogLevel: () => ({ dispose() { } }),
+    trace() { },
+    debug() { },
+    info() { },
+    warn() { },
+    error() { },
+    append() { },
+    appendLine() { },
+    replace() { },
+    clear() { },
+    show() { },
+    hide() { },
+    dispose() { },
+    name: 'test',
+  } as unknown as vscode.LogOutputChannel;
+}
+
 function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
   return {
     resolveDocument() {
@@ -97,8 +117,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
-    const service = new DisplayDiffService(output, githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
 
     const availability = await service.getAvailability(document);
     const resolved = await service.resolveBaseline(document, { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' });
@@ -149,8 +168,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
-    const service = new DisplayDiffService(output, githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
 
     const availability = await service.getAvailability(document);
 
@@ -198,8 +216,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
-    const service = new DisplayDiffService(output, githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
 
     const availability = await service.getAvailability(document);
 
@@ -247,8 +264,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const output = { appendLine() { } } as unknown as vscode.OutputChannel;
-    const service = new DisplayDiffService(output, githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
 
     const availability = await service.getAvailability(document);
 
