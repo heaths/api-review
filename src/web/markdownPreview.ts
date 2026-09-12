@@ -8,6 +8,7 @@ import {
 } from './codeLensProvider';
 import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, PullRequestContext, ResolvedBaseline } from './displayDiff';
 import { renderDiffPreview } from './diffPreview';
+import { GitHubClient } from './githubClient';
 import hljs, { normalizeHighlightLanguage } from './highlight';
 import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
 import { PullRequestLineComment, PullRequestReviewController } from './pullRequestReview';
@@ -220,6 +221,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   public constructor(
     private readonly model: ReviewModel,
     private readonly extensionUri: vscode.Uri,
+    private readonly githubClient: GitHubClient,
     private readonly diffService: DisplayDiffService,
     private readonly pullRequestReview: PullRequestReviewController,
     private readonly logger: vscode.LogOutputChannel,
@@ -278,7 +280,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
     await this.render(preview);
     void this.refreshDiffAvailability(preview);
-    void this.refreshPullRequestContext(preview);
+    void this.refreshPullRequestContext(preview, this.githubClient.isGitHubDocument(document.uri));
   }
 
   public refresh(uri?: vscode.Uri): void {
@@ -309,6 +311,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     if (!availability) {
       return;
     }
+    await this.refreshPullRequestContext(preview, true);
 
     if (!preview.diffBaseline && availability.defaultBaseline) {
       await this.openDiff(preview, availability.defaultBaseline);

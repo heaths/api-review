@@ -39,6 +39,9 @@ function createLogger(): vscode.LogOutputChannel {
 
 function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
   return {
+    isGitHubDocument(uri) {
+      return overrides.resolveDocument?.(uri) !== undefined;
+    },
     resolveDocument() {
       return undefined;
     },
@@ -82,6 +85,53 @@ function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
 }
 
 suite('Display diff', () => {
+  test('prompts when retrying pull request detection for a GitHub virtual document', async () => {
+    const documentRef = {
+      repository: { owner: 'heaths', repo: 'api-review' },
+      ref: 'api-review',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    };
+    const document = {
+      uri: vscode.Uri.parse(
+        'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      ),
+    } as vscode.TextDocument;
+    const promptValues: boolean[] = [];
+    const githubClient = createGitHubClient({
+      resolveDocument(uri) {
+        return uri.scheme === 'vscode-vfs' ? documentRef : undefined;
+      },
+      async getPullRequest(request) {
+        promptValues.push(request.promptForAuth === true);
+        return request.promptForAuth ? {
+          number: 26,
+          title: 'azure_security_keyvault_keys@1.1.0-beta.1',
+          state: 'open',
+          baseRef: 'azure_security_keyvault_keys@base',
+          baseSha: 'base-sha',
+          headRef: 'api-review',
+          headSha: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+          headOwner: 'heaths',
+        } : undefined;
+      },
+    });
+    const service = new DisplayDiffService(createLogger(), githubClient, {
+      async getRepository() {
+        return undefined;
+      },
+    });
+
+    assert.strictEqual(githubClient.isGitHubDocument(document.uri), true);
+    assert.strictEqual(githubClient.isGitHubDocument(vscode.Uri.parse('test-workspace:/API.md')), false);
+    assert.strictEqual(await service.getPullRequestContext(document), undefined);
+
+    const context = await service.getPullRequestContext(document, { promptForGitHubAuth: true });
+
+    assert.strictEqual(context?.pullRequest.number, 26);
+    assert.deepStrictEqual(context?.document, documentRef);
+    assert.deepStrictEqual(promptValues, [false, true]);
+  });
+
   test('uses GitHub history when local Git is unavailable', async () => {
     const document = {
       uri: vscode.Uri.parse(

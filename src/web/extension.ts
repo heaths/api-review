@@ -48,7 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
   const pullRequestReview = new PullRequestReviewController(githubClient);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, logger);
-  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService, pullRequestReview, logger);
+  const preview = new ReviewMarkdownPreview(model, context.extensionUri, githubClient, diffService, pullRequestReview, logger);
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
@@ -94,6 +94,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
       }
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => void refreshDiscovery()),
+    vscode.authentication.onDidChangeSessions(event => {
+      if (event.provider.id !== 'github') {
+        return;
+      }
+      diffService.invalidate();
+      preview.refresh();
+    }),
     vscode.workspace.onDidChangeTextDocument(event => {
       model.invalidate(event.document.uri);
       diffService.invalidate(event.document.uri);
