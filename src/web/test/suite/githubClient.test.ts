@@ -44,6 +44,12 @@ suite('GitHub client', () => {
       'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
     ), expected);
     assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github/heaths/api-review/e951fe014e6f88027561db809aba0e3e6054a3c6/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
       'https://vscode.dev/heaths/api-review/blob/feature%2Fhistory/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
     ), {
       ...expected,

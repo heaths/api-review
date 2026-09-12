@@ -163,6 +163,7 @@ export interface GitHubSubmitPullRequestReviewRequest extends GitHubPullRequestC
 }
 
 export interface GitHubClient {
+  isGitHubDocument(uri: vscode.Uri): boolean;
   resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined;
   getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined>;
   getPullRequestComments(request: GitHubPullRequestCommentsRequest): Promise<readonly GitHubPullRequestComment[] | undefined>;
@@ -237,7 +238,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   return new OctokitGitHubClient(
     options.cache,
     options.logger,
-    options.authProvider ?? new VsCodeGitHubAuthProvider(),
+    options.authProvider ?? new VsCodeGitHubAuthProvider(options.logger),
     options.transportFactory ?? createOctokitTransport,
     options.now ?? (() => Date.now()),
   );
@@ -297,6 +298,10 @@ class OctokitGitHubClient implements GitHubClient {
     private readonly transportFactory: (accessToken: string, logger?: vscode.LogOutputChannel) => GitHubTransport,
     private readonly now: () => number,
   ) { }
+
+  public isGitHubDocument(uri: vscode.Uri): boolean {
+    return this.resolveDocument(uri) !== undefined;
+  }
 
   public resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined {
     return parseGitHubDocument(uri.toString(true));
@@ -675,6 +680,8 @@ class OctokitGitHubClient implements GitHubClient {
 }
 
 class VsCodeGitHubAuthProvider implements GitHubAuthProvider {
+  public constructor(private readonly logger: vscode.LogOutputChannel | undefined) { }
+
   public async getSession(prompt: boolean): Promise<GitHubSession | undefined> {
     try {
       const session = await vscode.authentication.getSession(
@@ -690,7 +697,8 @@ class VsCodeGitHubAuthProvider implements GitHubAuthProvider {
         accessToken: session.accessToken,
         accountId: session.account.id,
       };
-    } catch {
+    } catch (error) {
+      this.logger?.warn(`Unable to authenticate with GitHub: ${formatError(error)}`);
       return undefined;
     }
   }

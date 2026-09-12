@@ -48,6 +48,10 @@ class GitHubProxyClient implements GitHubClient {
     private readonly ref: string,
   ) { }
 
+  public isGitHubDocument(uri: vscode.Uri): boolean {
+    return this.resolveDocument(uri) !== undefined;
+  }
+
   public resolveDocument(uri: vscode.Uri): GitHubDocumentRef | undefined {
     const githubDocument = parseGitHubDocument(uri.toString(true));
     if (githubDocument) {

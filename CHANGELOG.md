@@ -1,6 +1,12 @@
 # Change Log
 
-## 0.4.0 (2026-09-11)
+## Unreleased
+
+### Added
+
+- *(githubClient)* Enhance GitHub client with document resolution checks
+
+## 0.4.0 (2026-09-12)
 
 ### Added
 
