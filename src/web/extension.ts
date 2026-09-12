@@ -26,6 +26,8 @@ import { MemoryCache } from './cache';
 import { createGitHubClient } from './githubClientFactory';
 import { createGitClient } from './gitClientFactory';
 
+const defaultChannelName = 'Azure API Review';
+
 export interface AzureApiReviewExtensionApi {
   readonly version: 1;
   showDiff(documentUri: string, baseline: DiffBaselineSelection): Promise<void>;
@@ -33,16 +35,20 @@ export interface AzureApiReviewExtensionApi {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<AzureApiReviewExtensionApi> {
-  const output = vscode.window.createOutputChannel('Azure API Review');
-  const model = new ReviewModel(output);
+  const displayName = context.extension.packageJSON?.displayName;
+  const logger = vscode.window.createOutputChannel(
+    typeof displayName === 'string' && displayName.trim().length > 0 ? displayName : defaultChannelName,
+    { log: true },
+  );
+  const model = new ReviewModel(logger);
   const githubCache = new MemoryCache();
-  const githubClient = createGitHubClient({ cache: githubCache, output });
+  const githubClient = createGitHubClient({ cache: githubCache, logger });
   const gitClient = createGitClient();
-  const diffService = new DisplayDiffService(output, githubClient, gitClient);
+  const diffService = new DisplayDiffService(logger, githubClient, gitClient);
   const pullRequestReview = new PullRequestReviewController(githubClient);
   const provider = new ReviewCodeLensProvider(model);
-  const documentation = new DocumentationProvider(model, output);
-  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService, pullRequestReview);
+  const documentation = new DocumentationProvider(model, logger);
+  const preview = new ReviewMarkdownPreview(model, context.extensionUri, diffService, pullRequestReview, logger);
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
@@ -54,12 +60,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
       documentation.refresh();
       preview.refresh();
     } catch (error) {
-      output.appendLine(`Unable to discover API review files: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`Unable to discover API review files: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
+  logger.debug('Activated extension', { logLevel: logger.logLevel, channel: displayName });
+
   context.subscriptions.push(
-    output,
+    logger,
     watcher,
     vscode.window.registerCustomEditorProvider(
       reviewMarkdownPreviewViewType,

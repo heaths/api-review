@@ -52,6 +52,8 @@
   re-resolve metadata when commands execute to avoid stale navigation.
 - Treat malformed optional artifacts as per-document failures and log them to
   the `Azure API Review` output channel.
+- Log open/connect attempts before they start so failures keep their context;
+  log close/completion after success.
 - Keep parser tests pure where possible. Web integration tests belong under
   `src/web/test/suite` and are discovered by the existing webpack context.
 - Test virtual URI schemes and multi-root behavior, not only local file paths.

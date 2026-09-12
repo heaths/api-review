@@ -43,7 +43,7 @@ export class DocumentationProvider implements vscode.TextDocumentContentProvider
 
   public constructor(
     private readonly model: ReviewModel,
-    private readonly output: vscode.OutputChannel,
+    private readonly logger: vscode.LogOutputChannel,
   ) { }
 
   /** Re-resolves documentation shown in any open peek widget after the model changes. */
@@ -63,7 +63,7 @@ export class DocumentationProvider implements vscode.TextDocumentContentProvider
   public async provideTextDocumentContent(uri: vscode.Uri): Promise<string | undefined> {
     const argument = parseDocumentationUri(uri);
     if (!argument) {
-      this.output.appendLine(`Unable to show documentation for ${uri.toString()}: the location is malformed.`);
+      this.logger.warn(`Unable to show documentation for ${uri.toString()}: the location is malformed.`);
       return undefined;
     }
 
@@ -76,7 +76,7 @@ export class DocumentationProvider implements vscode.TextDocumentContentProvider
 
       return entry.documentation.join('\n');
     } catch (error) {
-      this.output.appendLine(
+      this.logger.warn(
         `Unable to show documentation for ${argument.uri.toString()}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return undefined;

@@ -200,9 +200,9 @@ export interface GitHubTransport {
 
 export interface GitHubClientOptions {
   readonly cache: CacheStore;
-  readonly output?: vscode.OutputChannel;
+  readonly logger?: vscode.LogOutputChannel;
   readonly authProvider?: GitHubAuthProvider;
-  readonly transportFactory?: (accessToken: string) => GitHubTransport;
+  readonly transportFactory?: (accessToken: string, logger?: vscode.LogOutputChannel) => GitHubTransport;
   readonly now?: () => number;
 }
 
@@ -236,7 +236,7 @@ export const githubAuthenticationDependency = githubAuthenticationExtension;
 export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   return new OctokitGitHubClient(
     options.cache,
-    options.output,
+    options.logger,
     options.authProvider ?? new VsCodeGitHubAuthProvider(),
     options.transportFactory ?? createOctokitTransport,
     options.now ?? (() => Date.now()),
@@ -292,9 +292,9 @@ export function parseGitHubDocument(url: string | undefined): GitHubDocumentRef 
 class OctokitGitHubClient implements GitHubClient {
   public constructor(
     private readonly cache: CacheStore,
-    private readonly output: vscode.OutputChannel | undefined,
+    private readonly logger: vscode.LogOutputChannel | undefined,
     private readonly authProvider: GitHubAuthProvider,
-    private readonly transportFactory: (accessToken: string) => GitHubTransport,
+    private readonly transportFactory: (accessToken: string, logger?: vscode.LogOutputChannel) => GitHubTransport,
     private readonly now: () => number,
   ) { }
 
@@ -381,7 +381,7 @@ class OctokitGitHubClient implements GitHubClient {
       return undefined;
     }
 
-    const response = await this.transportFactory(session.accessToken).request<unknown>(
+    const response = await this.transportFactory(session.accessToken, this.logger).request<unknown>(
       'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments',
       {
         owner: request.repository.owner,
@@ -408,7 +408,7 @@ class OctokitGitHubClient implements GitHubClient {
       return undefined;
     }
 
-    const response = await this.transportFactory(session.accessToken).request<unknown>(
+    const response = await this.transportFactory(session.accessToken, this.logger).request<unknown>(
       'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies',
       {
         owner: request.repository.owner,
@@ -432,7 +432,7 @@ class OctokitGitHubClient implements GitHubClient {
       return undefined;
     }
 
-    const response = await this.transportFactory(session.accessToken).request<unknown>(
+    const response = await this.transportFactory(session.accessToken, this.logger).request<unknown>(
       'PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}',
       {
         owner: request.repository.owner,
@@ -454,7 +454,7 @@ class OctokitGitHubClient implements GitHubClient {
       return false;
     }
 
-    const response = await this.transportFactory(session.accessToken).request<unknown>(
+    const response = await this.transportFactory(session.accessToken, this.logger).request<unknown>(
       'DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}',
       {
         owner: request.repository.owner,
@@ -473,7 +473,7 @@ class OctokitGitHubClient implements GitHubClient {
       return;
     }
 
-    await this.transportFactory(session.accessToken).request<unknown>('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
+    await this.transportFactory(session.accessToken, this.logger).request<unknown>('POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews', {
       owner: request.repository.owner,
       repo: request.repository.repo,
       pull_number: request.prNumber,
@@ -508,7 +508,7 @@ class OctokitGitHubClient implements GitHubClient {
       return cachedGraphQl.value;
     }
 
-    const transport = this.transportFactory(session.accessToken);
+    const transport = this.transportFactory(session.accessToken, this.logger);
 
     try {
       const graphQlResult = await transport.graphql<GraphQlPullRequestSearchResponse>(openPullRequestBaseQuery, {
@@ -524,7 +524,7 @@ class OctokitGitHubClient implements GitHubClient {
       }
     } catch (error) {
       if (cachedGraphQlValue) {
-        this.output?.appendLine(`Unable to refresh GitHub PR base from GraphQL; using cached data: ${formatError(error)}`);
+        this.logger?.warn(`Unable to refresh GitHub PR base from GraphQL; using cached data: ${formatError(error)}`);
         return cachedGraphQlValue;
       }
     }
@@ -587,7 +587,7 @@ class OctokitGitHubClient implements GitHubClient {
     );
 
     try {
-      const response = await this.transportFactory(session.accessToken).request<unknown>(route, {
+      const response = await this.transportFactory(session.accessToken, this.logger).request<unknown>(route, {
         owner: request.repository.owner,
         repo: request.repository.repo,
         ...parameters,
@@ -614,7 +614,7 @@ class OctokitGitHubClient implements GitHubClient {
         return cached.value;
       }
       if (cached) {
-        this.output?.appendLine(`Unable to refresh GitHub data; using cached data: ${formatError(error)}`);
+        this.logger?.warn(`Unable to refresh GitHub data; using cached data: ${formatError(error)}`);
         return cached.value;
       }
       throw error;
@@ -666,7 +666,7 @@ class OctokitGitHubClient implements GitHubClient {
         return cached.value;
       }
       if (cached) {
-        this.output?.appendLine(`Unable to refresh GitHub PR base from REST; using cached data: ${formatError(error)}`);
+        this.logger?.warn(`Unable to refresh GitHub PR base from REST; using cached data: ${formatError(error)}`);
         return cached.value;
       }
       throw error;
@@ -696,11 +696,11 @@ class VsCodeGitHubAuthProvider implements GitHubAuthProvider {
   }
 }
 
-function createOctokitTransport(accessToken: string): GitHubTransport {
+function createOctokitTransport(accessToken: string, logger?: vscode.LogOutputChannel): GitHubTransport {
   let octokitPromise: Promise<OctokitLike> | undefined;
 
   const getOctokit = async (): Promise<OctokitLike> => {
-    octokitPromise ??= loadOctokit(accessToken);
+    octokitPromise ??= loadOctokit(accessToken, logger);
     return octokitPromise;
   };
 
@@ -719,9 +719,29 @@ function createOctokitTransport(accessToken: string): GitHubTransport {
   };
 }
 
-async function loadOctokit(accessToken: string): Promise<OctokitLike> {
+async function loadOctokit(accessToken: string, logger?: vscode.LogOutputChannel): Promise<OctokitLike> {
   const { Octokit } = await import('octokit');
-  return new Octokit({ auth: accessToken });
+  return new Octokit({
+    auth: accessToken,
+    log: {
+      debug(message: unknown, additionalInfo?: unknown) {
+        logger?.debug(normalizeLogMessage(message), additionalInfo);
+      },
+      info(message: unknown, additionalInfo?: unknown) {
+        logger?.info(normalizeLogMessage(message), additionalInfo);
+      },
+      warn(message: unknown, additionalInfo?: unknown) {
+        logger?.warn(normalizeLogMessage(message), additionalInfo);
+      },
+      error(message: unknown, additionalInfo?: unknown) {
+        logger?.error(message instanceof Error ? message : normalizeLogMessage(message), additionalInfo);
+      },
+    },
+  });
+}
+
+function normalizeLogMessage(message: unknown): string {
+  return message instanceof Error ? (message.stack ?? message.message) : String(message);
 }
 
 function createPullRequestSearchQuery(repository: GitHubRepositoryRef, branch: string): string {

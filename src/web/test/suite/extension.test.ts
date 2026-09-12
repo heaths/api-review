@@ -225,7 +225,7 @@ suite('Web Extension Test Suite', function () {
 
     const uri = vscode.Uri.joinPath(folder.uri, fixturePath);
     const document = await vscode.workspace.openTextDocument(uri);
-    const output = vscode.window.createOutputChannel('Azure API Review Test');
+    const output = vscode.window.createOutputChannel('Azure API Review Test', { log: true });
     const model = new ReviewModel(output);
 
     try {
@@ -246,7 +246,7 @@ suite('Web Extension Test Suite', function () {
 
     const uri = vscode.Uri.joinPath(folder.uri, fixturePath);
     const document = await vscode.workspace.openTextDocument(uri);
-    const output = vscode.window.createOutputChannel('Azure API Review Test');
+    const output = vscode.window.createOutputChannel('Azure API Review Test', { log: true });
     const model = new ReviewModel(output);
 
     try {

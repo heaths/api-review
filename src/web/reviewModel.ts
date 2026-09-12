@@ -26,7 +26,7 @@ export class ReviewModel {
   private readonly descriptors = new Map<string, ApiDocumentDescriptor>();
   private readonly cache = new Map<string, Promise<readonly ReviewEntry[]>>();
 
-  public constructor(private readonly output: vscode.OutputChannel) { }
+  public constructor(private readonly logger: vscode.LogOutputChannel) { }
 
   public async refresh(): Promise<void> {
     const descriptors = await discoverApiDocuments();
@@ -75,7 +75,7 @@ export class ReviewModel {
       }
       return { markdown: patched, hasCommentsPatch: true, commentsPatch: patch };
     } catch (error) {
-      this.output.appendLine(`Unable to prepare preview for ${document.uri.toString()}: ${formatError(error)}`);
+      this.logger.warn(`Unable to prepare preview for ${document.uri.toString()}: ${formatError(error)}`);
       return { markdown, hasCommentsPatch: false };
     }
   }
@@ -104,7 +104,7 @@ export class ReviewModel {
 
         content = { markdown: patched, hasCommentsPatch: true, commentsPatch: patch };
       } catch (error) {
-        this.output.appendLine(`Unable to prepare preview for ${document.uri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to prepare preview for ${document.uri.toString()}: ${formatError(error)}`);
       }
     }
 
@@ -119,7 +119,7 @@ export class ReviewModel {
           }
         }
       } catch (error) {
-        this.output.appendLine(`Unable to load review metadata for ${document.uri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to load review metadata for ${document.uri.toString()}: ${formatError(error)}`);
       }
     }
 
@@ -164,7 +164,7 @@ export class ReviewModel {
         }
       }
     } catch (error) {
-      this.output.appendLine(`Unable to load review metadata for ${document.uri.toString()}: ${formatError(error)}`);
+      this.logger.warn(`Unable to load review metadata for ${document.uri.toString()}: ${formatError(error)}`);
     }
 
     return [...entries.values()].sort((left, right) => left.line - right.line);

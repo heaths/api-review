@@ -9,6 +9,7 @@ import {
   parseGitHubDocument,
   parseGitHubRepository,
 } from '../../githubClient';
+import * as vscode from 'vscode';
 
 suite('GitHub client', () => {
   test('parses GitHub repository remotes', () => {
@@ -721,6 +722,61 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(second, first);
     assert.strictEqual(graphqlCalls, 2);
     assert.strictEqual(restCalls, 2);
+  });
+
+  test('logs when cached GitHub data is reused after a refresh failure', async () => {
+    const warnings: string[] = [];
+    let loggerPassedToTransport = false;
+    let requestCalls = 0;
+    const logger = {
+      logLevel: vscode.LogLevel.Debug,
+      onDidChangeLogLevel: () => ({ dispose() { } }),
+      trace() { },
+      debug() { },
+      info() { },
+      warn(...args: unknown[]) {
+        warnings.push(args.map(value => value instanceof Error ? value.message : String(value)).join(' '));
+      },
+      error() { },
+      append() { },
+      appendLine() { },
+      replace() { },
+      clear() { },
+      show() { },
+      hide() { },
+      dispose() { },
+      name: 'test',
+    } as unknown as vscode.LogOutputChannel;
+    const client = createGitHubClient({
+      cache: new MemoryCache(),
+      logger,
+      authProvider: createAuthProvider(),
+      transportFactory(_accessToken, receivedLogger) {
+        loggerPassedToTransport = receivedLogger === logger;
+        return {
+          async graphql<T>() {
+            throw new Error('GraphQL should not be used for repository history');
+          },
+          async request<T>(route: string): Promise<GitHubTransportResponse<T>> {
+            requestCalls++;
+            assert.strictEqual(route, 'GET /repos/{owner}/{repo}/tags');
+            if (requestCalls === 1) {
+              return createResponse([
+                { name: 'crate@1.0.0', commit: { sha: 'tag-sha' } },
+              ]) as unknown as GitHubTransportResponse<T>;
+            }
+
+            throw new Error('offline');
+          },
+        } satisfies GitHubTransport;
+      },
+    });
+    const repository = { owner: 'heaths', repo: 'api-review' };
+
+    assert.deepStrictEqual(await client.getTags({ repository }), [{ name: 'crate@1.0.0', commit: 'tag-sha' }]);
+    assert.deepStrictEqual(await client.getTags({ repository }), [{ name: 'crate@1.0.0', commit: 'tag-sha' }]);
+    assert.strictEqual(loggerPassedToTransport, true);
+    assert.deepStrictEqual(warnings, ['Unable to refresh GitHub data; using cached data: offline']);
   });
 });
 
