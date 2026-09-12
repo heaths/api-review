@@ -114,9 +114,16 @@ Build an installable VSIX package for local testing:
 pnpm run package:vsix
 ```
 
-The command runs the standard `vscode:prepublish` lifecycle, builds the Node.js
-and web-worker extension bundles, and creates `azure-api-review-<version>.vsix`
-in the repository root. VSIX files are ignored by Git.
+The command performs these steps:
+
+1. Calculates the next release version from Conventional Commits.
+2. Runs the standard `vscode:prepublish` lifecycle.
+3. Builds the Node.js and web-worker extension bundles.
+4. Creates `azure-api-review-<version>.vsix` in the repository root.
+
+The generated `CHANGELOG.md` is ignored by Git but included in the VSIX. This
+packaging flow relies on POSIX shell command substitution, so it is supported
+on macOS and Linux shells.
 
 Install the generated package from the command line:
 
@@ -127,6 +134,19 @@ code --install-extension azure-api-review-0.0.1.vsix
 Alternatively, run **Extensions: Install from VSIX...** from the VS Code
 Command Palette and select the generated file. Reload VS Code after installing
 or replacing the extension.
+
+## Publish the Extension
+
+Publish the extension to the Marketplace with:
+
+```sh
+VSCE_PAT=<token> pnpm run publish
+```
+
+The publish command computes the next release version, regenerates
+`CHANGELOG.md`, updates `package.json`, and creates the local release commit and
+tag through `vsce publish`. It does not push commits or tags; push them
+explicitly after the publish succeeds.
 
 ## Debug in VS Code
 

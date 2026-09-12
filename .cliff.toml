@@ -1,0 +1,91 @@
+[bump]
+features_always_bump_minor = true
+breaking_always_bump_major = false
+
+[changelog]
+header = "# Change Log\n"
+body = """
+<!-- release -->
+{% if version -%}
+## {{ version | trim_start_matches(pat="v") }} ({{ timestamp | date(format="%Y-%m-%d") }})
+{%- else -%}
+## Unreleased
+{%- endif %}
+
+{% for group, commits in commits | group_by(attribute="group") -%}
+### {{ group | striptags | trim }}
+
+{% for commit in commits | unique(attribute="message") -%}
+  {% if commit.remote.pr_title -%}
+    {%- set commit_message = commit.remote.pr_title | replace_regex(from="[^:]*: ", to="") -%}
+  {%- else -%}
+    {%- set commit_message = commit.message -%}
+  {%- endif -%}
+- {% if commit.scope %}*({{ commit.scope | upper_first | replace_regex(from="Github", to="GitHub") }})* {% endif %}{{ commit_message | upper_first }}\
+  {% if commit.remote.username %} by @{{ commit.remote.username }}{%- endif -%}
+  {% if commit.remote.pr_number %} in \
+    [#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }}) \
+  {%- endif %}
+{% endfor %}
+
+{% endfor -%}
+
+{% macro remote_url() -%}
+  https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}
+{%- endmacro -%}
+"""
+trim = true
+render_always = true
+postprocessors = [
+  # { pattern = "\\w[Gg]it[Hh]ub\\w", replace = "GitHub" },
+  { pattern = "\\A<!-- release -->", replace = "" },
+  { pattern = "\\n{3,}", replace = "\n\n" },
+  { pattern = "\\n+\\z", replace = "\n" },
+]
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = false
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+commit_parsers = [
+  # Rewrite history
+  { sha = "20246539df88431c72d65d7d0d1b82fba3deec34", group = "<!-- 0 -->Added" }, # Initial commit
+  { sha = "936fba06ee5f36d2009e3af6d90e7b09a4281acd", group = "<!-- 0 -->Added" }, # Cache pnpm and Playwright downloads in CI (#2)
+  { sha = "b2aa978d956d270162e2af953f190fc48025b080", group = "<!-- 0 -->Added" }, # Show doc comments in a peek widget instead of a hover (#3)
+  { sha = "3ad1778fdf1e4f484a9129868c41b7b735dd110a", group = "<!-- 6 -->Other" }, # Add video link to README (#7)
+  { sha = "8231b4bd29071209b0d5d5269bd5e4ce7c213d28", group = "<!-- 2 -->Fixed" }, # Run headless tests only in Windows, macOS CI (#9)
+  { sha = "922c680055699442ede94378b4add7523182762f", skip = true }, # 0.2.0 (#12)
+  { sha = "e2f96dd21430bd9ff7453af1a2d0a528ea44fa36", group = "<!-- 6 -->Other" }, # Add mock API.md and related files for tests
+  { sha = "906d1e02dc49bcbd029dddce217368ba673037ca", skip = true }, # azure_security_keyvault_keys@1.0.0
+  { sha = "b18d818366db5522e80b4bdebad6ad4e5c7e638c", skip = true }, # azure_security_keyvault_keys@1.1.0-beta.1
+  { sha = "e0c6b34f6e0242693db077bc2b826ba40b603ab5", group = "<!-- 6 -->Other" }, # Treat API.comments.patch and API.md.map as binary merges (#21)
+  { sha = "7b8367f4dfa7b9f2e19627fa3ac35e45a35c4ace", group = "<!-- 6 -->Other" }, # Remove example APIs (#23)
+  { sha = "fa295dd9ea7d6b7caeacda9ca0e7ed7a57b69c74", skip = true }, # Prepare 0.4.0 release (#36)
+  { sha = "bf24f86db8639790cf7806d76f7c2ba244266d07", group = "<!-- 2 -->Fixed", scope = "github" },
+
+  # Groups
+  { message = "^feat(?:\\(|:|!)", group = "<!-- 0 -->Added", continue = true },
+  { message = "^(?:style|refactor|perf|test)(?:\\(|:|!)", group = "<!-- 1 -->Changed", continue = true },
+  { message = "^(?:fix|revert)(?:\\(|:|!)", group = "<!-- 2 -->Fixed", continue = true },
+  { message = "^(?:build|chore|ci|docs)(?:\\(|:|!)", group = "<!-- 6 -->Other", continue = true },
+  { body = ".*security", group = "<!-- 5 -->Security", continue = true },
+
+  # Scopes
+  { message = "(commentPatch)", scope = "comments" },
+  { message = "(githubClient)", scope = "github" },
+  { message = "(lineMetadata)", scope = "sourceMap" },
+  { message = "(markdownPreview)", scope = "markdown" },
+  { message = "(package)", scope = "packaging" },
+  { message = "(pullRequestReview)", scope = "pullRequest" },
+  { message = "(reviewModel)", scope = "pullRequest" },
+]
+# filter_commits = true
+topo_order_commits = true
+sort_commits = "oldest"
+
+[remote.github]
+owner = "heaths"
+repo = "api-review"
+offline = true

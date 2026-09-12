@@ -12,4 +12,5 @@ overrides:
   - CHANGELOG.md
   combine: merge
   config:
+    line-length: false
     no-duplicate-heading: false
