@@ -39,6 +39,9 @@ suite('Pull request review controller', () => {
       updatedAt: '2026-09-11T10:00:00Z',
     }];
     const client: GitHubClient = {
+      isGitHubDocument() {
+        return false;
+      },
       resolveDocument() {
         return undefined;
       },
@@ -112,6 +115,9 @@ suite('Pull request review controller', () => {
     const replies: unknown[] = [];
     const submissions: unknown[] = [];
     const client: GitHubClient = {
+      isGitHubDocument() {
+        return false;
+      },
       resolveDocument() {
         return undefined;
       },
@@ -226,6 +232,9 @@ suite('Pull request review controller', () => {
   test('forwards an overall review body on submission', async () => {
     const submissions: unknown[] = [];
     const client: GitHubClient = {
+      isGitHubDocument() {
+        return false;
+      },
       resolveDocument() {
         return undefined;
       },

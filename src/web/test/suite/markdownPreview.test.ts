@@ -674,6 +674,7 @@ suite('Markdown preview', () => {
     const previewProvider = new ReviewMarkdownPreview(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
       {
         async getPullRequestContext() {
           return pullRequestContext;
@@ -766,6 +767,7 @@ suite('Markdown preview', () => {
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
       {} as never,
+      {} as never,
       createLogger(loggerCalls),
     );
 
@@ -831,6 +833,7 @@ suite('Markdown preview', () => {
     const previewProvider = new ReviewMarkdownPreview(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
       {
         async getPullRequestContext() {
           return pullRequestContext;
@@ -925,6 +928,7 @@ suite('Markdown preview', () => {
     const previewProvider = new ReviewMarkdownPreview(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
       {} as never,
       {
         async upsertComment(
