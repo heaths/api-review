@@ -18,9 +18,24 @@ Write commit messages and pull request titles as [Conventional Commits](https://
 
 - Use one of these types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`,
   `build`, `ci`, `chore`, `style`, or `revert`.
-- Add a scope in parentheses when one area clearly dominates the change, for
-  example `feat(codeLens)`, `fix(sourceMap)`, or `ci(workflows)`. Omit the scope
-  when the change spans several areas. Never invent a scope.
+- Add a scope in parentheses when one area clearly dominates the change from
+  the list below. Omit the scope when the change spans several areas.
+  - changelog: changes to CHANGELOG generation
+  - codeLens: Code Lens changes to the built-in markdown editor
+  - comments: comment patch files and line metadata
+  - copilot: changes to agentic instructions or skills
+  - github: GitHub API and proxying
+  - highlight: code syntax highlighting
+  - icons: add or update icons
+  - logging: logging and tracing
+  - markdown: markdown preview
+  - packaging: versioning, VSIX generation, and webpack
+  - pullRequest: resolving or creating and adding comments to pull requests
+  - scripts: changes to build scripts
+  - sourceMap: source maps for code navigation
+  - tests: test-only changes
+- Never invent a scope but if none listed seem appropriate, prompt to add a new
+  one and update this skill accordingly.
 - Prefer a scope that matches the changed source module, extension setting, or
   workflow directory.
 - Write the description in lowercase imperative mood: "add", not "adds" or
