@@ -5,14 +5,21 @@ on:
     branches:
       - main
   pull_request:
+  workflow_call:
+
+defaults:
+  run:
+    shell: bash
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,6 +35,28 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run package:vsix
+      - name: Compute prerelease VSIX version
+        id: prerelease
+        if: github.event_name == 'pull_request'
+        run: |
+          version="$(pnpm run -s version:next)"
+          version="${version#v}-pr.${{ github.event.pull_request.number }}+${{ github.run_id }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "path=$GITHUB_WORKSPACE/azure-api-review-$version.vsix" >> "$GITHUB_OUTPUT"
+      - name: Package prerelease VSIX
+        if: github.event_name == 'pull_request'
+        run: |
+          pnpm exec vsce package '${{ steps.prerelease.outputs.version }}' \
+            --no-dependencies \
+            --no-update-package-json \
+            --no-git-tag-version \
+            --pre-release \
+            --out '${{ steps.prerelease.outputs.path }}'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          name: prerelease-vsix
+          path: ${{ steps.prerelease.outputs.path }}
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright

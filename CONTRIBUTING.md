@@ -137,16 +137,15 @@ or replacing the extension.
 
 ## Publish the Extension
 
-Publish the extension to the Marketplace with:
+Release publishing is handled by `.github/workflows/release.yml` with trusted
+publishing. Push a `v*` tag after the release commit is ready, then approve the
+`marketplace` environment deployment to let GitHub Actions publish with
+`pnpm exec vsce publish --oidc`.
 
-```sh
-VSCE_PAT=<token> pnpm run publish
-```
-
-The publish command computes the next release version, regenerates
-`CHANGELOG.md`, updates `package.json`, and creates the local release commit and
-tag through `vsce publish`. It does not push commits or tags; push them
-explicitly after the publish succeeds.
+The release workflow reuses `.github/workflows/ci.yml` first so the extension
+is linted, packaged, and tested before it can publish. Pull requests also
+upload a prerelease VSIX artifact built with `--pre-release` for review and
+manual installation.
 
 ## Debug in VS Code
 
