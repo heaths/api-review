@@ -105,6 +105,8 @@ jobs:
             VERSION="${VERSION#v}-pr.${{ github.event.pull_request.number }}+${{ github.run_id }}"
           fi
           NAME="azure-api-review-$VERSION.vsix"
+          echo "Will create package $NAME"
+
           echo "additional_args=${ARGS[@]}" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
@@ -114,7 +116,7 @@ jobs:
       - name: Package VSIX
         run: >
           pnpm run package:vsix
-          --out '${{ steps.info.outputs.version }}'
+          --out '${{ steps.info.outputs.name }}'
           --no-git-tag-version
           ${{ steps.info.outputs.additional_args }}
         env:
