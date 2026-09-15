@@ -21,6 +21,9 @@ corepack enable
 corepack prepare pnpm@11.20.0 --activate
 ```
 
+Text files in this repository are stored in the working tree with LF line
+endings. Keep your editor configured to write LF for tracked files.
+
 ## Install Dependencies
 
 Clone the repository, open it in VS Code, and install packages from the
