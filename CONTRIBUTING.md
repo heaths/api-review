@@ -21,6 +21,9 @@ corepack enable
 corepack prepare pnpm@11.20.0 --activate
 ```
 
+Text files in this repository are stored in the working tree with LF line
+endings. Keep your editor configured to write LF for tracked files.
+
 ## Install Dependencies
 
 Clone the repository, open it in VS Code, and install packages from the
@@ -125,6 +128,10 @@ The generated `CHANGELOG.md` is ignored by Git but included in the VSIX. This
 packaging flow relies on POSIX shell command substitution, so it is supported
 on macOS and Linux shells.
 
+Pull request validation also uploads a prerelease VSIX artifact built from the
+branch so reviewers can download it and try the extension without packaging it
+locally.
+
 Install the generated package from the command line:
 
 ```sh
@@ -134,19 +141,6 @@ code --install-extension azure-api-review-0.0.1.vsix
 Alternatively, run **Extensions: Install from VSIX...** from the VS Code
 Command Palette and select the generated file. Reload VS Code after installing
 or replacing the extension.
-
-## Publish the Extension
-
-Publish the extension to the Marketplace with:
-
-```sh
-VSCE_PAT=<token> pnpm run publish
-```
-
-The publish command computes the next release version, regenerates
-`CHANGELOG.md`, updates `package.json`, and creates the local release commit and
-tag through `vsce publish`. It does not push commits or tags; push them
-explicitly after the publish succeeds.
 
 ## Debug in VS Code
 

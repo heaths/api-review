@@ -4,3 +4,4 @@ allowBuilds:
   keytar: false
 minimumReleaseAgeExclude:
   - '@types/vscode@1.136.0'
+  - '@vscode/vsce@4.0.0'
