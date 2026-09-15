@@ -12,7 +12,7 @@ import {
   GitHubDocumentRef,
   GitHubTag,
 } from './githubClient';
-import { PullRequestService, getPullRequestBaseBaseline } from './pullRequest';
+import { PullRequestService, getPullRequestBaseBaseline } from './pullRequestService';
 
 const gitTagRefType = 2;
 const maxLogEntries = 64;
@@ -80,7 +80,7 @@ interface CargoPackageMetadata {
   readonly version?: string;
 }
 
-export class DisplayDiffService {
+export class DiffService {
   private readonly availabilityCache = new Map<string, Promise<DiffAvailability>>();
 
   public constructor(

@@ -2,15 +2,15 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { discoverApiDocuments } from '../../fileDiscovery';
 import {
-  approvePreviewPullRequestCommand,
-  closePreviewDiffCommand,
-  reopenPreviewAsTextCommand,
-  rejectPreviewPullRequestCommand,
-  reviewMarkdownPreviewViewType,
-  nextPreviewDiffHunkCommand,
-  previousPreviewDiffHunkCommand,
-  showPreviewDiffCommand,
-} from '../../markdownPreview';
+  approveViewPullRequestCommand,
+  closeViewDiffCommand,
+  reopenViewAsTextCommand,
+  rejectViewPullRequestCommand,
+  markdownViewType,
+  nextViewDiffHunkCommand,
+  previousViewDiffHunkCommand,
+  showViewDiffCommand,
+} from '../../markdownView';
 import { ReviewModel } from '../../reviewModel';
 
 suite('Web Extension Test Suite', function () {
@@ -30,34 +30,34 @@ suite('Web Extension Test Suite', function () {
       '*.md',
     );
     const sourceCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === reopenPreviewAsTextCommand,
+      (command: { command: string }) => command.command === reopenViewAsTextCommand,
     );
     assert.strictEqual(sourceCommand?.icon, '$(file-code)');
     const diffCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === showPreviewDiffCommand,
+      (command: { command: string }) => command.command === showViewDiffCommand,
     );
     assert.strictEqual(diffCommand?.icon, '$(diff)');
     const approveCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === approvePreviewPullRequestCommand,
+      (command: { command: string }) => command.command === approveViewPullRequestCommand,
     );
     assert.strictEqual(approveCommand?.icon, '$(pass)');
     const rejectCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === rejectPreviewPullRequestCommand,
+      (command: { command: string }) => command.command === rejectViewPullRequestCommand,
     );
     assert.strictEqual(rejectCommand?.icon, '$(error)');
     const activeDiffCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === closePreviewDiffCommand,
+      (command: { command: string }) => command.command === closeViewDiffCommand,
     );
     assert.deepStrictEqual(activeDiffCommand?.icon, {
       light: 'assets/codicons/light/close-diff.svg',
       dark: 'assets/codicons/dark/close-diff.svg',
     });
     const nextDiffCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === nextPreviewDiffHunkCommand,
+      (command: { command: string }) => command.command === nextViewDiffHunkCommand,
     );
     assert.strictEqual(nextDiffCommand?.icon, '$(arrow-down)');
     const previousDiffCommand = extension.packageJSON.contributes.commands.find(
-      (command: { command: string }) => command.command === previousPreviewDiffHunkCommand,
+      (command: { command: string }) => command.command === previousViewDiffHunkCommand,
     );
     assert.strictEqual(previousDiffCommand?.icon, '$(arrow-up)');
     const showCommentsCommand = extension.packageJSON.contributes.commands.find(
@@ -77,31 +77,31 @@ suite('Web Extension Test Suite', function () {
       dark: 'assets/codicons/dark/collapse-all-docs.svg',
     });
     const sourceMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === reopenPreviewAsTextCommand,
+      (menu: { command: string }) => menu.command === reopenViewAsTextCommand,
     );
     assert.strictEqual(sourceMenu?.group, 'navigation@-994');
     const diffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === showPreviewDiffCommand,
+      (menu: { command: string }) => menu.command === showViewDiffCommand,
     );
     assert.strictEqual(diffMenu?.group, 'navigation@-998');
     const approveMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === approvePreviewPullRequestCommand,
+      (menu: { command: string }) => menu.command === approveViewPullRequestCommand,
     );
     assert.strictEqual(approveMenu?.group, 'navigation@-1000');
     const rejectMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === rejectPreviewPullRequestCommand,
+      (menu: { command: string }) => menu.command === rejectViewPullRequestCommand,
     );
     assert.strictEqual(rejectMenu?.group, 'navigation@-999');
     const nextDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === nextPreviewDiffHunkCommand,
+      (menu: { command: string }) => menu.command === nextViewDiffHunkCommand,
     );
     assert.strictEqual(nextDiffMenu?.group, 'navigation@-998');
     const previousDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === previousPreviewDiffHunkCommand,
+      (menu: { command: string }) => menu.command === previousViewDiffHunkCommand,
     );
     assert.strictEqual(previousDiffMenu?.group, 'navigation@-997');
     const closeDiffMenu = extension.packageJSON.contributes.menus['editor/title'].find(
-      (menu: { command: string }) => menu.command === closePreviewDiffCommand,
+      (menu: { command: string }) => menu.command === closeViewDiffCommand,
     );
     assert.strictEqual(closeDiffMenu?.group, 'navigation@-996');
     const api = await extension.activate();
@@ -111,17 +111,17 @@ suite('Web Extension Test Suite', function () {
     assert.strictEqual(typeof api.hideDiff, 'function');
 
     const commands = await vscode.commands.getCommands(true);
-    assert.ok(commands.includes(showPreviewDiffCommand));
-    assert.ok(commands.includes(approvePreviewPullRequestCommand));
-    assert.ok(commands.includes(rejectPreviewPullRequestCommand));
-    assert.ok(commands.includes(nextPreviewDiffHunkCommand));
-    assert.ok(commands.includes(previousPreviewDiffHunkCommand));
-    assert.ok(commands.includes(closePreviewDiffCommand));
+    assert.ok(commands.includes(showViewDiffCommand));
+    assert.ok(commands.includes(approveViewPullRequestCommand));
+    assert.ok(commands.includes(rejectViewPullRequestCommand));
+    assert.ok(commands.includes(nextViewDiffHunkCommand));
+    assert.ok(commands.includes(previousViewDiffHunkCommand));
+    assert.ok(commands.includes(closeViewDiffCommand));
     assert.ok(commands.includes('heaths.azureApiReview.showDocumentation'));
     assert.ok(commands.includes('heaths.azureApiReview.goToSource'));
     assert.ok(commands.includes('heaths.azureApiReview.preview.showComments'));
     assert.ok(commands.includes('heaths.azureApiReview.preview.hideComments'));
-    assert.ok(commands.includes(reopenPreviewAsTextCommand));
+    assert.ok(commands.includes(reopenViewAsTextCommand));
   });
 
   test('provides review CodeLens for the API fixture', async () => {
@@ -251,7 +251,7 @@ suite('Web Extension Test Suite', function () {
 
     try {
       await model.refresh();
-      const preview = await model.getPreviewContent(document);
+      const preview = await model.getViewContent(document);
 
       assert.strictEqual(preview.hasCommentsPatch, true);
       assert.ok(preview.markdown.includes('/// Greets the caller.'));
@@ -268,11 +268,11 @@ suite('Web Extension Test Suite', function () {
     assert.ok(folder, 'Test workspace was not mounted');
 
     const uri = vscode.Uri.joinPath(folder.uri, fixturePath);
-    await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
+    await vscode.commands.executeCommand('vscode.openWith', uri, markdownViewType);
 
     const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
     assert.ok(input instanceof vscode.TabInputCustom, 'Active tab is not a custom editor');
-    assert.strictEqual(input.viewType, reviewMarkdownPreviewViewType);
+    assert.strictEqual(input.viewType, markdownViewType);
   });
 
   test('reopens the custom preview in the default text editor', async () => {
@@ -280,8 +280,8 @@ suite('Web Extension Test Suite', function () {
     assert.ok(folder, 'Test workspace was not mounted');
 
     const uri = vscode.Uri.joinPath(folder.uri, fixturePath);
-    await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
-    await vscode.commands.executeCommand(reopenPreviewAsTextCommand);
+    await vscode.commands.executeCommand('vscode.openWith', uri, markdownViewType);
+    await vscode.commands.executeCommand(reopenViewAsTextCommand);
 
     const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
     assert.ok(input instanceof vscode.TabInputText, 'Active tab is not the default text editor');

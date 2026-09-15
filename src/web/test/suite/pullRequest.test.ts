@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { GitClient } from '../../gitClient';
 import { GitHubClient, parseGitHubDocument } from '../../githubClient';
-import { PullRequestService } from '../../pullRequest';
+import { PullRequestService } from '../../pullRequestService';
 
 function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
   return {

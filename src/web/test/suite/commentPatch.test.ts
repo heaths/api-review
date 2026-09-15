@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { applyCommentsPatch, extractDocumentationAnchors, mapPreviewLines } from '../../commentPatch';
+import { applyCommentsPatch, extractDocumentationAnchors, mapViewLines } from '../../commentPatch';
 
 suite('Comment patch', () => {
   test('applies inserted comments in memory', () => {
@@ -102,12 +102,12 @@ suite('Comment patch', () => {
       ' pub fn hello();',
     ].join('\n');
 
-    assert.deepStrictEqual(mapPreviewLines(source, patch), {
-      sourceToPreview: [0, 1, 2, 4, 5],
+    assert.deepStrictEqual(mapViewLines(source, patch), {
+      sourceToView: [0, 1, 2, 4, 5],
       documentationGroups: [{
         line: 3,
-        previewLine: 4,
-        documentationPreviewLines: [3],
+        viewLine: 4,
+        documentationViewLines: [3],
       }],
     });
   });

@@ -1,18 +1,18 @@
-import { mapPreviewLines, PreviewLineMap } from './commentPatch';
+import { mapViewLines, ViewLineMap } from './commentPatch';
 import { getFencedCodeLines } from './markdown';
-import { PullRequestLineComment } from './pullRequestReview';
-import { PreviewContent, ReviewEntry } from './reviewModel';
+import { PullRequestLineComment } from './pullRequestService';
+import { ViewContent, ReviewEntry } from './reviewModel';
 
 export interface ReviewLineMetadata extends ReviewEntry {
   readonly hasDocumentation: boolean;
   readonly hasSource: boolean;
 }
 
-export interface PreviewLineMetadata extends ReviewLineMetadata {
+export interface ViewLineMetadata extends ReviewLineMetadata {
   readonly sourceLine: number;
-  readonly previewLine: number;
+  readonly viewLine: number;
   readonly documentationGroupId?: string;
-  readonly documentationPreviewLines: readonly number[];
+  readonly documentationViewLines: readonly number[];
   readonly pullRequestComments?: readonly PullRequestLineComment[];
   readonly hasPullRequestDiscussion: boolean;
   readonly ariaLabel: string;
@@ -26,15 +26,15 @@ export function createReviewLineMetadata(entries: readonly ReviewEntry[]): reado
   }));
 }
 
-export function createPreviewLineMetadata(
+export function createMarkdownViewLineMetadata(
   sourceMarkdown: string,
-  content: PreviewContent,
+  content: ViewContent,
   entries: readonly ReviewEntry[],
   pullRequestComments?: ReadonlyMap<number, readonly PullRequestLineComment[]>,
-): readonly PreviewLineMetadata[] {
-  const previewLineMap = getPreviewLineMap(sourceMarkdown, content);
+): readonly ViewLineMetadata[] {
+  const viewLineMap = getViewLineMap(sourceMarkdown, content);
   const documentationGroups = new Map(
-    previewLineMap.documentationGroups.map(group => [group.line, group] as const),
+    viewLineMap.documentationGroups.map(group => [group.line, group] as const),
   );
   const fencedCodeLanguages = new Map(
     getFencedCodeLines(sourceMarkdown).map(line => [line.line, line.language] as const),
@@ -48,24 +48,24 @@ export function createPreviewLineMetadata(
       return {
         ...entry,
         sourceLine: entry.line,
-        previewLine: previewLineMap.sourceToPreview[entry.line] ?? entry.line,
+        viewLine: viewLineMap.sourceToView[entry.line] ?? entry.line,
         hasDocumentation,
         documentationGroupId: hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
-        documentationPreviewLines: hasDocumentation ? documentationGroup.documentationPreviewLines : [],
+        documentationViewLines: hasDocumentation ? documentationGroup.documentationViewLines : [],
         pullRequestComments: lineComments,
         hasPullRequestDiscussion: (lineComments?.length ?? 0) > 1,
         ariaLabel: describeActionLine(hasDocumentation, entry.hasSource, lineComments?.length ?? 0),
       };
     })
     .filter(entry => entry.hasDocumentation || entry.hasSource || (entry.pullRequestComments?.length ?? 0) > 0)
-    .sort((left, right) => left.previewLine - right.previewLine);
+    .sort((left, right) => left.viewLine - right.viewLine);
 }
 
 export function createDiffLineMetadata(
   entries: readonly ReviewEntry[],
   pullRequestComments?: ReadonlyMap<number, readonly PullRequestLineComment[]>,
   sourceMarkdown?: string,
-): readonly PreviewLineMetadata[] {
+): readonly ViewLineMetadata[] {
   const fencedCodeLanguages = sourceMarkdown
     ? new Map(getFencedCodeLines(sourceMarkdown).map(line => [line.line, line.language] as const))
     : undefined;
@@ -74,32 +74,32 @@ export function createDiffLineMetadata(
     .map(entry => ({
       ...entry,
       sourceLine: entry.line,
-      previewLine: entry.line,
+      viewLine: entry.line,
       hasDocumentation: entry.hasDocumentation,
       hasSource: entry.hasSource,
       documentationGroupId: entry.hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
-      documentationPreviewLines: [],
+      documentationViewLines: [],
       pullRequestComments: pullRequestComments?.get(entry.line),
       hasPullRequestDiscussion: (pullRequestComments?.get(entry.line)?.length ?? 0) > 1,
       ariaLabel: describeActionLine(entry.hasDocumentation, entry.hasSource, pullRequestComments?.get(entry.line)?.length ?? 0),
     }))
     .filter(entry => entry.hasDocumentation || entry.hasSource || (entry.pullRequestComments?.length ?? 0) > 0)
-    .sort((left, right) => left.previewLine - right.previewLine);
+    .sort((left, right) => left.viewLine - right.viewLine);
 }
 
 export function getDocumentationGroupId(sourceLine: number): string {
   return `line-${sourceLine}`;
 }
 
-function getPreviewLineMap(sourceMarkdown: string, content: PreviewContent): PreviewLineMap {
+function getViewLineMap(sourceMarkdown: string, content: ViewContent): ViewLineMap {
   if (!content.commentsPatch) {
     return {
-      sourceToPreview: sourceMarkdown.split(/\r?\n/).map((_, line) => line),
+      sourceToView: sourceMarkdown.split(/\r?\n/).map((_, line) => line),
       documentationGroups: [],
     };
   }
 
-  return mapPreviewLines(sourceMarkdown, content.commentsPatch);
+  return mapViewLines(sourceMarkdown, content.commentsPatch);
 }
 
 function describeActionLine(hasDocumentation: boolean, hasSource: boolean, pullRequestCommentCount: number): string {

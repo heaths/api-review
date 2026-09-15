@@ -6,15 +6,15 @@ export interface DocumentationAnchor {
   readonly documentation: readonly string[];
 }
 
-export interface PreviewDocumentationGroup {
+export interface ViewDocumentationGroup {
   readonly line: number;
-  readonly previewLine: number;
-  readonly documentationPreviewLines: readonly number[];
+  readonly viewLine: number;
+  readonly documentationViewLines: readonly number[];
 }
 
-export interface PreviewLineMap {
-  readonly sourceToPreview: readonly number[];
-  readonly documentationGroups: readonly PreviewDocumentationGroup[];
+export interface ViewLineMap {
+  readonly sourceToView: readonly number[];
+  readonly documentationGroups: readonly ViewDocumentationGroup[];
 }
 
 const documentationLine = /^\s*(?:\/\/[!/]|\/\*\*?|\*\/?|#!?\[doc\s*=|#|--)/;
@@ -62,9 +62,9 @@ export function extractDocumentationAnchors(patch: string): DocumentationAnchor[
   return anchors;
 }
 
-export function mapPreviewLines(source: string, patch: string): PreviewLineMap {
-  const sourceToPreview: number[] = [];
-  const documentationGroups: PreviewDocumentationGroup[] = [];
+export function mapViewLines(source: string, patch: string): ViewLineMap {
+  const sourceToView: number[] = [];
+  const documentationGroups: ViewDocumentationGroup[] = [];
   const sourceLines = source.split(/\r?\n/);
   let oldLine = 0;
   let newLine = 0;
@@ -73,12 +73,12 @@ export function mapPreviewLines(source: string, patch: string): PreviewLineMap {
     for (const hunk of file.hunks) {
       const hunkOldStart = hunk.oldStart - 1;
       while (oldLine < hunkOldStart && oldLine < sourceLines.length) {
-        sourceToPreview[oldLine] = newLine;
+        sourceToView[oldLine] = newLine;
         oldLine++;
         newLine++;
       }
 
-      let documentationPreviewLines: number[] = [];
+      let documentationViewLines: number[] = [];
       for (const line of hunk.lines) {
         const marker = line[0];
         const content = line.slice(1);
@@ -86,31 +86,31 @@ export function mapPreviewLines(source: string, patch: string): PreviewLineMap {
         switch (marker) {
           case '+':
             if (documentationLine.test(content)) {
-              documentationPreviewLines.push(newLine);
+              documentationViewLines.push(newLine);
             } else if (content.trim().length > 0) {
-              documentationPreviewLines = [];
+              documentationViewLines = [];
             }
             newLine++;
             break;
 
           case ' ':
-            if (documentationPreviewLines.length > 0 && content.trim().length > 0) {
+            if (documentationViewLines.length > 0 && content.trim().length > 0) {
               documentationGroups.push({
                 line: oldLine,
-                previewLine: newLine,
-                documentationPreviewLines,
+                viewLine: newLine,
+                documentationViewLines,
               });
-              documentationPreviewLines = [];
+              documentationViewLines = [];
             } else {
-              documentationPreviewLines = [];
+              documentationViewLines = [];
             }
-            sourceToPreview[oldLine] = newLine;
+            sourceToView[oldLine] = newLine;
             oldLine++;
             newLine++;
             break;
 
           case '-':
-            documentationPreviewLines = [];
+            documentationViewLines = [];
             oldLine++;
             break;
 
@@ -122,10 +122,10 @@ export function mapPreviewLines(source: string, patch: string): PreviewLineMap {
   }
 
   while (oldLine < sourceLines.length) {
-    sourceToPreview[oldLine] = newLine;
+    sourceToView[oldLine] = newLine;
     oldLine++;
     newLine++;
   }
 
-  return { sourceToPreview, documentationGroups };
+  return { sourceToView, documentationGroups };
 }

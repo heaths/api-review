@@ -1,17 +1,17 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { GitHubDocumentRef, GitHubPullRequest } from '../../githubClient';
-import { createPreviewLineMetadata } from '../../lineMetadata';
-import { PullRequestLineComment } from '../../pullRequestReview';
+import { createMarkdownViewLineMetadata } from '../../lineMetadata';
+import { PullRequestLineComment } from '../../pullRequestService';
 import {
-  getContributedMarkdownPreviewStyles,
+  getContributedMarkdownViewStyles,
   getPathLabel,
-  getPreviewHtml,
+  getMarkdownViewHtml,
   renderCommentMarkdown,
   renderMarkdown,
-  renderPreviewMarkdown,
-  ReviewMarkdownPreview,
-} from '../../markdownPreview';
+  renderMarkdownView,
+  MarkdownViewProvider,
+} from '../../markdownView';
 
 function createLogger(calls?: { info: string[] }): vscode.LogOutputChannel {
   return {
@@ -35,7 +35,7 @@ function createLogger(calls?: { info: string[] }): vscode.LogOutputChannel {
   } as unknown as vscode.LogOutputChannel;
 }
 
-suite('Markdown preview', () => {
+suite('Markdown view', () => {
   test('renders standard Markdown content', () => {
     const html = renderMarkdown('# API\n\n[Documentation](https://example.com)');
 
@@ -102,7 +102,7 @@ suite('Markdown preview', () => {
       'pub fn hello();',
       '```',
     ].join('\n');
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown: [
         '# Mock API',
         '',
@@ -132,11 +132,11 @@ suite('Markdown preview', () => {
       documentation: ['/// Prints a greeting.'],
       source: new vscode.Location(vscode.Uri.parse('test:/src/lib.rs'), new vscode.Range(0, 0, 0, 1)),
       sourceLine: 3,
-      previewLine: 4,
+      viewLine: 4,
       hasDocumentation: true,
       hasSource: true,
       documentationGroupId: 'line-3',
-      documentationPreviewLines: [3],
+      documentationViewLines: [3],
       pullRequestComments: undefined,
       hasPullRequestDiscussion: false,
       ariaLabel: 'Review actions available: documentation and go to source',
@@ -152,7 +152,7 @@ suite('Markdown preview', () => {
       'pub fn source_only();',
       '```',
     ].join('\n');
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown: [
         '# Mock API',
         '',
@@ -187,28 +187,28 @@ suite('Markdown preview', () => {
     assert.deepStrictEqual(lineMetadata, [
       {
         sourceLine: 3,
-        previewLine: 4,
+        viewLine: 4,
         line: 3,
         language: 'rust',
         documentation: ['/// Documentation only.'],
         hasDocumentation: true,
         hasSource: false,
         documentationGroupId: 'line-3',
-        documentationPreviewLines: [3],
+        documentationViewLines: [3],
         pullRequestComments: undefined,
         hasPullRequestDiscussion: false,
         ariaLabel: 'Review actions available: documentation',
       },
       {
         sourceLine: 4,
-        previewLine: 5,
+        viewLine: 5,
         line: 4,
         language: 'rust',
         source: new vscode.Location(vscode.Uri.parse('test:/src/lib.rs'), new vscode.Range(1, 0, 1, 1)),
         hasDocumentation: false,
         hasSource: true,
         documentationGroupId: undefined,
-        documentationPreviewLines: [],
+        documentationViewLines: [],
         pullRequestComments: undefined,
         hasPullRequestDiscussion: false,
         ariaLabel: 'Review actions available: go to source',
@@ -245,24 +245,24 @@ suite('Markdown preview', () => {
       isDraft: false,
     }]]]);
 
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown: source,
       hasCommentsPatch: false,
     }, [{
       line: 3,
       language: 'rust',
     }], pullRequestComments);
-    const html = renderPreviewMarkdown(source, lineMetadata);
+    const html = renderMarkdownView(source, lineMetadata);
 
     assert.deepStrictEqual(lineMetadata, [{
       sourceLine: 3,
-      previewLine: 3,
+      viewLine: 3,
       line: 3,
       language: 'rust',
       hasDocumentation: false,
       hasSource: false,
       documentationGroupId: undefined,
-      documentationPreviewLines: [],
+      documentationViewLines: [],
       pullRequestComments: [{
         id: 7,
         body: 'First comment.',
@@ -309,7 +309,7 @@ suite('Markdown preview', () => {
       isDraft: false,
     }]]]);
 
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown: source,
       hasCommentsPatch: false,
     }, [{
@@ -319,13 +319,13 @@ suite('Markdown preview', () => {
 
     assert.deepStrictEqual(lineMetadata, [{
       sourceLine: 3,
-      previewLine: 3,
+      viewLine: 3,
       line: 3,
       language: 'rust',
       hasDocumentation: false,
       hasSource: false,
       documentationGroupId: undefined,
-      documentationPreviewLines: [],
+      documentationViewLines: [],
       pullRequestComments: [{
         id: 7,
         body: 'Please rename this.',
@@ -361,7 +361,7 @@ suite('Markdown preview', () => {
       isDraft: false,
     }]]]);
 
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown: source,
       hasCommentsPatch: false,
     }, [], pullRequestComments);
@@ -370,11 +370,11 @@ suite('Markdown preview', () => {
       line: 3,
       language: 'rust',
       sourceLine: 3,
-      previewLine: 3,
+      viewLine: 3,
       hasDocumentation: false,
       hasSource: false,
       documentationGroupId: undefined,
-      documentationPreviewLines: [],
+      documentationViewLines: [],
       pullRequestComments: [{
         id: 8,
         body: 'Comment only.',
@@ -409,7 +409,7 @@ suite('Markdown preview', () => {
       'pub fn source_only();',
       '```',
     ].join('\n');
-    const lineMetadata = createPreviewLineMetadata(source, {
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
       markdown,
       hasCommentsPatch: true,
       commentsPatch: [
@@ -433,7 +433,7 @@ suite('Markdown preview', () => {
       },
     ]);
 
-    const html = renderPreviewMarkdown(markdown, lineMetadata);
+    const html = renderMarkdownView(markdown, lineMetadata);
 
     assert.ok(html.includes('class="code-line comment-line preview-documentation-line" data-line="3" data-documentation-group="line-3"'));
     assert.ok(html.includes('class="code-line preview-action-line" data-line="4" data-source-line="3" tabindex="0" aria-haspopup="true" aria-controls="preview-hover-actions" aria-label="Review actions available: documentation" data-has-documentation data-documentation-group="line-3"'));
@@ -447,7 +447,7 @@ suite('Markdown preview', () => {
       asWebviewUri: (uri: vscode.Uri) => uri.with({ scheme: 'test-webview' }),
     } as vscode.Webview;
 
-    const html = getPreviewHtml(
+    const html = getMarkdownViewHtml(
       webview,
       root,
       vscode.Uri.parse('test-workspace:/API.md'),
@@ -489,7 +489,7 @@ suite('Markdown preview', () => {
   test('resolves contributed preview styles in declaration order', () => {
     const firstRoot = vscode.Uri.parse('test-extension:/first');
     const secondRoot = vscode.Uri.parse('test-extension:/second');
-    const styles = getContributedMarkdownPreviewStyles([
+    const styles = getContributedMarkdownViewStyles([
       {
         extensionUri: firstRoot,
         packageJSON: {
@@ -521,7 +521,7 @@ suite('Markdown preview', () => {
 
   test('ignores malformed and unsafe preview style contributions', () => {
     const root = vscode.Uri.parse('test-extension:/styles');
-    const styles = getContributedMarkdownPreviewStyles([
+    const styles = getContributedMarkdownViewStyles([
       {
         extensionUri: root,
         packageJSON: {
@@ -675,17 +675,17 @@ suite('Markdown preview', () => {
 
     let hasPendingReview = true;
     const messages: unknown[] = [];
-    const previewProvider = new ReviewMarkdownPreview(
+    const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
-      {} as never,
       {
+        isGitHubDocument() {
+          return false;
+        },
         async getContext() {
           return pullRequestContext;
         },
-      } as never,
-      {
         async submitReview() {
           hasPendingReview = false;
           return 1;
@@ -767,13 +767,15 @@ suite('Markdown preview', () => {
 
   test('logs diff open and close for versioned file baselines', async () => {
     const loggerCalls = { info: [] as string[] };
-    const previewProvider = new ReviewMarkdownPreview(
+    const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
+      {
+        isGitHubDocument() {
+          return false;
+        },
+      } as never,
       createLogger(loggerCalls),
     );
 
@@ -815,26 +817,23 @@ suite('Markdown preview', () => {
 
   test('requests pull request context on preview load before any diff action', async () => {
     const requests: string[] = [];
-    const previewProvider = new ReviewMarkdownPreview(
+    const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
-      {
-        isGitHubDocument() {
-          return false;
-        },
-      } as never,
       {
         async getAvailability() {
           return { candidates: [], canPickFile: true };
         },
       } as never,
       {
+        isGitHubDocument() {
+          return false;
+        },
         async getContext(document: vscode.TextDocument) {
           requests.push(document.uri.toString());
           return undefined;
         },
       } as never,
-      {} as never,
       createLogger(),
     );
     const document = {
@@ -894,17 +893,17 @@ suite('Markdown preview', () => {
     };
 
     const messages: unknown[] = [];
-    const previewProvider = new ReviewMarkdownPreview(
+    const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
-      {} as never,
       {
+        isGitHubDocument() {
+          return false;
+        },
         async getContext() {
           return pullRequestContext;
         },
-      } as never,
-      {
         async submitReview() {
           return 0;
         },
@@ -990,13 +989,14 @@ suite('Markdown preview', () => {
     };
 
     const existingCalls: unknown[] = [];
-    const previewProvider = new ReviewMarkdownPreview(
+    const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
-      {} as never,
-      {} as never,
       {
+        isGitHubDocument() {
+          return false;
+        },
         async upsertComment(
           _document: GitHubDocumentRef,
           _pullRequest: GitHubPullRequest,

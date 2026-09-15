@@ -11,15 +11,15 @@ export interface ReviewEntry {
   readonly source?: vscode.Location;
 }
 
-export interface PreviewContent {
+export interface ViewContent {
   readonly markdown: string;
   readonly hasCommentsPatch: boolean;
   readonly commentsPatch?: string;
 }
 
-export interface PreviewSnapshot {
+export interface ViewSnapshot {
   readonly entries: readonly ReviewEntry[];
-  readonly content: PreviewContent;
+  readonly content: ViewContent;
 }
 
 export class ReviewModel {
@@ -60,7 +60,7 @@ export class ReviewModel {
     return entries;
   }
 
-  public async getPreviewContent(document: vscode.TextDocument): Promise<PreviewContent> {
+  public async getViewContent(document: vscode.TextDocument): Promise<ViewContent> {
     const markdown = document.getText();
     const descriptor = await this.getDescriptor(document.uri);
     if (!descriptor?.comments) {
@@ -80,7 +80,7 @@ export class ReviewModel {
     }
   }
 
-  public async getPreviewSnapshot(document: vscode.TextDocument): Promise<PreviewSnapshot> {
+  public async getViewSnapshot(document: vscode.TextDocument): Promise<ViewSnapshot> {
     const markdown = document.getText();
     const descriptor = await this.getDescriptor(document.uri);
     if (!descriptor) {
@@ -88,7 +88,7 @@ export class ReviewModel {
     }
 
     const entries = new Map<number, ReviewEntry>();
-    let content: PreviewContent = { markdown, hasCommentsPatch: false };
+    let content: ViewContent = { markdown, hasCommentsPatch: false };
 
     if (descriptor.comments) {
       try {

@@ -1,7 +1,7 @@
 import { diffLines } from 'diff';
 import MarkdownIt = require('markdown-it');
 import hljs, { normalizeHighlightLanguage } from './highlight';
-import { PreviewLineMetadata } from './lineMetadata';
+import { ViewLineMetadata } from './lineMetadata';
 
 interface ParsedLine {
   readonly text: string;
@@ -28,12 +28,12 @@ interface ParsedFence {
   readonly language: string;
 }
 
-export interface RenderedDiffPreview {
+export interface RenderedDiffView {
   readonly html: string;
   readonly hunkCount: number;
 }
 
-interface PreviewLineRenderMetadata {
+interface ViewLineRenderMetadata {
   readonly sourceLine?: number;
   readonly hasDocumentation?: true;
   readonly hasSource?: true;
@@ -51,12 +51,12 @@ const markdownRenderer = new MarkdownIt({
   linkify: true,
 });
 
-export function renderDiffPreview(
+export function renderDiffView(
   baselineMarkdown: string,
   targetMarkdown: string,
-  lineMetadata: readonly PreviewLineMetadata[],
+  lineMetadata: readonly ViewLineMetadata[],
   baselineLabel: string,
-): RenderedDiffPreview {
+): RenderedDiffView {
   const metadata = createRenderMetadata(lineMetadata);
   const targetLines = parseMarkdownLines(targetMarkdown, true);
   const baselineLines = parseMarkdownLines(baselineMarkdown, false);
@@ -133,7 +133,7 @@ function mergeAdjacentChunks(chunks: readonly DiffChunk[]): readonly DiffChunk[]
 
 function renderDiffBody(
   chunks: readonly DiffChunk[],
-  metadata: ReadonlyMap<number, PreviewLineRenderMetadata>,
+  metadata: ReadonlyMap<number, ViewLineRenderMetadata>,
 ): { html: string; hunkCount: number } {
   const rendered: string[] = [];
   let markdownLines: string[] = [];
@@ -322,12 +322,12 @@ function isClosingFence(line: string, markerCharacter: string, markerLength: num
 }
 
 function createRenderMetadata(
-  lineMetadata: readonly PreviewLineMetadata[],
-): ReadonlyMap<number, PreviewLineRenderMetadata> {
-  const renderedLineMetadata = new Map<number, PreviewLineRenderMetadata>();
+  lineMetadata: readonly ViewLineMetadata[],
+): ReadonlyMap<number, ViewLineRenderMetadata> {
+  const renderedLineMetadata = new Map<number, ViewLineRenderMetadata>();
 
   for (const line of lineMetadata) {
-    renderedLineMetadata.set(line.previewLine, {
+    renderedLineMetadata.set(line.viewLine, {
       sourceLine: line.sourceLine,
       hasDocumentation: line.hasDocumentation ? true : undefined,
       hasSource: line.hasSource ? true : undefined,
@@ -343,7 +343,7 @@ function createRenderMetadata(
       continue;
     }
 
-    for (const documentationPreviewLine of line.documentationPreviewLines) {
+    for (const documentationPreviewLine of line.documentationViewLines) {
       renderedLineMetadata.set(documentationPreviewLine, {
         ...renderedLineMetadata.get(documentationPreviewLine),
         documentationGroupId: line.documentationGroupId,
@@ -358,7 +358,7 @@ function createRenderMetadata(
 function renderCodeLines(
   codeLines: readonly DiffRenderedLine[],
   language: string,
-  lineMetadata: ReadonlyMap<number, PreviewLineRenderMetadata>,
+  lineMetadata: ReadonlyMap<number, ViewLineRenderMetadata>,
 ): string {
   const code = codeLines.map(line => line.text).join('\n');
   const normalized = normalizeHighlightLanguage(language);
@@ -372,7 +372,7 @@ function renderCodeLines(
 function wrapHighlightedLines(
   highlighted: string,
   codeLines: readonly DiffRenderedLine[],
-  lineMetadata: ReadonlyMap<number, PreviewLineRenderMetadata>,
+  lineMetadata: ReadonlyMap<number, ViewLineRenderMetadata>,
 ): string {
   const parts = highlighted.split(/(<span\b[^>]*>|<\/span>)/);
   const openTags: { tag: string; comment: boolean }[] = [];
