@@ -504,8 +504,34 @@ body.web-host {
 }
 
 .preview-comment-thread-header {
-  color: var(--preview-comment-history-meta);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 24px;
   font-size: 0.9em;
+}
+
+.preview-comment-thread-avatar {
+  flex: none;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.preview-comment-thread-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5em;
+  min-inline-size: 0;
+}
+
+.preview-comment-thread-author {
+  font-weight: 600;
+  color: var(--preview-hover-foreground);
+}
+
+.preview-comment-thread-meta {
+  color: var(--preview-comment-history-meta);
 }
 
 .preview-comment-thread-body > :first-child {

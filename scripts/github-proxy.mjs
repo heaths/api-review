@@ -4,6 +4,8 @@ import { promisify } from 'node:util';
 import express from 'express';
 
 const execFileAsync = promisify(execFile);
+const mockUserLogin = 'heaths';
+const mockUserAvatarUrl = 'https://avatars.githubusercontent.com/u/1532486?v=4';
 
 export async function startGitHubProxy(repositoryRoot) {
   const app = express();
@@ -123,7 +125,7 @@ export async function startGitHubProxy(repositoryRoot) {
       path,
       line,
       body,
-      author: 'local',
+      author: mockUserLogin,
       reviewId: review.id,
     });
     review.commentIds.push(comment.id);
@@ -172,7 +174,7 @@ export async function startGitHubProxy(repositoryRoot) {
       path: parent.path,
       line: parent.line,
       body,
-      author: 'local',
+      author: mockUserLogin,
       inReplyToId: parent.id,
     });
     review.commentIds.push(comment.id);
@@ -339,7 +341,7 @@ function createSeededPullRequestStore(commitId) {
       state: 'COMMENTED',
       body: 'This is the first review with 1 comment.',
       commitId,
-      author: 'heaths',
+      author: mockUserLogin,
       submittedAt: '2026-09-11T20:32:06Z',
       commentIds: [3993158275],
     }, {
@@ -347,7 +349,7 @@ function createSeededPullRequestStore(commitId) {
       state: 'COMMENTED',
       body: '',
       commitId,
-      author: 'heaths',
+      author: mockUserLogin,
       submittedAt: '2026-09-11T20:32:23Z',
       commentIds: [3993164859],
     }, {
@@ -355,7 +357,7 @@ function createSeededPullRequestStore(commitId) {
       state: 'COMMENTED',
       body: '',
       commitId,
-      author: 'heaths',
+      author: mockUserLogin,
       submittedAt: '2026-09-11T20:32:51Z',
       commentIds: [3993167721],
     }, {
@@ -363,7 +365,7 @@ function createSeededPullRequestStore(commitId) {
       state: 'COMMENTED',
       body: 'This is the second review with 1 reply.',
       commitId,
-      author: 'heaths',
+      author: mockUserLogin,
       submittedAt: '2026-09-11T20:33:47Z',
       commentIds: [3993171853],
     }, {
@@ -371,7 +373,7 @@ function createSeededPullRequestStore(commitId) {
       state: 'COMMENTED',
       body: '',
       commitId,
-      author: 'heaths',
+      author: mockUserLogin,
       submittedAt: '2026-09-11T23:06:51Z',
       commentIds: [3994090762],
     }],
@@ -383,7 +385,7 @@ function createSeededPullRequestStore(commitId) {
       commit_id: commitId,
       pull_request_review_id: 5183174172,
       in_reply_to_id: undefined,
-      user: { login: 'heaths' },
+      user: createMockUser(),
       created_at: '2026-09-11T20:31:25Z',
       updated_at: '2026-09-11T20:32:06Z',
     }, {
@@ -394,7 +396,7 @@ function createSeededPullRequestStore(commitId) {
       commit_id: commitId,
       pull_request_review_id: 5183181104,
       in_reply_to_id: undefined,
-      user: { login: 'heaths' },
+      user: createMockUser(),
       created_at: '2026-09-11T20:32:23Z',
       updated_at: '2026-09-11T20:32:23Z',
     }, {
@@ -405,7 +407,7 @@ function createSeededPullRequestStore(commitId) {
       commit_id: commitId,
       pull_request_review_id: 5183184124,
       in_reply_to_id: 3993158275,
-      user: { login: 'heaths' },
+      user: createMockUser(),
       created_at: '2026-09-11T20:32:51Z',
       updated_at: '2026-09-11T20:32:51Z',
     }, {
@@ -416,7 +418,7 @@ function createSeededPullRequestStore(commitId) {
       commit_id: commitId,
       pull_request_review_id: 5183188404,
       in_reply_to_id: 3993158275,
-      user: { login: 'heaths' },
+      user: createMockUser(),
       created_at: '2026-09-11T20:33:26Z',
       updated_at: '2026-09-11T20:33:47Z',
     }, {
@@ -427,7 +429,7 @@ function createSeededPullRequestStore(commitId) {
       commit_id: commitId,
       pull_request_review_id: 5184128494,
       in_reply_to_id: 3993158275,
-      user: { login: 'heaths' },
+      user: createMockUser(),
       created_at: '2026-09-11T23:06:51Z',
       updated_at: '2026-09-11T23:06:51Z',
     }],
@@ -450,7 +452,7 @@ function createReview(store, commitId, event, body, comments) {
     path: comment.path,
     line: comment.line,
     body: comment.body,
-    author: 'local',
+    author: mockUserLogin,
     reviewId: review.id,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -509,7 +511,7 @@ function createSubmittedComment(store, options) {
     commit_id: options.commitId,
     pull_request_review_id: options.reviewId,
     in_reply_to_id: options.inReplyToId,
-    user: { login: options.author },
+    user: createMockUser(options.author),
     created_at: timestamp,
     updated_at: options.updatedAt ?? timestamp,
   };
@@ -523,7 +525,7 @@ function createReviewRecord(store, commitId, event, body, commentIds, submittedA
     state: event === 'APPROVE' ? 'APPROVED' : event === 'REQUEST_CHANGES' ? 'CHANGES_REQUESTED' : 'COMMENTED',
     body,
     commitId,
-    author: 'local',
+    author: mockUserLogin,
     submittedAt,
     commentIds,
   };
@@ -541,8 +543,15 @@ function toReviewPayload(review) {
     state: review.state,
     body: review.body,
     commit_id: review.commitId,
-    user: { login: review.author },
+    user: createMockUser(review.author),
     submitted_at: review.submittedAt,
+  };
+}
+
+function createMockUser(login = mockUserLogin) {
+  return {
+    login,
+    avatar_url: mockUserAvatarUrl,
   };
 }
 

@@ -97,6 +97,7 @@ export interface GitHubPullRequestComment {
    */
   readonly originalPostId: number;
   readonly author?: string;
+  readonly avatarUrl?: string;
   readonly createdAt?: string;
   readonly updatedAt?: string;
 }
@@ -964,6 +965,7 @@ function normalizePullRequestComment(
   const reviewId = typeof payload.pull_request_review_id === 'number' ? payload.pull_request_review_id : undefined;
   const inReplyToId = typeof payload.in_reply_to_id === 'number' ? payload.in_reply_to_id : undefined;
   const review = reviewId !== undefined ? reviewsById?.get(reviewId) : undefined;
+  const user = normalizeGitHubUser(payload.user);
   return {
     id: payload.id,
     body: payload.body,
@@ -974,7 +976,8 @@ function normalizePullRequestComment(
     reviewId,
     inReplyToId,
     originalPostId: inReplyToId ?? payload.id,
-    author: isRecord(payload.user) && typeof payload.user.login === 'string' ? payload.user.login : undefined,
+    author: user.author,
+    ...(user.avatarUrl ? { avatarUrl: user.avatarUrl } : {}),
     createdAt: typeof payload.created_at === 'string' ? payload.created_at : undefined,
     updatedAt: typeof payload.updated_at === 'string' ? payload.updated_at : undefined,
   };
@@ -1090,6 +1093,19 @@ export function parsePullRequestNumber(ref: string): number | undefined {
 
   const pullRequestNumber = Number.parseInt(match[1], 10);
   return Number.isSafeInteger(pullRequestNumber) ? pullRequestNumber : undefined;
+}
+
+function normalizeGitHubUser(value: unknown): { readonly author?: string; readonly avatarUrl?: string } {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return {
+    ...(typeof value.login === 'string' ? { author: value.login } : {}),
+    ...(typeof value.avatar_url === 'string' && /^https:\/\//iu.test(value.avatar_url)
+      ? { avatarUrl: value.avatar_url }
+      : {}),
+  };
 }
 
 function normalizeTags(payload: unknown): readonly GitHubTag[] | undefined {

@@ -35,6 +35,7 @@ suite('Pull request service review workflows', () => {
       inReplyToId: undefined,
       originalPostId: 5,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T09:00:00Z',
       updatedAt: '2026-09-11T10:00:00Z',
     }];
@@ -105,6 +106,7 @@ suite('Pull request service review workflows', () => {
       inReplyToId: undefined,
       originalPostId: 5,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T09:00:00Z',
       updatedAt: '2026-09-11T11:00:00Z',
       isDraft: false,
@@ -136,6 +138,7 @@ suite('Pull request service review workflows', () => {
           inReplyToId: undefined,
           originalPostId: 5,
           author: 'heaths',
+          avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
           createdAt: '2026-09-11T09:00:00Z',
           updatedAt: '2026-09-11T10:00:00Z',
         }];
@@ -159,6 +162,7 @@ suite('Pull request service review workflows', () => {
           inReplyToId: 5,
           originalPostId: 5,
           author: 'local',
+          avatarUrl: 'https://avatars.githubusercontent.com/u/2?v=4',
           createdAt: '2026-09-11T11:30:00Z',
           updatedAt: '2026-09-11T11:30:00Z',
         };
@@ -202,6 +206,7 @@ suite('Pull request service review workflows', () => {
       inReplyToId: 5,
       originalPostId: 5,
       author: 'local',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/2?v=4',
       createdAt: '2026-09-11T11:30:00Z',
       updatedAt: '2026-09-11T11:30:00Z',
       isDraft: false,
