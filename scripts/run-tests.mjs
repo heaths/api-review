@@ -1,3 +1,4 @@
+import { env, platform } from 'process';
 import { runVsCodeTestWeb } from './vscode-test-web.mjs';
 
 const baseArgs = [
@@ -7,14 +8,15 @@ const baseArgs = [
   '.',
 ];
 
-if (shouldRunHeadless(process.env)) {
+if (shouldRunHeadless(env, platform)) {
   baseArgs.splice(3, 0, '--headless');
 }
 
 runVsCodeTestWeb(baseArgs);
 
-function shouldRunHeadless(environment) {
-  return isTruthy(environment.CI) || isPresent(environment.COPILOT_GITHUB_TOKEN);
+function shouldRunHeadless(environment, currentPlatform) {
+  return (isTruthy(environment.CI) && currentPlatform !== 'linux')
+    || isPresent(environment.COPILOT_GITHUB_TOKEN);
 }
 
 function isTruthy(value) {
