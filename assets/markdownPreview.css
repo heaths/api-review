@@ -41,6 +41,7 @@
   --comment-icon-margin: 4px;
   --preview-comment-badge-size: 16px;
   --preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));
+  --preview-code-line-gutter-width: var(--preview-comment-badge-hit-size);
   --preview-comment-window-width: 360px;
   --preview-comment-window-padding: 12px;
   --preview-comment-window-footer-gap: 8px;
@@ -231,6 +232,11 @@ body {
   border-radius: var(--preview-inline-code-radius);
 }
 
+body.web-host {
+  --comment-icon-margin: 8px;
+  --preview-code-line-gutter-width: 32px;
+}
+
 .markdown-body pre {
   overflow: auto;
   padding: var(--preview-code-block-padding);
@@ -248,7 +254,7 @@ body {
   display: block;
   box-sizing: border-box;
   min-height: var(--preview-code-line-min-height);
-  padding-inline-start: var(--preview-comment-badge-hit-size);
+  padding-inline-start: var(--preview-code-line-gutter-width);
 }
 
 .markdown-body .preview-action-line {

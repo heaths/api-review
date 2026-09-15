@@ -13,6 +13,7 @@ import {
 } from '../../displayDiff';
 import { GitClient } from '../../gitClient';
 import { GitHubClient } from '../../githubClient';
+import { PullRequestService } from '../../pullRequest';
 import { renderDiffPreview } from '../../diffPreview';
 import { createDiffLineMetadata, createPreviewLineMetadata } from '../../lineMetadata';
 import { createDiffQuickPickCandidate } from '../../markdownPreview';
@@ -84,52 +85,97 @@ function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
   };
 }
 
+function createGitClient(overrides: Partial<GitClient> = {}): GitClient {
+  return {
+    async getRepository() {
+      return undefined;
+    },
+    async watchState() {
+      return new vscode.Disposable(() => { });
+    },
+    ...overrides,
+  };
+}
+
+function createPullRequestService(
+  overrides: Partial<PullRequestService> = {},
+): PullRequestService {
+  return {
+    invalidate() { },
+    async getContext() {
+      return undefined;
+    },
+    ...overrides,
+  } as PullRequestService;
+}
+
 suite('Display diff', () => {
-  test('prompts when retrying pull request detection for a GitHub virtual document', async () => {
-    const documentRef = {
+  test('uses pull request context from the dedicated service for PR-backed GitHub history', async () => {
+    const githubDocument = {
       repository: { owner: 'heaths', repo: 'api-review' },
-      ref: 'api-review',
+      ref: 'refs/pull/26/head',
       path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      pullRequestNumber: 26,
     };
     const document = {
       uri: vscode.Uri.parse(
-        'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
       ),
     } as vscode.TextDocument;
-    const promptValues: boolean[] = [];
+    const headSha = 'e951fe014e6f88027561db809aba0e3e6054a3c6';
+    const commitRefs: string[] = [];
     const githubClient = createGitHubClient({
-      resolveDocument(uri) {
-        return uri.scheme === 'vscode-vfs' ? documentRef : undefined;
+      resolveDocument() {
+        return githubDocument;
       },
-      async getPullRequest(request) {
-        promptValues.push(request.promptForAuth === true);
-        return request.promptForAuth ? {
-          number: 26,
-          title: 'azure_security_keyvault_keys@1.1.0-beta.1',
-          state: 'open',
-          baseRef: 'azure_security_keyvault_keys@base',
-          baseSha: 'base-sha',
-          headRef: 'api-review',
-          headSha: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
-          headOwner: 'heaths',
-        } : undefined;
+      async getTags() {
+        return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
       },
-    });
-    const service = new DisplayDiffService(createLogger(), githubClient, {
-      async getRepository() {
-        return undefined;
+      async getCommits(request) {
+        commitRefs.push(request.ref);
+        return [{ hash: headSha, message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
+      },
+      async getFileContent() {
+        return '# Baseline';
+      },
+      async getPullRequestBase() {
+        throw new Error('Explicit pull request metadata should provide the base.');
       },
     });
+    const service = new DisplayDiffService(
+      createLogger(),
+      githubClient,
+      createGitClient(),
+      createPullRequestService({
+        async getContext() {
+          return {
+            document: githubDocument,
+            pullRequest: {
+              number: 26,
+              title: 'azure_security_keyvault_keys@1.1.0-beta.1',
+              state: 'open',
+              baseRef: 'main',
+              baseSha: 'tagged-commit',
+              headRef: 'feature/history',
+              headSha,
+              headOwner: 'heaths',
+            },
+          };
+        },
+      }),
+    );
 
-    assert.strictEqual(githubClient.isGitHubDocument(document.uri), true);
-    assert.strictEqual(githubClient.isGitHubDocument(vscode.Uri.parse('test-workspace:/API.md')), false);
-    assert.strictEqual(await service.getPullRequestContext(document), undefined);
+    const availability = await service.getAvailability(document);
 
-    const context = await service.getPullRequestContext(document, { promptForGitHubAuth: true });
-
-    assert.strictEqual(context?.pullRequest.number, 26);
-    assert.deepStrictEqual(context?.document, documentRef);
-    assert.deepStrictEqual(promptValues, [false, true]);
+    assert.deepStrictEqual(commitRefs, [headSha]);
+    assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
+      { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+      { kind: 'commit', ref: headSha },
+    ]);
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'tag',
+      ref: 'azure_security_keyvault_keys@1.0.0',
+    });
   });
 
   test('uses GitHub history when local Git is unavailable', async () => {
@@ -138,11 +184,7 @@ suite('Display diff', () => {
         'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
       ),
     } as vscode.TextDocument;
-    const gitClient: GitClient = {
-      async getRepository() {
-        return undefined;
-      },
-    };
+    const gitClient = createGitClient();
     const githubClient = createGitHubClient({
       resolveDocument() {
         return {
@@ -167,7 +209,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
     const resolved = await service.resolveBaseline(document, { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' });
@@ -189,11 +231,7 @@ suite('Display diff', () => {
         'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
       ),
     } as vscode.TextDocument;
-    const gitClient: GitClient = {
-      async getRepository() {
-        return undefined;
-      },
-    };
+    const gitClient = createGitClient();
     const githubClient = createGitHubClient({
       resolveDocument() {
         return {
@@ -218,7 +256,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -237,11 +275,7 @@ suite('Display diff', () => {
         'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
       ),
     } as vscode.TextDocument;
-    const gitClient: GitClient = {
-      async getRepository() {
-        return undefined;
-      },
-    };
+    const gitClient = createGitClient();
     const githubClient = createGitHubClient({
       resolveDocument() {
         return {
@@ -266,7 +300,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -285,11 +319,7 @@ suite('Display diff', () => {
         'https://github.dev/heaths/api-review/blob/main/src/web/test/fixtures/v2/API.md',
       ),
     } as vscode.TextDocument;
-    const gitClient: GitClient = {
-      async getRepository() {
-        return undefined;
-      },
-    };
+    const gitClient = createGitClient();
     const githubClient = createGitHubClient({
       resolveDocument() {
         return {
@@ -314,7 +344,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient);
+    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -324,6 +354,70 @@ suite('Display diff', () => {
     assert.deepStrictEqual(availability.defaultBaseline, {
       kind: 'commit',
       ref: 'newer-commit',
+    });
+  });
+
+  test('uses the dedicated pull request context for local repository baselines', async () => {
+    const document = {
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
+    } as vscode.TextDocument;
+    const baseSha = 'base-sha';
+    const service = new DisplayDiffService(
+      createLogger(),
+      createGitHubClient({}),
+      createGitClient({
+        async getRepository() {
+          return {
+            rootUri: vscode.Uri.parse('file:///workspace'),
+            state: {
+              HEAD: {
+                name: 'pr/26',
+              },
+              remotes: [],
+            },
+            async getRefs() {
+              return [{ type: 2, name: 'azure_security_keyvault_keys@1.0.0', commit: baseSha }];
+            },
+            async log() {
+              return [{ hash: 'head-sha', message: 'Update API', commitDate: new Date('2026-09-10T12:00:00Z') }];
+            },
+            async show(ref) {
+              if (ref !== baseSha && ref !== 'azure_security_keyvault_keys@1.0.0') {
+                throw new Error(`Unexpected ref ${ref}`);
+              }
+              return '# Baseline';
+            },
+          };
+        },
+      }),
+      createPullRequestService({
+        async getContext() {
+          return {
+            document: {
+              repository: { owner: 'heaths', repo: 'api-review' },
+              ref: 'feature/history',
+              path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+            },
+            pullRequest: {
+              number: 26,
+              title: 'Active PR',
+              state: 'open',
+              baseRef: 'main',
+              baseSha,
+              headRef: 'feature/history',
+              headSha: 'head-sha',
+              headOwner: 'heaths',
+            },
+          };
+        },
+      }),
+    );
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'tag',
+      ref: 'azure_security_keyvault_keys@1.0.0',
     });
   });
 

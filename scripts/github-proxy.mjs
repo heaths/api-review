@@ -8,7 +8,10 @@ const execFileAsync = promisify(execFile);
 export async function startGitHubProxy(repositoryRoot) {
   const app = express();
   const token = randomUUID();
-  const pullRequests = new Map();
+  const seededCommitId = await getSeededPullRequestCommitId(repositoryRoot);
+  const pullRequests = new Map([
+    [1, createSeededPullRequestStore(seededCommitId)],
+  ]);
 
   app.disable('x-powered-by');
   app.use(express.json());
@@ -305,16 +308,138 @@ function readDraftComment(value) {
 
 function getPullRequestStore(pullRequests, prNumber, create) {
   let store = pullRequests.get(prNumber);
-  if (!store && create) {
-    store = {
-      nextReviewId: 1,
-      nextCommentId: 1,
-      comments: [],
-      reviews: [],
-    };
+  if (!store && (create || shouldSeedPullRequest(prNumber))) {
+    store = shouldSeedPullRequest(prNumber)
+      ? createSeededPullRequestStore(pullRequests.get(1)?.reviews[0]?.commitId ?? '')
+      : createEmptyPullRequestStore();
     pullRequests.set(prNumber, store);
   }
   return store;
+}
+
+function shouldSeedPullRequest(prNumber) {
+  return prNumber === 1;
+}
+
+function createEmptyPullRequestStore() {
+  return {
+    nextReviewId: 1,
+    nextCommentId: 1,
+    comments: [],
+    reviews: [],
+  };
+}
+
+function createSeededPullRequestStore(commitId) {
+  return {
+    nextReviewId: 5184128495,
+    nextCommentId: 3994090763,
+    reviews: [{
+      id: 5183174172,
+      state: 'COMMENTED',
+      body: 'This is the first review with 1 comment.',
+      commitId,
+      author: 'heaths',
+      submittedAt: '2026-09-11T20:32:06Z',
+      commentIds: [3993158275],
+    }, {
+      id: 5183181104,
+      state: 'COMMENTED',
+      body: '',
+      commitId,
+      author: 'heaths',
+      submittedAt: '2026-09-11T20:32:23Z',
+      commentIds: [3993164859],
+    }, {
+      id: 5183184124,
+      state: 'COMMENTED',
+      body: '',
+      commitId,
+      author: 'heaths',
+      submittedAt: '2026-09-11T20:32:51Z',
+      commentIds: [3993167721],
+    }, {
+      id: 5183188404,
+      state: 'COMMENTED',
+      body: 'This is the second review with 1 reply.',
+      commitId,
+      author: 'heaths',
+      submittedAt: '2026-09-11T20:33:47Z',
+      commentIds: [3993171853],
+    }, {
+      id: 5184128494,
+      state: 'COMMENTED',
+      body: '',
+      commitId,
+      author: 'heaths',
+      submittedAt: '2026-09-11T23:06:51Z',
+      commentIds: [3994090762],
+    }],
+    comments: [{
+      id: 3993158275,
+      body: 'This is a review comment.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commit_id: commitId,
+      pull_request_review_id: 5183174172,
+      in_reply_to_id: undefined,
+      user: { login: 'heaths' },
+      created_at: '2026-09-11T20:31:25Z',
+      updated_at: '2026-09-11T20:32:06Z',
+    }, {
+      id: 3993164859,
+      body: 'This is an immediate review comment.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 66,
+      commit_id: commitId,
+      pull_request_review_id: 5183181104,
+      in_reply_to_id: undefined,
+      user: { login: 'heaths' },
+      created_at: '2026-09-11T20:32:23Z',
+      updated_at: '2026-09-11T20:32:23Z',
+    }, {
+      id: 3993167721,
+      body: 'This is an immediately review comment reply.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commit_id: commitId,
+      pull_request_review_id: 5183184124,
+      in_reply_to_id: 3993158275,
+      user: { login: 'heaths' },
+      created_at: '2026-09-11T20:32:51Z',
+      updated_at: '2026-09-11T20:32:51Z',
+    }, {
+      id: 3993171853,
+      body: 'This is a review comment reply in a separate review.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commit_id: commitId,
+      pull_request_review_id: 5183188404,
+      in_reply_to_id: 3993158275,
+      user: { login: 'heaths' },
+      created_at: '2026-09-11T20:33:26Z',
+      updated_at: '2026-09-11T20:33:47Z',
+    }, {
+      id: 3994090762,
+      body: 'This is an immediately review comment reply added by the VSCode extension.',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      line: 65,
+      commit_id: commitId,
+      pull_request_review_id: 5184128494,
+      in_reply_to_id: 3993158275,
+      user: { login: 'heaths' },
+      created_at: '2026-09-11T23:06:51Z',
+      updated_at: '2026-09-11T23:06:51Z',
+    }],
+  };
+}
+
+async function getSeededPullRequestCommitId(repositoryRoot) {
+  try {
+    return await runGit(repositoryRoot, ['rev-parse', 'api-review']);
+  } catch {
+    return runGit(repositoryRoot, ['rev-parse', 'HEAD']);
+  }
 }
 
 function createReview(store, commitId, event, body, comments) {

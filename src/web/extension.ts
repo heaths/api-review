@@ -20,6 +20,7 @@ import {
   showPreviewCommentsCommand,
 } from './markdownPreview';
 import { PullRequestReviewController } from './pullRequestReview';
+import { PullRequestService } from './pullRequest';
 import { ReviewModel } from './reviewModel';
 import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
 import { MemoryCache } from './cache';
@@ -44,11 +45,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
   const githubCache = new MemoryCache();
   const githubClient = createGitHubClient({ cache: githubCache, logger });
   const gitClient = createGitClient();
-  const diffService = new DisplayDiffService(logger, githubClient, gitClient);
+  const pullRequestService = new PullRequestService(githubClient, gitClient);
+  const diffService = new DisplayDiffService(logger, githubClient, gitClient, pullRequestService);
   const pullRequestReview = new PullRequestReviewController(githubClient);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, logger);
-  const preview = new ReviewMarkdownPreview(model, context.extensionUri, githubClient, diffService, pullRequestReview, logger);
+  const preview = new ReviewMarkdownPreview(
+    model,
+    context.extensionUri,
+    githubClient,
+    diffService,
+    pullRequestService,
+    pullRequestReview,
+    logger,
+  );
+  const gitStateWatcher = await gitClient.watchState(() => {
+    diffService.invalidate();
+    pullRequestService.invalidate();
+    preview.refresh();
+  });
   const selector: vscode.DocumentSelector = { language: 'markdown' };
   const watcher = vscode.workspace.createFileSystemWatcher('**/*');
 
@@ -56,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     try {
       await model.refresh();
       diffService.invalidate();
+      pullRequestService.invalidate();
       provider.refresh();
       documentation.refresh();
       preview.refresh();
@@ -68,6 +84,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
 
   context.subscriptions.push(
     logger,
+    gitStateWatcher,
     watcher,
     vscode.window.registerCustomEditorProvider(
       reviewMarkdownPreviewViewType,
@@ -99,11 +116,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
         return;
       }
       diffService.invalidate();
+      pullRequestService.invalidate();
       preview.refresh();
     }),
     vscode.workspace.onDidChangeTextDocument(event => {
       model.invalidate(event.document.uri);
       diffService.invalidate(event.document.uri);
+      pullRequestService.invalidate(event.document.uri);
       provider.refresh();
       documentation.refresh(event.document.uri);
       preview.refresh(event.document.uri);

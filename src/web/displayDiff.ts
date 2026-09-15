@@ -4,18 +4,15 @@ import {
   GitClient,
   GitCommit,
   GitRef,
-  GitRemote,
   GitRepository,
-  GitRepositoryState,
   getRepositoryRelativePath,
 } from './gitClient';
 import {
   GitHubClient,
   GitHubDocumentRef,
-  GitHubPullRequest,
   GitHubTag,
-  parseGitHubRepository,
 } from './githubClient';
+import { PullRequestService, getPullRequestBaseBaseline } from './pullRequest';
 
 const gitTagRefType = 2;
 const maxLogEntries = 64;
@@ -59,11 +56,6 @@ export interface ResolvedBaseline {
   readonly markdown: string;
 }
 
-export interface PullRequestContext {
-  readonly document: GitHubDocumentRef;
-  readonly pullRequest: GitHubPullRequest;
-}
-
 export interface ParsedVersion {
   readonly raw: string;
   readonly normalized: string;
@@ -90,42 +82,21 @@ interface CargoPackageMetadata {
 
 export class DisplayDiffService {
   private readonly availabilityCache = new Map<string, Promise<DiffAvailability>>();
-  private readonly pullRequestCache = new Map<string, Promise<PullRequestContext | undefined>>();
 
   public constructor(
     private readonly logger: vscode.LogOutputChannel,
     private readonly githubClient: GitHubClient,
     private readonly gitClient: GitClient,
+    private readonly pullRequestService: PullRequestService,
   ) { }
 
   public invalidate(uri?: vscode.Uri): void {
     if (uri) {
       this.availabilityCache.delete(uri.toString());
-      this.pullRequestCache.delete(uri.toString());
       return;
     }
 
     this.availabilityCache.clear();
-    this.pullRequestCache.clear();
-  }
-
-  public async getPullRequestContext(
-    document: vscode.TextDocument,
-    options?: { readonly promptForGitHubAuth?: boolean },
-  ): Promise<PullRequestContext | undefined> {
-    const key = document.uri.toString();
-    const shouldPrompt = options?.promptForGitHubAuth === true;
-
-    if (shouldPrompt) {
-      return this.loadPullRequestContext(document, shouldPrompt);
-    }
-
-    let cached = this.pullRequestCache.get(key);
-    if (!cached) {
-      cached = this.loadPullRequestContext(document, false);
-      this.pullRequestCache.set(key, cached);
-    }
-    return cached;
   }
 
   public async getAvailability(
@@ -205,7 +176,7 @@ export class DisplayDiffService {
     if (!repository) {
       const githubDocument = this.githubClient.resolveDocument(document.uri);
       return githubDocument
-        ? this.loadGitHubAvailability(document.uri, githubDocument, promptForGitHubAuth)
+        ? this.loadGitHubAvailability(document, githubDocument, promptForGitHubAuth)
         : { candidates: [], canPickFile };
     }
 
@@ -227,7 +198,13 @@ export class DisplayDiffService {
         detail: firstLine(commit.message),
       }));
 
-    const pullRequestBase = await this.getPullRequestBase(repository, relativePath, tagCandidates, promptForGitHubAuth);
+    const pullRequestBase = await this.getPullRequestBase(
+      document,
+      repository,
+      relativePath,
+      tagCandidates,
+      promptForGitHubAuth,
+    );
     const candidates = [
       ...tagCandidates.map(candidate => candidate.candidate),
       ...commitCandidates,
@@ -245,46 +222,24 @@ export class DisplayDiffService {
     };
   }
 
-  private async loadPullRequestContext(
-    document: vscode.TextDocument,
-    promptForGitHubAuth: boolean,
-  ): Promise<PullRequestContext | undefined> {
-    const repository = await this.gitClient.getRepository(document.uri);
-    if (repository) {
-      const resolved = await this.getRepositoryPullRequestContext(repository, document.uri, promptForGitHubAuth);
-      if (resolved) {
-        return resolved;
-      }
-    }
-
-    const githubDocument = this.githubClient.resolveDocument(document.uri);
-    if (!githubDocument) {
-      return undefined;
-    }
-
-    const pullRequest = await this.githubClient.getPullRequest({
-      repository: githubDocument.repository,
-      ref: githubDocument.ref,
-      headOwner: githubDocument.repository.owner,
-      promptForAuth: promptForGitHubAuth,
-    });
-    return pullRequest ? { document: githubDocument, pullRequest } : undefined;
-  }
-
   private async loadGitHubAvailability(
-    documentUri: vscode.Uri,
-    document: GitHubDocumentRef,
+    previewDocument: vscode.TextDocument,
+    githubDocument: GitHubDocumentRef,
     promptForGitHubAuth: boolean,
   ): Promise<DiffAvailability> {
+    const pullRequestContext = await this.pullRequestService.getContext(previewDocument, { promptForGitHubAuth });
+    const historyDocument = pullRequestContext
+      ? { ...githubDocument, ref: pullRequestContext.pullRequest.headSha }
+      : githubDocument;
     const [tagsResult, commitsResult] = await Promise.allSettled([
       this.githubClient.getTags({
-        repository: document.repository,
+        repository: githubDocument.repository,
         promptForAuth: promptForGitHubAuth,
       }),
       this.githubClient.getCommits({
-        repository: document.repository,
-        ref: document.ref,
-        path: document.path,
+        repository: historyDocument.repository,
+        ref: historyDocument.ref,
+        path: historyDocument.path,
         maxEntries: maxLogEntries,
         promptForAuth: promptForGitHubAuth,
       }),
@@ -292,14 +247,19 @@ export class DisplayDiffService {
 
     try {
       const tags = settledValue(tagsResult, error => {
-        this.logger.warn(`Unable to load GitHub tags for ${documentUri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to load GitHub tags for ${previewDocument.uri.toString()}: ${formatError(error)}`);
         return [];
       });
       const commits = settledValue(commitsResult, error => {
-        this.logger.warn(`Unable to load GitHub commits for ${documentUri.toString()}: ${formatError(error)}`);
+        this.logger.warn(`Unable to load GitHub commits for ${previewDocument.uri.toString()}: ${formatError(error)}`);
         return [];
       });
-      const tagCandidates = await this.getGitHubTagCandidates(documentUri, document, tags ?? [], promptForGitHubAuth);
+      const tagCandidates = await this.getGitHubTagCandidates(
+        previewDocument.uri,
+        githubDocument,
+        tags ?? [],
+        promptForGitHubAuth,
+      );
       const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
       const commitCandidates = (commits ?? [])
         .filter(commit => !taggedCommits.has(commit.hash))
@@ -310,9 +270,10 @@ export class DisplayDiffService {
           detail: firstLine(commit.message),
         }));
       const pullRequestBase = await this.getGitHubPullRequestBase(
-        document,
+        historyDocument,
         tagCandidates,
         promptForGitHubAuth,
+        pullRequestContext?.pullRequest,
       );
 
       return {
@@ -321,7 +282,7 @@ export class DisplayDiffService {
         canPickFile: true,
       };
     } catch (error) {
-      this.logger.warn(`Unable to load GitHub history for ${documentUri.toString()}: ${formatError(error)}`);
+      this.logger.warn(`Unable to load GitHub history for ${previewDocument.uri.toString()}: ${formatError(error)}`);
       return { candidates: [], canPickFile: true };
     }
   }
@@ -372,16 +333,17 @@ export class DisplayDiffService {
     document: GitHubDocumentRef,
     tagCandidates: readonly TagCandidate[],
     promptForGitHubAuth: boolean,
+    resolvedPullRequest?: { readonly baseSha: string; readonly baseRef: string },
   ): Promise<DiffBaselineSelection | undefined> {
-    if (/^[0-9a-f]{40}$/iu.test(document.ref)) {
+    if (looksLikeFullCommitSha(document.ref) && !resolvedPullRequest) {
       return undefined;
     }
 
-    const pullRequest = await this.githubClient.getPullRequestBase({
-      repository: document.repository,
-      branch: document.ref,
-      headOwner: document.repository.owner,
-      promptForAuth: promptForGitHubAuth,
+    const pullRequest = resolvedPullRequest ?? await this.githubClient.getPullRequestBase({
+        repository: document.repository,
+        branch: document.ref,
+        headOwner: document.repository.owner,
+        promptForAuth: promptForGitHubAuth,
     });
     if (!pullRequest) {
       return undefined;
@@ -444,107 +406,29 @@ export class DisplayDiffService {
   }
 
   private async getPullRequestBase(
+    document: vscode.TextDocument,
     repository: GitRepository,
     relativePath: string,
     tagCandidates: readonly TagCandidate[],
     promptForGitHubAuth: boolean,
   ): Promise<DiffBaselineSelection | undefined> {
-    const branch = repository.state.HEAD?.name;
-    const remote = getPreferredRemote(repository.state);
-    if (!branch || !remote) {
-      return undefined;
-    }
-
-    const githubRepository = parseGitHubRepository(remote.fetchUrl ?? remote.pushUrl);
-    if (!githubRepository) {
+    const pullRequestContext = await this.pullRequestService.getContext(document, { promptForGitHubAuth });
+    if (!pullRequestContext) {
       return undefined;
     }
 
     try {
-      const pullRequest = await this.githubClient.getPullRequestBase({
-        repository: githubRepository,
-        branch,
-        headOwner: githubRepository.owner,
-        promptForAuth: promptForGitHubAuth,
-      });
-      if (!pullRequest) {
-        return undefined;
-      }
-
-      const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequest.baseSha);
-      if (taggedBase) {
-        return taggedBase.candidate.baseline;
-      }
-
-      await repository.show(pullRequest.baseSha, relativePath);
-      return { kind: 'commit', ref: pullRequest.baseSha };
+      return await getPullRequestBaseBaseline(repository, relativePath, pullRequestContext, tagCandidates);
     } catch (error) {
+      const branch = pullRequestContext.document.ref;
       this.logger.warn(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
       return undefined;
     }
   }
-
-  private async getRepositoryPullRequestContext(
-    repository: GitRepository,
-    documentUri: vscode.Uri,
-    promptForGitHubAuth: boolean,
-  ): Promise<PullRequestContext | undefined> {
-    const remote = getPreferredRemote(repository.state);
-    const relativePath = getRepositoryRelativePath(documentUri, repository.rootUri);
-    if (!remote || !relativePath) {
-      return undefined;
-    }
-
-    const githubRepository = parseGitHubRepository(remote.fetchUrl ?? remote.pushUrl);
-    if (!githubRepository) {
-      return undefined;
-    }
-
-    const head = repository.state.HEAD;
-    const ref = head?.commit ?? head?.name;
-    if (!ref) {
-      return undefined;
-    }
-
-    let pullRequest = await this.githubClient.getPullRequest({
-      repository: githubRepository,
-      ref,
-      headOwner: githubRepository.owner,
-      promptForAuth: promptForGitHubAuth,
-    });
-    if (!pullRequest && head?.commit && head.name) {
-      pullRequest = await this.githubClient.getPullRequest({
-        repository: githubRepository,
-        ref: head.name,
-        headOwner: githubRepository.owner,
-        promptForAuth: promptForGitHubAuth,
-      });
-    }
-    if (!pullRequest) {
-      return undefined;
-    }
-
-    return {
-      document: {
-        repository: githubRepository,
-        ref,
-        path: relativePath,
-      },
-      pullRequest,
-    };
-  }
 }
 
-function getPreferredRemote(state: GitRepositoryState): GitRemote | undefined {
-  const upstreamRemote = state.HEAD?.upstream?.remote;
-  if (upstreamRemote) {
-    const match = state.remotes.find(remote => remote.name === upstreamRemote);
-    if (match) {
-      return match;
-    }
-  }
-
-  return state.remotes.find(remote => parseGitHubRepository(remote.fetchUrl ?? remote.pushUrl) !== undefined);
+function looksLikeFullCommitSha(ref: string): boolean {
+  return /^[0-9a-f]{40}$/iu.test(ref);
 }
 
 async function getCurrentPackageMetadata(
