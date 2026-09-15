@@ -301,7 +301,7 @@ suite('GitHub client', () => {
                   line: 65,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183174172,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T20:31:25Z',
                   updated_at: '2026-09-11T20:32:06Z',
                 }, {
@@ -311,7 +311,7 @@ suite('GitHub client', () => {
                   line: 66,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183181104,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T20:32:23Z',
                   updated_at: '2026-09-11T20:32:23Z',
                 }, {
@@ -322,7 +322,7 @@ suite('GitHub client', () => {
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183184124,
                   in_reply_to_id: 3993158275,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T20:32:51Z',
                   updated_at: '2026-09-11T20:32:51Z',
                 }, {
@@ -333,7 +333,7 @@ suite('GitHub client', () => {
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183188404,
                   in_reply_to_id: 3993158275,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T20:33:26Z',
                   updated_at: '2026-09-11T20:33:47Z',
                 }]) as unknown as GitHubTransportResponse<T>;
@@ -361,6 +361,7 @@ suite('GitHub client', () => {
       inReplyToId: undefined,
       originalPostId: 3993158275,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T20:31:25Z',
       updatedAt: '2026-09-11T20:32:06Z',
     }, {
@@ -374,6 +375,7 @@ suite('GitHub client', () => {
       inReplyToId: undefined,
       originalPostId: 3993164859,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T20:32:23Z',
       updatedAt: '2026-09-11T20:32:23Z',
     }, {
@@ -387,6 +389,7 @@ suite('GitHub client', () => {
       inReplyToId: 3993158275,
       originalPostId: 3993158275,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T20:32:51Z',
       updatedAt: '2026-09-11T20:32:51Z',
     }, {
@@ -400,6 +403,7 @@ suite('GitHub client', () => {
       inReplyToId: 3993158275,
       originalPostId: 3993158275,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T20:33:26Z',
       updatedAt: '2026-09-11T20:33:47Z',
     }]);
@@ -435,7 +439,7 @@ suite('GitHub client', () => {
                   path: 'sdk/keyvault/api/API.md',
                   line: 18,
                   commit_id: 'commit-sha',
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T12:45:00Z',
                   updated_at: '2026-09-11T12:45:00Z',
                 }) as unknown as GitHubTransportResponse<T>;
@@ -451,7 +455,7 @@ suite('GitHub client', () => {
                   commit_id: 'commit-sha',
                   pull_request_review_id: 12,
                   in_reply_to_id: 7,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T12:50:00Z',
                   updated_at: '2026-09-11T12:50:00Z',
                 }) as unknown as GitHubTransportResponse<T>;
@@ -465,7 +469,7 @@ suite('GitHub client', () => {
                   line: 18,
                   commit_id: 'commit-sha',
                   pull_request_review_id: 12,
-                  user: { login: 'heaths' },
+                  user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
                   created_at: '2026-09-11T11:00:00Z',
                   updated_at: '2026-09-11T13:00:00Z',
                 }) as unknown as GitHubTransportResponse<T>;
@@ -509,6 +513,7 @@ suite('GitHub client', () => {
       inReplyToId: undefined,
       originalPostId: 9,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T12:45:00Z',
       updatedAt: '2026-09-11T12:45:00Z',
     });
@@ -523,6 +528,7 @@ suite('GitHub client', () => {
       inReplyToId: 7,
       originalPostId: 7,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T12:50:00Z',
       updatedAt: '2026-09-11T12:50:00Z',
     });
@@ -537,6 +543,7 @@ suite('GitHub client', () => {
       inReplyToId: undefined,
       originalPostId: 7,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       createdAt: '2026-09-11T11:00:00Z',
       updatedAt: '2026-09-11T13:00:00Z',
     });

@@ -36,6 +36,7 @@ export interface PullRequestLineComment {
    */
   readonly originalPostId?: number;
   readonly author?: string;
+  readonly avatarUrl?: string;
   readonly createdAt?: string;
   readonly updatedAt?: string;
   readonly isDraft: boolean;
@@ -353,6 +354,7 @@ export class PullRequestService {
       inReplyToId: existing?.inReplyToId,
       originalPostId: existing?.originalPostId,
       author: existing?.author,
+      ...(existing?.avatarUrl ? { avatarUrl: existing.avatarUrl } : {}),
       createdAt: existing?.createdAt,
       updatedAt: new Date().toISOString(),
       isDraft: true,
@@ -455,6 +457,7 @@ function toLineComment(comment: GitHubPullRequestComment, sourceLine = comment.l
     inReplyToId: comment.inReplyToId,
     originalPostId: comment.originalPostId,
     author: comment.author,
+    ...(comment.avatarUrl ? { avatarUrl: comment.avatarUrl } : {}),
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
     isDraft: false,

@@ -6,6 +6,7 @@ import {
   hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
+import { createDateService, DateService } from './dateService';
 import { DiffAvailability, DiffBaselineSelection, DiffService, ResolvedBaseline } from './diffService';
 import { renderDiffView } from './diffView';
 import hljs, { normalizeHighlightLanguage } from './highlight';
@@ -165,6 +166,8 @@ interface ViewPullRequestCommentEntryState {
   readonly kind: PullRequestLineComment['kind'];
   readonly isDraft: boolean;
   readonly author?: string;
+  readonly avatarUrl?: string;
+  readonly metaLabel?: string;
   readonly createdAt?: string;
   readonly updatedAt?: string;
   readonly originalPostId?: number;
@@ -223,6 +226,7 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
     private readonly diffService: DiffService,
     private readonly pullRequestService: PullRequestService,
     private readonly logger: vscode.LogOutputChannel,
+    private readonly dateService: DateService = createDateService(),
   ) { }
 
   public async resolveCustomTextEditor(
@@ -665,18 +669,23 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       ),
       comments: [...lineComments.entries()].map(([line, comments]) => ({
         line,
-        comments: comments.map(comment => ({
-          id: comment.id,
-          localId: comment.localId,
-          body: comment.body,
-          renderedBody: renderCommentMarkdown(comment.body),
-          kind: comment.kind,
-          isDraft: comment.isDraft,
-          author: comment.author,
-          createdAt: comment.createdAt,
-          updatedAt: comment.updatedAt,
-          originalPostId: comment.originalPostId,
-        })),
+        comments: comments.map(comment => {
+          const metaLabel = this.getCommentMetaLabel(comment);
+          return {
+            id: comment.id,
+            localId: comment.localId,
+            body: comment.body,
+            renderedBody: renderCommentMarkdown(comment.body),
+            kind: comment.kind,
+            isDraft: comment.isDraft,
+            author: comment.author,
+            ...(comment.avatarUrl ? { avatarUrl: comment.avatarUrl } : {}),
+            ...(metaLabel ? { metaLabel } : {}),
+            createdAt: comment.createdAt,
+            updatedAt: comment.updatedAt,
+            originalPostId: comment.originalPostId,
+          };
+        }),
       })),
     });
   }
@@ -815,6 +824,14 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
     }
     return diffFile;
   }
+
+  private getCommentMetaLabel(comment: PullRequestLineComment): string | undefined {
+    return this.dateService.formatCommentTimestamp({
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      isDraft: comment.isDraft,
+    }) ?? getCommentKindLabel(comment);
+  }
 }
 
 export function renderMarkdown(markdown: string): string {
@@ -862,6 +879,19 @@ function getMarkdownViewStylePaths(packageJSON: unknown): readonly string[] {
   }
 
   return styles.filter((value): value is string => isSafeRelativeStylePath(value));
+}
+
+function getCommentKindLabel(comment: PullRequestLineComment): string | undefined {
+  switch (comment.kind) {
+    case 'reply':
+      return 'reply';
+    case 'individual':
+      return 'comment';
+    case 'review':
+      return 'review comment';
+    default:
+      return undefined;
+  }
 }
 
 function isSafeRelativeStylePath(value: unknown): value is string {

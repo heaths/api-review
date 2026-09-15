@@ -1,4 +1,6 @@
 (function () {
+  const commentAvatarRequestSize = 48;
+  const commentAvatarDisplaySize = 24;
   const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
   const popup = requireElement(document.getElementById('preview-hover-actions'), HTMLDivElement, '#preview-hover-actions');
   const documentationButton = requireElement(
@@ -22,6 +24,7 @@
   const cancelCommentButton = requireElement(commentWindow.querySelector('[data-action="cancel-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="cancel-comment"]');
   const replyCommentButton = requireElement(commentWindow.querySelector('[data-action="reply-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="reply-comment"]');
   const submitCommentButton = requireElement(commentWindow.querySelector('[data-action="submit-comment"]'), HTMLButtonElement, '#preview-comment-window [data-action="submit-comment"]');
+  window.setInterval(refreshRelativeCommentTimes, 60_000);
   const pullRequestComments = new Map();
   const submitShortcut = getSubmitShortcutLabel();
   let hasPendingReview = false;
@@ -599,10 +602,7 @@
       const article = document.createElement('article');
       article.className = 'preview-comment-thread-entry';
 
-      const header = document.createElement('div');
-      header.className = 'preview-comment-thread-header';
-      header.textContent = describeComment(comment);
-      article.appendChild(header);
+      article.appendChild(createCommentHeader(comment));
 
       const body = document.createElement('div');
       body.className = 'preview-comment-thread-body';
@@ -643,30 +643,129 @@
     return topLevelComment?.originalPostId;
   }
 
-  function describeComment(comment) {
-    const parts = [];
-    if (typeof comment?.author === 'string' && comment.author.length > 0) {
-      parts.push(comment.author);
+  function createCommentHeader(comment) {
+    const header = document.createElement('div');
+    header.className = 'preview-comment-thread-header';
+
+    const avatarUrl = getCommentAvatarUrl(comment);
+    if (avatarUrl) {
+      const avatar = document.createElement('img');
+      avatar.className = 'preview-comment-thread-avatar';
+      avatar.alt = '';
+      avatar.width = commentAvatarDisplaySize;
+      avatar.height = commentAvatarDisplaySize;
+      avatar.loading = 'lazy';
+      avatar.decoding = 'async';
+      avatar.src = avatarUrl;
+      avatar.addEventListener('error', () => {
+        avatar.remove();
+      });
+      header.appendChild(avatar);
     }
 
-    switch (comment?.kind) {
-      case 'reply':
-        parts.push('reply');
-        break;
-      case 'individual':
-        parts.push('comment');
-        break;
-      case 'review':
-        parts.push(comment?.isDraft ? 'pending review comment' : 'review comment');
-        break;
-      default:
-        if (comment?.isDraft) {
-          parts.push('pending review comment');
-        }
-        break;
+    const title = document.createElement('span');
+    title.className = 'preview-comment-thread-title';
+
+    const author = document.createElement('span');
+    author.className = 'preview-comment-thread-author';
+    author.textContent = typeof comment?.author === 'string' ? comment.author : '';
+    title.appendChild(author);
+
+    const metaLabel = getCommentMetaLabel(comment);
+    if (metaLabel) {
+      const meta = document.createElement('span');
+      meta.className = 'preview-comment-thread-meta';
+      meta.dataset.createdAt = typeof comment?.createdAt === 'string' ? comment.createdAt : '';
+      meta.dataset.updatedAt = typeof comment?.updatedAt === 'string' ? comment.updatedAt : '';
+      meta.dataset.isDraft = comment?.isDraft ? 'true' : 'false';
+      meta.dataset.fallbackLabel = metaLabel;
+      meta.textContent = getLiveCommentMetaLabel(meta) ?? metaLabel;
+      title.appendChild(meta);
     }
 
-    return parts.join(' • ');
+    header.appendChild(title);
+
+    return header;
+  }
+
+  function getCommentAvatarUrl(comment) {
+    if (typeof comment?.avatarUrl !== 'string' || !comment.avatarUrl.startsWith('https://')) {
+      return undefined;
+    }
+
+    return /\bsize=\d+\b/u.test(comment.avatarUrl)
+      ? comment.avatarUrl.replace(/([?&])size=\d+\b/u, `$1size=${commentAvatarRequestSize}`)
+      : `${comment.avatarUrl}${comment.avatarUrl.includes('?') ? '&' : '?'}size=${commentAvatarRequestSize}`;
+  }
+
+  function getCommentMetaLabel(comment) {
+    return typeof comment?.metaLabel === 'string' && comment.metaLabel.length > 0
+      ? comment.metaLabel
+      : undefined;
+  }
+
+  function refreshRelativeCommentTimes() {
+    for (const meta of document.querySelectorAll('.preview-comment-thread-meta')) {
+      if (!(meta instanceof HTMLElement)) {
+        continue;
+      }
+
+      const label = getLiveCommentMetaLabel(meta);
+      if (label) {
+        meta.textContent = label;
+      }
+    }
+  }
+
+  function getLiveCommentMetaLabel(meta) {
+    if (meta.dataset.isDraft === 'true') {
+      return 'pending';
+    }
+
+    const timestamp = meta.dataset.createdAt || meta.dataset.updatedAt;
+    return timestamp ? formatRelativeDate(timestamp) ?? meta.dataset.fallbackLabel : meta.dataset.fallbackLabel;
+  }
+
+  function formatRelativeDate(timestamp) {
+    const parsed = Date.parse(timestamp);
+    if (!Number.isFinite(parsed)) {
+      return undefined;
+    }
+
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
+    if (elapsedSeconds < 10) {
+      return 'now';
+    }
+    if (elapsedSeconds < 60) {
+      return `${elapsedSeconds}s ago`;
+    }
+
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+    if (elapsedMinutes < 60) {
+      return `${elapsedMinutes}m ago`;
+    }
+
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    if (elapsedHours < 24) {
+      return `${elapsedHours}h ago`;
+    }
+
+    const elapsedDays = Math.floor(elapsedHours / 24);
+    if (elapsedDays < 7) {
+      return `${elapsedDays}d ago`;
+    }
+
+    const elapsedWeeks = Math.floor(elapsedDays / 7);
+    if (elapsedDays < 30) {
+      return `${elapsedWeeks}w ago`;
+    }
+
+    const elapsedMonths = Math.floor(elapsedDays / 30);
+    if (elapsedDays < 365) {
+      return `${elapsedMonths}mo ago`;
+    }
+
+    return `${Math.floor(elapsedDays / 365)}y ago`;
   }
 
   function getInlineAnchorLeft(lineBounds) {

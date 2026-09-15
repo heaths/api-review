@@ -636,6 +636,10 @@ suite('Markdown view', () => {
     assert.ok(script.includes('showReply: !hasPendingReview && originalPostId !== undefined'));
     assert.ok(script.includes("submitLabel: 'Update'"));
     assert.ok(script.includes('placeholder: `Edit this pending comment. Press ${submitShortcut} to update.`'));
+    assert.ok(script.includes('const commentAvatarRequestSize = 48;'));
+    assert.ok(script.includes('const commentAvatarDisplaySize = 24;'));
+    assert.ok(script.includes("author.className = 'preview-comment-thread-author'"));
+    assert.ok(script.includes("meta.className = 'preview-comment-thread-meta'"));
     assert.ok(script.includes("submitCommentButton.classList.toggle('preview-secondary', options.showReply)"));
     assert.ok(script.includes('if (!replyCommentButton.hidden) {'));
     assert.ok(script.includes('hasPendingReview = event.data.hasPendingReview === true'));
@@ -702,12 +706,18 @@ suite('Markdown view', () => {
             reviewId: 12,
             originalPostId: 5,
             author: 'heaths',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
             updatedAt: '2026-09-11T12:00:00Z',
             isDraft: hasPendingReview,
           }]]]);
         },
       } as never,
       createLogger(),
+      {
+        formatCommentTimestamp() {
+          return '1w ago';
+        },
+      },
     );
 
     const preview = {
@@ -756,6 +766,8 @@ suite('Markdown view', () => {
           kind: 'review',
           isDraft: false,
           author: 'heaths',
+          avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
+          metaLabel: '1w ago',
           createdAt: undefined,
           updatedAt: '2026-09-11T12:00:00Z',
           originalPostId: 5,
@@ -1025,6 +1037,7 @@ suite('Markdown view', () => {
             reviewId: 12,
             originalPostId: 5,
             author: 'heaths',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
             updatedAt: '2026-09-11T12:00:00Z',
             isDraft: true,
           }]]]);
@@ -1071,6 +1084,7 @@ suite('Markdown view', () => {
       reviewId: 12,
       originalPostId: 5,
       author: 'heaths',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1532486?v=4',
       updatedAt: '2026-09-11T12:00:00Z',
       isDraft: true,
     }]);

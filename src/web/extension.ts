@@ -27,6 +27,7 @@ import { createGitHubClient } from './githubClientFactory';
 import { createGitClient } from './gitClientFactory';
 
 const defaultChannelName = 'Azure API Review';
+const githubResponseCacheSizeLimit = 10 * 1024 * 1024;
 
 export interface AzureApiReviewExtensionApi {
   readonly version: 1;
@@ -41,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     { log: true },
   );
   const model = new ReviewModel(logger);
-  const githubCache = new MemoryCache();
+  const githubCache = new MemoryCache({ maxSize: githubResponseCacheSizeLimit });
   const githubClient = createGitHubClient({ cache: githubCache, logger });
   const gitClient = createGitClient();
   const pullRequestService = new PullRequestService(githubClient, gitClient);
