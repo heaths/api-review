@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
   DiffCandidate,
-  DisplayDiffService,
+  DiffService,
   compareVersions,
   getFileBaselineLabel,
   parseConfiguredTagVersion,
@@ -10,13 +10,13 @@ import {
   parseVersion,
   selectDefaultBaseline,
   TagCandidate,
-} from '../../displayDiff';
+} from '../../diffService';
 import { GitClient } from '../../gitClient';
 import { GitHubClient } from '../../githubClient';
-import { PullRequestService } from '../../pullRequest';
-import { renderDiffPreview } from '../../diffPreview';
-import { createDiffLineMetadata, createPreviewLineMetadata } from '../../lineMetadata';
-import { createDiffQuickPickCandidate } from '../../markdownPreview';
+import { PullRequestService } from '../../pullRequestService';
+import { renderDiffView } from '../../diffView';
+import { createDiffLineMetadata, createMarkdownViewLineMetadata } from '../../lineMetadata';
+import { createDiffQuickPickCandidate } from '../../markdownView';
 
 function createLogger(): vscode.LogOutputChannel {
   return {
@@ -109,7 +109,7 @@ function createPullRequestService(
   } as PullRequestService;
 }
 
-suite('Display diff', () => {
+suite('Diff service', () => {
   test('uses pull request context from the dedicated service for PR-backed GitHub history', async () => {
     const githubDocument = {
       repository: { owner: 'heaths', repo: 'api-review' },
@@ -142,7 +142,7 @@ suite('Display diff', () => {
         throw new Error('Explicit pull request metadata should provide the base.');
       },
     });
-    const service = new DisplayDiffService(
+    const service = new DiffService(
       createLogger(),
       githubClient,
       createGitClient(),
@@ -209,7 +209,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
+    const service = new DiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
     const resolved = await service.resolveBaseline(document, { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' });
@@ -256,7 +256,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
+    const service = new DiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -300,7 +300,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
+    const service = new DiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -344,7 +344,7 @@ suite('Display diff', () => {
         return undefined;
       },
     });
-    const service = new DisplayDiffService(createLogger(), githubClient, gitClient, createPullRequestService());
+    const service = new DiffService(createLogger(), githubClient, gitClient, createPullRequestService());
 
     const availability = await service.getAvailability(document);
 
@@ -362,7 +362,7 @@ suite('Display diff', () => {
       uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
     } as vscode.TextDocument;
     const baseSha = 'base-sha';
-    const service = new DisplayDiffService(
+    const service = new DiffService(
       createLogger(),
       createGitHubClient({}),
       createGitClient({
@@ -552,7 +552,7 @@ suite('Display diff', () => {
       'pub fn hello();',
       '```',
     ].join('\n');
-    const lineMetadata = createPreviewLineMetadata(target, {
+    const lineMetadata = createMarkdownViewLineMetadata(target, {
       markdown: target,
       hasCommentsPatch: false,
     }, [{
@@ -561,7 +561,7 @@ suite('Display diff', () => {
       source: new vscode.Location(vscode.Uri.parse('test:/src/lib.rs'), new vscode.Range(0, 0, 0, 1)),
     }]);
 
-    const rendered = renderDiffPreview(baseline, target, lineMetadata, 'v1.0.0');
+    const rendered = renderDiffView(baseline, target, lineMetadata, 'v1.0.0');
 
     assert.strictEqual(rendered.hunkCount, 1);
     assert.ok(rendered.html.includes('Comparing against <strong>v1.0.0</strong>'));
@@ -587,7 +587,7 @@ suite('Display diff', () => {
       documentation: ['/// Prints a greeting.'],
     }]);
 
-    const rendered = renderDiffPreview(target, target, lineMetadata, 'v1.0.0');
+    const rendered = renderDiffView(target, target, lineMetadata, 'v1.0.0');
 
     assert.strictEqual(rendered.hunkCount, 0);
     assert.ok(rendered.html.includes('preview-documentation-line'));
@@ -612,7 +612,7 @@ suite('Display diff', () => {
       '```',
     ].join('\n');
 
-    const rendered = renderDiffPreview(baseline, target, [], 'v1.0.0');
+    const rendered = renderDiffView(baseline, target, [], 'v1.0.0');
     const codeBlockCount = (rendered.html.match(/<pre class="preview-diff-block preview-diff-code">/gu) ?? []).length;
 
     assert.strictEqual(codeBlockCount, 1);
@@ -622,7 +622,7 @@ suite('Display diff', () => {
   });
 
   test('renders indented fenced code blocks as diff code lines', () => {
-    const rendered = renderDiffPreview('', [
+    const rendered = renderDiffView('', [
       '   ```rust',
       'pub fn hello();',
       '   ```',
@@ -633,7 +633,7 @@ suite('Display diff', () => {
   });
 
   test('accepts longer closing fences in diff mode', () => {
-    const rendered = renderDiffPreview('', [
+    const rendered = renderDiffView('', [
       '```rust',
       'pub fn hello();',
       '````',
@@ -646,7 +646,7 @@ suite('Display diff', () => {
   test('renders versioned fixture diffs with markdown blocks and compact code blocks', async () => {
     const baseline = await readFixture('v1/API.md');
     const target = await readFixture('v2/API.md');
-    const lineMetadata = createPreviewLineMetadata(target, {
+    const lineMetadata = createMarkdownViewLineMetadata(target, {
       markdown: target,
       hasCommentsPatch: false,
     }, [{
@@ -655,7 +655,7 @@ suite('Display diff', () => {
       source: new vscode.Location(vscode.Uri.parse('test:/src/lib.rs'), new vscode.Range(0, 0, 0, 1)),
     }]);
 
-    const rendered = renderDiffPreview(baseline, target, lineMetadata, '0.1.0');
+    const rendered = renderDiffView(baseline, target, lineMetadata, '0.1.0');
     const hunkIds = new Set(
       Array.from(rendered.html.matchAll(/data-diff-hunk="(\d+)"/gu), match => match[1]),
     );

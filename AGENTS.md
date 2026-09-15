@@ -5,7 +5,7 @@
 - The extension has one browser-safe source entry point, `src/web/extension.ts`,
   bundled for both Node.js and `webworker` extension hosts. Do not add Node-only
   APIs or a separate desktop source entry point.
-- Local repository access belongs in `gitClient.ts`. Keep `displayDiff.ts` and
+- Local repository access belongs in `gitClient.ts`. Keep `diffService.ts` and
   other feature code unaware of `vscode.git` activation details, and keep the
   real Git adapter behind `gitClientFactory.ts` for Node.js hosts plus the noop
   adapter behind `gitClientFactory.web.ts` for web hosts.
@@ -14,6 +14,11 @@
   tags or commits, or GitHub blob content, update `githubClient.ts` rather than
   adding GitHub transport code elsewhere or depending on another GitHub
   extension API.
+- Keep suffixes consistent by responsibility: `*Client` for external adapters,
+  `*Service` for internal workflow orchestration that our code calls directly,
+  `*Provider` for VS Code extension-point adapters called by VS Code, `*View`
+  for rendered webview or view modules, and `*Model` for derived or cached
+  state.
 - Use `vscode.workspace.fs`, `findFiles`, `RelativePattern`, and `Uri` for all
   workspace I/O. Never use Node `fs`, platform path helpers, or `Uri.file`.
 - `configuration.ts`, `variables.ts`, and `fileDiscovery.ts` own resource-scoped
@@ -38,6 +43,14 @@
 - Preview extensibility is CSS-only. Do not load `markdown.styles`, execute
   `markdown.previewScripts`, or activate `markdown.markdownItPlugins` in the
   custom editor.
+- Pull request discovery, line-comment loading, draft state, comment/reply CRUD,
+  and review submission belong together in `pullRequestService.ts`. Do not split
+  PR workflow logic between views or route PR operations directly through
+  `githubClient.ts`.
+- Diff baseline discovery, version sorting, baseline labeling, and content
+  resolution belong in `diffService.ts`. Keep `diffView.ts` focused on diff HTML
+  rendering and keep `markdownView.ts` focused on the main markdown view, webview
+  lifecycle, and final document rendering.
 - Prefer local-first diff behavior: use `gitClient.ts` when a local repository is
   available, and fall back to `githubClient.ts` only for GitHub-backed documents
   or operations that require published GitHub state.
@@ -70,7 +83,7 @@
   pagination behavior, or `ETag`-based revalidation that should back the cache.
 - When adding or changing diff history behavior, update `gitClient.ts` if the
   source of truth is the local repository, update `githubClient.ts` if the
-  source of truth is GitHub, and update `displayDiff.ts` only for orchestration,
+  source of truth is GitHub, and update `diffService.ts` only for orchestration,
   baseline selection, and fallback order.
 - Write commit messages and pull request titles and descriptions as described in
   `.github/instructions/commits.instructions.md`.

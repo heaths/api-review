@@ -6,38 +6,36 @@ import {
   hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
-import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, ResolvedBaseline } from './displayDiff';
-import { renderDiffPreview } from './diffPreview';
-import { GitHubClient } from './githubClient';
+import { DiffAvailability, DiffBaselineSelection, DiffService, ResolvedBaseline } from './diffService';
+import { renderDiffView } from './diffView';
 import hljs, { normalizeHighlightLanguage } from './highlight';
-import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
-import { PullRequestLineComment, PullRequestReviewController } from './pullRequestReview';
-import { PullRequestContext, PullRequestService } from './pullRequest';
+import { createDiffLineMetadata, createMarkdownViewLineMetadata, ViewLineMetadata } from './lineMetadata';
+import { PullRequestContext, PullRequestLineComment, PullRequestService } from './pullRequestService';
 import { ReviewModel } from './reviewModel';
 
-export const reviewMarkdownPreviewViewType = 'heaths.azureApiReview.preview';
-export const showPreviewCommentsCommand = 'heaths.azureApiReview.preview.showComments';
-export const hidePreviewCommentsCommand = 'heaths.azureApiReview.preview.hideComments';
-export const reopenPreviewAsTextCommand = 'heaths.azureApiReview.preview.reopenAsText';
-export const showPreviewDiffCommand = 'heaths.azureApiReview.preview.showDiff';
-export const nextPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.nextDiffHunk';
-export const previousPreviewDiffHunkCommand = 'heaths.azureApiReview.preview.previousDiffHunk';
-export const closePreviewDiffCommand = 'heaths.azureApiReview.preview.closeDiff';
-export const approvePreviewPullRequestCommand = 'heaths.azureApiReview.preview.approvePullRequest';
-export const rejectPreviewPullRequestCommand = 'heaths.azureApiReview.preview.rejectPullRequest';
+export const markdownViewType = 'heaths.azureApiReview.preview';
+export const showViewCommentsCommand = 'heaths.azureApiReview.preview.showComments';
+export const hideViewCommentsCommand = 'heaths.azureApiReview.preview.hideComments';
+export const reopenViewAsTextCommand = 'heaths.azureApiReview.preview.reopenAsText';
+export const showViewDiffCommand = 'heaths.azureApiReview.preview.showDiff';
+export const nextViewDiffHunkCommand = 'heaths.azureApiReview.preview.nextDiffHunk';
+export const previousViewDiffHunkCommand = 'heaths.azureApiReview.preview.previousDiffHunk';
+export const closeViewDiffCommand = 'heaths.azureApiReview.preview.closeDiff';
+export const approveViewPullRequestCommand = 'heaths.azureApiReview.preview.approvePullRequest';
+export const rejectViewPullRequestCommand = 'heaths.azureApiReview.preview.rejectPullRequest';
 
-const hasPreviewCommentsContext = 'heaths.azureApiReview.preview.hasComments';
-const previewCommentsVisibleContext = 'heaths.azureApiReview.preview.commentsVisible';
-const previewDiffAvailableContext = 'heaths.azureApiReview.preview.diffAvailable';
-const previewDiffVisibleContext = 'heaths.azureApiReview.preview.diffVisible';
-const previewCanNavigatePreviousDiffContext = 'heaths.azureApiReview.preview.canNavigatePreviousDiff';
-const previewCanNavigateNextDiffContext = 'heaths.azureApiReview.preview.canNavigateNextDiff';
-const previewInPullRequestContext = 'heaths.azureApiReview.preview.inPullRequest';
+const hasViewCommentsContext = 'heaths.azureApiReview.preview.hasComments';
+const viewCommentsVisibleContext = 'heaths.azureApiReview.preview.commentsVisible';
+const viewDiffAvailableContext = 'heaths.azureApiReview.preview.diffAvailable';
+const viewDiffVisibleContext = 'heaths.azureApiReview.preview.diffVisible';
+const viewCanNavigatePreviousDiffContext = 'heaths.azureApiReview.preview.canNavigatePreviousDiff';
+const viewCanNavigateNextDiffContext = 'heaths.azureApiReview.preview.canNavigateNextDiff';
+const viewInPullRequestContext = 'heaths.azureApiReview.preview.inPullRequest';
 
-interface PreviewPanel {
+interface ViewPanel {
   readonly document: vscode.TextDocument;
   readonly panel: vscode.WebviewPanel;
-  readonly contributedStyles: MarkdownPreviewStyles;
+  readonly contributedStyles: MarkdownViewStyles;
   commentsVisible: boolean;
   hasCommentsPatch: boolean;
   diffAvailable: boolean;
@@ -51,94 +49,94 @@ interface PreviewPanel {
   generation: number;
 }
 
-interface MarkdownPreviewStyleExtension {
+interface MarkdownViewStyleExtension {
   readonly extensionUri: vscode.Uri;
   readonly packageJSON: unknown;
 }
 
-interface GoToSourcePreviewWebviewMessage {
+interface GoToSourceViewWebviewMessage {
   readonly type: 'goToSource';
   readonly line: number;
 }
 
-interface DiffNavigationStatePreviewWebviewMessage {
+interface DiffNavigationStateViewWebviewMessage {
   readonly type: 'diffNavigationState';
   readonly canNavigatePrevious: boolean;
   readonly canNavigateNext: boolean;
 }
 
-interface UpsertPullRequestCommentPreviewWebviewMessage {
+interface UpsertPullRequestCommentViewWebviewMessage {
   readonly type: 'upsertPullRequestComment';
   readonly line: number;
   readonly body: string;
   readonly localId?: string;
 }
 
-interface DeletePullRequestCommentPreviewWebviewMessage {
+interface DeletePullRequestCommentViewWebviewMessage {
   readonly type: 'deletePullRequestComment';
   readonly line: number;
   readonly localId?: string;
 }
 
-interface CreatePullRequestCommentReplyPreviewWebviewMessage {
+interface CreatePullRequestCommentReplyViewWebviewMessage {
   readonly type: 'createPullRequestCommentReply';
   readonly line: number;
   readonly originalPostId: number;
   readonly body: string;
 }
 
-interface RequestPullRequestCommentStatePreviewWebviewMessage {
+interface RequestPullRequestCommentStateViewWebviewMessage {
   readonly type: 'requestPullRequestCommentState';
 }
 
-interface SubmitPullRequestReviewPreviewWebviewMessage {
+interface SubmitPullRequestReviewViewWebviewMessage {
   readonly type: 'submitPullRequestReview';
   readonly event: 'APPROVE' | 'REQUEST_CHANGES';
   readonly body: string;
 }
 
-type PreviewWebviewMessage =
-  | GoToSourcePreviewWebviewMessage
-  | DiffNavigationStatePreviewWebviewMessage
-  | UpsertPullRequestCommentPreviewWebviewMessage
-  | DeletePullRequestCommentPreviewWebviewMessage
-  | CreatePullRequestCommentReplyPreviewWebviewMessage
-  | RequestPullRequestCommentStatePreviewWebviewMessage
-  | SubmitPullRequestReviewPreviewWebviewMessage;
+type ViewWebviewMessage =
+  | GoToSourceViewWebviewMessage
+  | DiffNavigationStateViewWebviewMessage
+  | UpsertPullRequestCommentViewWebviewMessage
+  | DeletePullRequestCommentViewWebviewMessage
+  | CreatePullRequestCommentReplyViewWebviewMessage
+  | RequestPullRequestCommentStateViewWebviewMessage
+  | SubmitPullRequestReviewViewWebviewMessage;
 
-interface SetCommentsVisiblePreviewHostMessage {
+interface SetCommentsVisibleViewHostMessage {
   readonly type: 'setCommentsVisible';
   readonly visible: boolean;
 }
 
-interface NavigateDiffHunkPreviewHostMessage {
+interface NavigateDiffHunkViewHostMessage {
   readonly type: 'navigateDiffHunk';
   readonly direction: 'previous' | 'next';
 }
 
-interface PullRequestCommentStatePreviewHostMessage {
+interface PullRequestCommentStateViewHostMessage {
   readonly type: 'pullRequestCommentState';
   readonly hasPendingReview: boolean;
-  readonly comments: readonly PreviewPullRequestCommentState[];
+  readonly comments: readonly ViewPullRequestCommentState[];
 }
 
-interface OpenPullRequestReviewDialogPreviewHostMessage {
+interface OpenPullRequestReviewDialogViewHostMessage {
   readonly type: 'openPullRequestReviewDialog';
   readonly event: 'APPROVE' | 'REQUEST_CHANGES';
 }
 
-type PreviewHostMessage =
-  | SetCommentsVisiblePreviewHostMessage
-  | NavigateDiffHunkPreviewHostMessage
-  | PullRequestCommentStatePreviewHostMessage
-  | OpenPullRequestReviewDialogPreviewHostMessage;
+type ViewHostMessage =
+  | SetCommentsVisibleViewHostMessage
+  | NavigateDiffHunkViewHostMessage
+  | PullRequestCommentStateViewHostMessage
+  | OpenPullRequestReviewDialogViewHostMessage;
 
-export interface MarkdownPreviewStyles {
+export interface MarkdownViewStyles {
   readonly stylesheets: readonly vscode.Uri[];
   readonly roots: readonly vscode.Uri[];
 }
 
-interface PreviewLineRenderMetadata {
+interface ViewLineRenderMetadata {
   readonly sourceLine?: number;
   readonly hasDocumentation?: true;
   readonly hasSource?: true;
@@ -150,16 +148,16 @@ interface PreviewLineRenderMetadata {
   readonly ariaLabel?: string;
 }
 
-interface PreviewRenderEnv {
-  readonly lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>;
+interface ViewRenderEnv {
+  readonly lineMetadata?: ReadonlyMap<number, ViewLineRenderMetadata>;
 }
 
-interface PreviewPullRequestCommentState {
+interface ViewPullRequestCommentState {
   readonly line: number;
-  readonly comments: readonly PreviewPullRequestCommentEntryState[];
+  readonly comments: readonly ViewPullRequestCommentEntryState[];
 }
 
-interface PreviewPullRequestCommentEntryState {
+interface ViewPullRequestCommentEntryState {
   readonly id?: number;
   readonly localId?: string;
   readonly body: string;
@@ -210,22 +208,20 @@ markdownRenderer.renderer.rules.fence = (tokens, index, options, env) => {
   const className = normalized.length > 0 ? `${options.langPrefix}${normalized}` : '';
   const classAttribute = className.length > 0 ? ` class="${escapeAttribute(className)}"` : '';
   const startLine = token.map ? token.map[0] + 1 : undefined;
-  const previewEnv = isPreviewRenderEnv(env) ? env : undefined;
+  const viewEnv = isViewRenderEnv(env) ? env : undefined;
 
-  return `<pre><code${classAttribute}>${highlightCode(token.content, language, startLine, previewEnv?.lineMetadata)}</code></pre>\n`;
+  return `<pre><code${classAttribute}>${highlightCode(token.content, language, startLine, viewEnv?.lineMetadata)}</code></pre>\n`;
 };
 
-export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
-  private readonly previews = new Set<PreviewPanel>();
-  private activePreview: PreviewPanel | undefined;
+export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
+  private readonly previews = new Set<ViewPanel>();
+  private activePreview: ViewPanel | undefined;
 
   public constructor(
     private readonly model: ReviewModel,
     private readonly extensionUri: vscode.Uri,
-    private readonly githubClient: GitHubClient,
-    private readonly diffService: DisplayDiffService,
+    private readonly diffService: DiffService,
     private readonly pullRequestService: PullRequestService,
-    private readonly pullRequestReview: PullRequestReviewController,
     private readonly logger: vscode.LogOutputChannel,
   ) { }
 
@@ -233,8 +229,8 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     document: vscode.TextDocument,
     webviewPanel: vscode.WebviewPanel,
   ): Promise<void> {
-    const contributedStyles = getContributedMarkdownPreviewStyles(vscode.extensions.all);
-    const preview: PreviewPanel = {
+    const contributedStyles = getContributedMarkdownViewStyles(vscode.extensions.all);
+    const preview: ViewPanel = {
       document,
       panel: webviewPanel,
       contributedStyles,
@@ -282,7 +278,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
     await this.render(preview);
     void this.refreshDiffAvailability(preview);
-    void this.refreshPullRequestContext(preview, this.githubClient.isGitHubDocument(document.uri));
+    void this.refreshPullRequestContext(preview, this.pullRequestService.isGitHubDocument(document.uri));
   }
 
   public refresh(uri?: vscode.Uri): void {
@@ -388,8 +384,8 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     await this.promptPullRequestReview('REQUEST_CHANGES');
   }
 
-  private async handleMessage(preview: PreviewPanel, message: unknown): Promise<void> {
-    if (!isPreviewWebviewMessage(message)) {
+  private async handleMessage(preview: ViewPanel, message: unknown): Promise<void> {
+    if (!isViewWebviewMessage(message)) {
       return;
     }
 
@@ -447,32 +443,32 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     this.updateContexts(preview);
   }
 
-  private setActivePreview(preview: PreviewPanel | undefined): void {
+  private setActivePreview(preview: ViewPanel | undefined): void {
     this.activePreview = preview;
     this.updateContexts(preview);
   }
 
-  private updateContexts(preview: PreviewPanel | undefined): void {
-    void vscode.commands.executeCommand('setContext', hasPreviewCommentsContext, preview?.hasCommentsPatch === true);
-    void vscode.commands.executeCommand('setContext', previewCommentsVisibleContext, preview?.commentsVisible === true);
-    void vscode.commands.executeCommand('setContext', previewDiffAvailableContext, preview?.diffAvailable === true);
-    void vscode.commands.executeCommand('setContext', previewDiffVisibleContext, preview?.diffBaseline !== undefined);
-    void vscode.commands.executeCommand('setContext', previewInPullRequestContext, preview?.pullRequestContext !== undefined);
+  private updateContexts(preview: ViewPanel | undefined): void {
+    void vscode.commands.executeCommand('setContext', hasViewCommentsContext, preview?.hasCommentsPatch === true);
+    void vscode.commands.executeCommand('setContext', viewCommentsVisibleContext, preview?.commentsVisible === true);
+    void vscode.commands.executeCommand('setContext', viewDiffAvailableContext, preview?.diffAvailable === true);
+    void vscode.commands.executeCommand('setContext', viewDiffVisibleContext, preview?.diffBaseline !== undefined);
+    void vscode.commands.executeCommand('setContext', viewInPullRequestContext, preview?.pullRequestContext !== undefined);
     void vscode.commands.executeCommand(
       'setContext',
-      previewCanNavigatePreviousDiffContext,
+      viewCanNavigatePreviousDiffContext,
       preview?.diffBaseline !== undefined && preview.canNavigatePreviousDiff,
     );
     void vscode.commands.executeCommand(
       'setContext',
-      previewCanNavigateNextDiffContext,
+      viewCanNavigateNextDiffContext,
       preview?.diffBaseline !== undefined && preview.canNavigateNextDiff,
     );
   }
 
-  private async render(preview: PreviewPanel): Promise<void> {
+  private async render(preview: ViewPanel): Promise<void> {
     const generation = ++preview.generation;
-    const snapshot = await this.model.getPreviewSnapshot(preview.document);
+    const snapshot = await this.model.getViewSnapshot(preview.document);
     if (generation !== preview.generation || !this.previews.has(preview)) {
       return;
     }
@@ -490,8 +486,8 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     if (generation !== preview.generation || !this.previews.has(preview)) {
       return;
     }
-    const lineMetadata = createPreviewLineMetadata(sourceMarkdown, content, entries, lineComments);
-    let contentHtml = renderPreviewMarkdown(content.markdown, lineMetadata);
+    const lineMetadata = createMarkdownViewLineMetadata(sourceMarkdown, content, entries, lineComments);
+    let contentHtml = renderMarkdownView(content.markdown, lineMetadata);
     let diffVisible = false;
     if (preview.diffBaseline) {
       try {
@@ -500,7 +496,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
           return;
         }
         const diffLineMetadata = createDiffLineMetadata(entries, lineComments, sourceMarkdown);
-        const renderedDiff = renderDiffPreview(baseline.markdown, sourceMarkdown, diffLineMetadata, baseline.label);
+        const renderedDiff = renderDiffView(baseline.markdown, sourceMarkdown, diffLineMetadata, baseline.label);
         contentHtml = renderedDiff.html;
         preview.canNavigateNextDiff = renderedDiff.hunkCount > 0;
         diffVisible = true;
@@ -512,7 +508,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       }
     }
 
-    preview.panel.webview.html = getPreviewHtml(
+    preview.panel.webview.html = getMarkdownViewHtml(
       preview.panel.webview,
       this.extensionUri,
       preview.document.uri,
@@ -529,18 +525,18 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
   }
 
-  private async ensurePreview(uri: vscode.Uri): Promise<PreviewPanel | undefined> {
+  private async ensurePreview(uri: vscode.Uri): Promise<ViewPanel | undefined> {
     let preview = this.findPreview(uri);
     if (preview) {
       return preview;
     }
 
-    await vscode.commands.executeCommand('vscode.openWith', uri, reviewMarkdownPreviewViewType);
+    await vscode.commands.executeCommand('vscode.openWith', uri, markdownViewType);
     preview = this.findPreview(uri);
     return preview;
   }
 
-  private findPreview(uri: vscode.Uri): PreviewPanel | undefined {
+  private findPreview(uri: vscode.Uri): ViewPanel | undefined {
     for (const preview of this.previews) {
       if (preview.document.uri.toString() === uri.toString()) {
         return preview;
@@ -550,7 +546,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   }
 
   private async refreshDiffAvailability(
-    preview: PreviewPanel,
+    preview: ViewPanel,
     promptForGitHubAuth = false,
   ): Promise<DiffAvailability | undefined> {
     const generation = ++preview.diffRefreshGeneration;
@@ -585,7 +581,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   }
 
   private async refreshPullRequestContext(
-    preview: PreviewPanel,
+    preview: ViewPanel,
     promptForGitHubAuth = false,
   ): Promise<PullRequestContext | undefined> {
     const generation = ++preview.pullRequestRefreshGeneration;
@@ -627,13 +623,13 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     await this.postMessage(preview, { type: 'navigateDiffHunk', direction });
   }
 
-  private async openDiff(preview: PreviewPanel, baseline: DiffBaselineSelection): Promise<void> {
+  private async openDiff(preview: ViewPanel, baseline: DiffBaselineSelection): Promise<void> {
     this.logger.info(`Opening diff for ${preview.document.uri.toString()} against ${describeDiffBaseline(baseline)}`);
     preview.diffBaseline = baseline;
     await this.render(preview);
   }
 
-  private async closeDiff(preview: PreviewPanel): Promise<void> {
+  private async closeDiff(preview: ViewPanel): Promise<void> {
     const baseline = preview.diffBaseline;
     preview.diffBaseline = undefined;
     await this.render(preview);
@@ -642,7 +638,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     }
   }
 
-  private async resolveBaseline(preview: PreviewPanel): Promise<ResolvedBaseline> {
+  private async resolveBaseline(preview: ViewPanel): Promise<ResolvedBaseline> {
     const baseline = preview.diffBaseline;
     if (!baseline) {
       throw new Error('No diff baseline is active.');
@@ -651,11 +647,11 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     return this.diffService.resolveBaseline(preview.document, baseline);
   }
 
-  private async postMessage(preview: PreviewPanel, message: PreviewHostMessage): Promise<void> {
+  private async postMessage(preview: ViewPanel, message: ViewHostMessage): Promise<void> {
     await preview.panel.webview.postMessage(message);
   }
 
-  private async postPullRequestCommentState(preview: PreviewPanel): Promise<void> {
+  private async postPullRequestCommentState(preview: ViewPanel): Promise<void> {
     const lineComments = await this.getLineComments(preview);
     if (!this.previews.has(preview)) {
       return;
@@ -663,7 +659,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
 
     await this.postMessage(preview, {
       type: 'pullRequestCommentState',
-      hasPendingReview: preview.pullRequestContext !== undefined && this.pullRequestReview.hasPendingReview(
+      hasPendingReview: preview.pullRequestContext !== undefined && this.pullRequestService.hasPendingReview(
         preview.pullRequestContext.document,
         preview.pullRequestContext.pullRequest,
       ),
@@ -709,7 +705,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     const action = getReviewActionLabel(event);
     this.logger.info(`Submitting ${action} review for pull request #${pullRequestContext.pullRequest.number}`);
 
-    const draftCount = await this.pullRequestReview.submitReview(
+    const draftCount = await this.pullRequestService.submitReview(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
       event,
@@ -728,20 +724,20 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     );
   }
 
-  private async getLineComments(preview: PreviewPanel): Promise<ReadonlyMap<number, readonly PullRequestLineComment[]>> {
+  private async getLineComments(preview: ViewPanel): Promise<ReadonlyMap<number, readonly PullRequestLineComment[]>> {
     const pullRequestContext = preview.pullRequestContext;
     if (!pullRequestContext) {
       return new Map();
     }
 
-    return this.pullRequestReview.getLineComments(
+    return this.pullRequestService.getLineComments(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
     );
   }
 
   private async upsertPullRequestComment(
-    preview: PreviewPanel,
+    preview: ViewPanel,
     line: number,
     body: string,
     localId?: string,
@@ -754,7 +750,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     const existing = localId
       ? (await this.getLineComments(preview)).get(line)?.find(comment => comment.localId === localId)
       : undefined;
-    await this.pullRequestReview.upsertComment(
+    await this.pullRequestService.upsertComment(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
       line,
@@ -765,7 +761,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
   }
 
   private async createPullRequestCommentReply(
-    preview: PreviewPanel,
+    preview: ViewPanel,
     line: number,
     originalPostId: number,
     body: string,
@@ -775,7 +771,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       return;
     }
 
-    await this.pullRequestReview.replyToComment(
+    await this.pullRequestService.replyToComment(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
       line,
@@ -785,14 +781,14 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     await this.render(preview);
   }
 
-  private async deletePullRequestComment(preview: PreviewPanel, line: number, localId?: string): Promise<void> {
+  private async deletePullRequestComment(preview: ViewPanel, line: number, localId?: string): Promise<void> {
     const pullRequestContext = preview.pullRequestContext;
     if (!pullRequestContext) {
       return;
     }
 
     const existing = (await this.getLineComments(preview)).get(line)?.find(comment => comment.localId === localId);
-    await this.pullRequestReview.deleteComment(
+    await this.pullRequestService.deleteComment(
       pullRequestContext.document,
       pullRequestContext.pullRequest,
       line,
@@ -829,19 +825,19 @@ export function renderCommentMarkdown(markdown: string): string {
   return commentMarkdownRenderer.render(markdown);
 }
 
-export function renderPreviewMarkdown(markdown: string, lineMetadata: readonly PreviewLineMetadata[]): string {
-  return markdownRenderer.render(markdown, { lineMetadata: createPreviewLineRenderMetadata(lineMetadata) });
+export function renderMarkdownView(markdown: string, lineMetadata: readonly ViewLineMetadata[]): string {
+  return markdownRenderer.render(markdown, { lineMetadata: createViewLineRenderMetadata(lineMetadata) });
 }
 
-export function getContributedMarkdownPreviewStyles(
-  extensions: readonly MarkdownPreviewStyleExtension[],
-): MarkdownPreviewStyles {
+export function getContributedMarkdownViewStyles(
+  extensions: readonly MarkdownViewStyleExtension[],
+): MarkdownViewStyles {
   const stylesheets: vscode.Uri[] = [];
   const roots: vscode.Uri[] = [];
   const rootKeys = new Set<string>();
 
   for (const extension of extensions) {
-    const paths = getMarkdownPreviewStylePaths(extension.packageJSON);
+    const paths = getMarkdownViewStylePaths(extension.packageJSON);
     for (const path of paths) {
       stylesheets.push(vscode.Uri.joinPath(extension.extensionUri, path));
       const rootKey = extension.extensionUri.toString();
@@ -855,7 +851,7 @@ export function getContributedMarkdownPreviewStyles(
   return { stylesheets, roots };
 }
 
-function getMarkdownPreviewStylePaths(packageJSON: unknown): readonly string[] {
+function getMarkdownViewStylePaths(packageJSON: unknown): readonly string[] {
   if (!isRecord(packageJSON) || !isRecord(packageJSON.contributes)) {
     return [];
   }
@@ -886,7 +882,7 @@ function highlightCode(
   code: string,
   language: string,
   startingLine?: number,
-  lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>,
+  lineMetadata?: ReadonlyMap<number, ViewLineRenderMetadata>,
 ): string {
   const normalized = normalizeHighlightLanguage(language);
   if (normalized && hljs.getLanguage(normalized)) {
@@ -899,7 +895,7 @@ function highlightCode(
 function wrapHighlightedLines(
   highlighted: string,
   startingLine?: number,
-  lineMetadata?: ReadonlyMap<number, PreviewLineRenderMetadata>,
+  lineMetadata?: ReadonlyMap<number, ViewLineRenderMetadata>,
 ): string {
   const parts = highlighted.split(/(<span\b[^>]*>|<\/span>)/);
   const openTags: { tag: string; comment: boolean }[] = [];
@@ -999,7 +995,7 @@ function wrapHighlightedLines(
   return lines.join('');
 }
 
-export function getPreviewHtml(
+export function getMarkdownViewHtml(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   documentUri: vscode.Uri,
@@ -1061,7 +1057,7 @@ ${contributedStyles}
 </html>`;
 }
 
-function isPreviewWebviewMessage(message: unknown): message is PreviewWebviewMessage {
+function isViewWebviewMessage(message: unknown): message is ViewWebviewMessage {
   if (!isRecord(message) || typeof message.type !== 'string') {
     return false;
   }
@@ -1110,12 +1106,12 @@ function isPreviewWebviewMessage(message: unknown): message is PreviewWebviewMes
   }
 }
 
-function createPreviewLineRenderMetadata(
-  lineMetadata: readonly PreviewLineMetadata[],
-): ReadonlyMap<number, PreviewLineRenderMetadata> {
-  const lines = new Map<number, PreviewLineRenderMetadata>();
+function createViewLineRenderMetadata(
+  lineMetadata: readonly ViewLineMetadata[],
+): ReadonlyMap<number, ViewLineRenderMetadata> {
+  const lines = new Map<number, ViewLineRenderMetadata>();
   for (const entry of lineMetadata) {
-    lines.set(entry.previewLine, {
+    lines.set(entry.viewLine, {
       sourceLine: entry.sourceLine,
       hasDocumentation: entry.hasDocumentation ? true : undefined,
       hasSource: entry.hasSource ? true : undefined,
@@ -1126,7 +1122,7 @@ function createPreviewLineRenderMetadata(
       ariaLabel: entry.ariaLabel,
     });
 
-    for (const documentationPreviewLine of entry.documentationPreviewLines) {
+    for (const documentationPreviewLine of entry.documentationViewLines) {
       const current = lines.get(documentationPreviewLine) ?? {};
       lines.set(documentationPreviewLine, {
         ...current,
@@ -1164,7 +1160,7 @@ function getPullRequestContextKey(pullRequestContext: PullRequestContext | undef
   return `${pullRequestContext.pullRequest.number}:${pullRequestContext.pullRequest.headSha}`;
 }
 
-function isPreviewRenderEnv(value: unknown): value is PreviewRenderEnv {
+function isViewRenderEnv(value: unknown): value is ViewRenderEnv {
   return isRecord(value);
 }
 
@@ -1184,7 +1180,7 @@ function describeDiffBaseline(baseline: DiffBaselineSelection): string {
 }
 
 async function showDiffQuickPick(
-  preview: PreviewPanel,
+  preview: ViewPanel,
   availability: DiffAvailability,
 ): Promise<DiffQuickPickItem | undefined> {
   const quickPick = vscode.window.createQuickPick<DiffQuickPickItem>();
@@ -1222,7 +1218,7 @@ async function showDiffQuickPick(
 }
 
 function createDiffQuickPickItems(
-  preview: PreviewPanel,
+  preview: ViewPanel,
   availability: DiffAvailability,
 ): readonly DiffQuickPickItem[] {
   const items: DiffQuickPickItem[] = [];
@@ -1339,7 +1335,7 @@ function getDuplicateTagLabels(candidates: readonly DiffAvailability['candidates
 
 function getActiveQuickPickItems(
   items: readonly DiffQuickPickItem[],
-  preview: PreviewPanel,
+  preview: ViewPanel,
   availability: DiffAvailability,
 ): readonly DiffQuickPickItem[] {
   const currentBaseline = preview.diffBaseline;

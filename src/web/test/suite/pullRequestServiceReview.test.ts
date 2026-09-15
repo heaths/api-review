@@ -1,12 +1,12 @@
 import * as assert from 'assert';
-import { PullRequestReviewController } from '../../pullRequestReview';
+import { PullRequestService } from '../../pullRequestService';
 import {
   GitHubClient,
   GitHubPullRequest,
   GitHubPullRequestComment,
 } from '../../githubClient';
 
-suite('Pull request review controller', () => {
+suite('Pull request service review workflows', () => {
   const document = {
     repository: { owner: 'heaths', repo: 'api-review' },
     ref: 'commit-sha',
@@ -85,7 +85,7 @@ suite('Pull request review controller', () => {
         return undefined;
       },
     };
-    const controller = new PullRequestReviewController(client);
+    const controller = new PullRequestService(client);
 
     assert.strictEqual(controller.hasPendingReview(document, pullRequest), false);
     await controller.upsertComment(document, pullRequest, 12, 'Draft comment');
@@ -185,7 +185,7 @@ suite('Pull request review controller', () => {
         return undefined;
       },
     };
-    const controller = new PullRequestReviewController(client);
+    const controller = new PullRequestService(client);
 
     await controller.upsertComment(document, pullRequest, 11, 'Pending review comment');
     assert.strictEqual(controller.hasPendingReview(document, pullRequest), true);
@@ -275,7 +275,7 @@ suite('Pull request review controller', () => {
         return undefined;
       },
     };
-    const controller = new PullRequestReviewController(client);
+    const controller = new PullRequestService(client);
 
     await controller.submitReview(document, pullRequest, 'APPROVE', '  Looks good overall.  ');
 

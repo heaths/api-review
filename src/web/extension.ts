@@ -7,22 +7,21 @@ import {
 } from './codeLensProvider';
 import { DocumentationProvider, documentationScheme } from './documentation';
 import {
-  approvePreviewPullRequestCommand,
-  closePreviewDiffCommand,
-  hidePreviewCommentsCommand,
-  nextPreviewDiffHunkCommand,
-  previousPreviewDiffHunkCommand,
-  rejectPreviewPullRequestCommand,
-  reopenPreviewAsTextCommand,
-  ReviewMarkdownPreview,
-  reviewMarkdownPreviewViewType,
-  showPreviewDiffCommand,
-  showPreviewCommentsCommand,
-} from './markdownPreview';
-import { PullRequestReviewController } from './pullRequestReview';
-import { PullRequestService } from './pullRequest';
+  approveViewPullRequestCommand,
+  closeViewDiffCommand,
+  hideViewCommentsCommand,
+  nextViewDiffHunkCommand,
+  previousViewDiffHunkCommand,
+  rejectViewPullRequestCommand,
+  reopenViewAsTextCommand,
+  MarkdownViewProvider,
+  markdownViewType,
+  showViewDiffCommand,
+  showViewCommentsCommand,
+} from './markdownView';
+import { PullRequestService } from './pullRequestService';
 import { ReviewModel } from './reviewModel';
-import { DiffBaselineSelection, DisplayDiffService } from './displayDiff';
+import { DiffBaselineSelection, DiffService } from './diffService';
 import { MemoryCache } from './cache';
 import { createGitHubClient } from './githubClientFactory';
 import { createGitClient } from './gitClientFactory';
@@ -46,17 +45,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
   const githubClient = createGitHubClient({ cache: githubCache, logger });
   const gitClient = createGitClient();
   const pullRequestService = new PullRequestService(githubClient, gitClient);
-  const diffService = new DisplayDiffService(logger, githubClient, gitClient, pullRequestService);
-  const pullRequestReview = new PullRequestReviewController(githubClient);
+  const diffService = new DiffService(logger, githubClient, gitClient, pullRequestService);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, logger);
-  const preview = new ReviewMarkdownPreview(
+  const preview = new MarkdownViewProvider(
     model,
     context.extensionUri,
-    githubClient,
     diffService,
     pullRequestService,
-    pullRequestReview,
     logger,
   );
   const gitStateWatcher = await gitClient.watchState(() => {
@@ -87,7 +83,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     gitStateWatcher,
     watcher,
     vscode.window.registerCustomEditorProvider(
-      reviewMarkdownPreviewViewType,
+      markdownViewType,
       preview,
       { webviewOptions: { enableFindWidget: true } },
     ),
@@ -95,15 +91,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     vscode.workspace.registerTextDocumentContentProvider(documentationScheme, documentation),
     vscode.commands.registerCommand(showDocumentationCommand, argument => provider.showDocumentation(argument)),
     vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
-    vscode.commands.registerCommand(showPreviewCommentsCommand, () => preview.showComments()),
-    vscode.commands.registerCommand(hidePreviewCommentsCommand, () => preview.hideComments()),
-    vscode.commands.registerCommand(showPreviewDiffCommand, () => preview.showDiffPicker()),
-    vscode.commands.registerCommand(nextPreviewDiffHunkCommand, () => preview.showNextDiffHunk()),
-    vscode.commands.registerCommand(previousPreviewDiffHunkCommand, () => preview.showPreviousDiffHunk()),
-    vscode.commands.registerCommand(closePreviewDiffCommand, () => preview.hideActiveDiff()),
-    vscode.commands.registerCommand(approvePreviewPullRequestCommand, () => preview.approvePullRequest()),
-    vscode.commands.registerCommand(rejectPreviewPullRequestCommand, () => preview.rejectPullRequest()),
-    vscode.commands.registerCommand(reopenPreviewAsTextCommand, () =>
+    vscode.commands.registerCommand(showViewCommentsCommand, () => preview.showComments()),
+    vscode.commands.registerCommand(hideViewCommentsCommand, () => preview.hideComments()),
+    vscode.commands.registerCommand(showViewDiffCommand, () => preview.showDiffPicker()),
+    vscode.commands.registerCommand(nextViewDiffHunkCommand, () => preview.showNextDiffHunk()),
+    vscode.commands.registerCommand(previousViewDiffHunkCommand, () => preview.showPreviousDiffHunk()),
+    vscode.commands.registerCommand(closeViewDiffCommand, () => preview.hideActiveDiff()),
+    vscode.commands.registerCommand(approveViewPullRequestCommand, () => preview.approvePullRequest()),
+    vscode.commands.registerCommand(rejectViewPullRequestCommand, () => preview.rejectPullRequest()),
+    vscode.commands.registerCommand(reopenViewAsTextCommand, () =>
       vscode.commands.executeCommand('reopenActiveEditorWith', 'default')),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('heaths.azureApiReview.files')) {
