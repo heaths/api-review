@@ -1,72 +1,127 @@
 name: ci
 
 on:
+  pull_request:
   push:
     branches:
       - main
-  pull_request:
   workflow_call:
+    inputs:
+      release:
+        description: Whether this is running as part of a release workflow
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      name:
+        description: Package name
+        value: ${{ jobs.pack.outputs.name }}
+      version:
+        description: Package version
+        value: ${{ jobs.pack.outputs.version }}
+      artifact-id:
+        description: Artifact ID containing the package
+        value: ${{ jobs.pack.outputs.artifact-id }}
+
+permissions:
+  contents: read
 
 defaults:
   run:
     shell: bash
 
-permissions:
-  contents: read
+env:
+  NODE_ENV: ${{ inputs.release && 'production' || 'development' }}
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &setup-pnpm
+        name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 11.20.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - &setup-node
+        name: Cache
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run lint
-      - run: pnpm run package:vsix
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - name: Compute prerelease VSIX version
-        id: prerelease
-        if: github.event_name == 'pull_request'
-        run: |
-          version="$(pnpm run -s version:next)"
-          version="${version#v}-pr.${{ github.event.pull_request.number }}+${{ github.run_id }}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "path=$GITHUB_WORKSPACE/azure-api-review-$version.vsix" >> "$GITHUB_OUTPUT"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - name: Package prerelease VSIX
-        if: github.event_name == 'pull_request'
-        run: |
-          pnpm exec vsce package '${{ steps.prerelease.outputs.version }}' \
-            --no-dependencies \
-            --no-update-package-json \
-            --no-git-tag-version \
-            --pre-release \
-            --out '${{ steps.prerelease.outputs.path }}'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: github.event_name == 'pull_request'
-        with:
-          name: azure-api-review-${{ steps.prerelease.outputs.version }}.vsix
-          path: ${{ steps.prerelease.outputs.path }}
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - &install-dependencies
+        name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm run lint
+      - name: Cache Playwright
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: xvfb-run -a pnpm test
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test
+        run: xvfb-run -a pnpm test
         if: runner.os == 'Linux'
-      - run: pnpm run test:headless
+      - name: Test (headless)
+        run: pnpm run test:headless
         if: runner.os != 'Linux'
+
+  pack:
+    if: inputs.release || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      name: ${{ steps.info.outputs.name }}
+      version: ${{ steps.info.outputs.version }}
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - *setup-pnpm
+      - *setup-node
+      - *install-dependencies
+      - name: Compute package info
+        id: info
+        run: |
+          ARGS=()
+          VERSION="$(pnpm run -s version:next)"
+          if [[ '${{ inputs.release }}' == 'true' ]]; then
+            VERSION="${VERSION#v}"
+          else
+            ARGS+=('--pre-release')
+            VERSION="${VERSION#v}-pr.${{ github.event.pull_request.number }}+${{ github.run_id }}"
+          fi
+          NAME="azure-api-review-$VERSION.vsix"
+          echo "additional_args=${ARGS[@]}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "path=$GITHUB_WORKSPACE/$NAME" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package VSIX
+        run: >
+          pnpm run package:vsix
+          --out '${{ steps.info.outputs.version }}'
+          --no-git-tag-version
+          ${{ steps.info.outputs.additional_args }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload package
+        id: artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package
+          path: ${{ steps.info.outputs.path }}
