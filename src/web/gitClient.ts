@@ -44,6 +44,7 @@ export interface GitCommit {
 
 export interface GitClient {
   getRepository(uri: vscode.Uri): Promise<GitRepository | undefined>;
+  watchState(listener: () => void): Promise<vscode.Disposable>;
 }
 
 export function getRepositoryRelativePath(uri: vscode.Uri, rootUri: vscode.Uri): string | undefined {

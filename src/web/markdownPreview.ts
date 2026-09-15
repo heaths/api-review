@@ -6,12 +6,13 @@ import {
   hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
-import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, PullRequestContext, ResolvedBaseline } from './displayDiff';
+import { DiffAvailability, DiffBaselineSelection, DisplayDiffService, ResolvedBaseline } from './displayDiff';
 import { renderDiffPreview } from './diffPreview';
 import { GitHubClient } from './githubClient';
 import hljs, { normalizeHighlightLanguage } from './highlight';
 import { createDiffLineMetadata, createPreviewLineMetadata, PreviewLineMetadata } from './lineMetadata';
 import { PullRequestLineComment, PullRequestReviewController } from './pullRequestReview';
+import { PullRequestContext, PullRequestService } from './pullRequest';
 import { ReviewModel } from './reviewModel';
 
 export const reviewMarkdownPreviewViewType = 'heaths.azureApiReview.preview';
@@ -223,6 +224,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly githubClient: GitHubClient,
     private readonly diffService: DisplayDiffService,
+    private readonly pullRequestService: PullRequestService,
     private readonly pullRequestReview: PullRequestReviewController,
     private readonly logger: vscode.LogOutputChannel,
   ) { }
@@ -519,6 +521,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
       preview.commentsVisible,
       diffVisible,
       preview.pullRequestContext !== undefined,
+      vscode.env.uiKind === vscode.UIKind.Web,
       preview.contributedStyles.stylesheets,
     );
     if (this.activePreview === preview) {
@@ -588,7 +591,7 @@ export class ReviewMarkdownPreview implements vscode.CustomTextEditorProvider {
     const generation = ++preview.pullRequestRefreshGeneration;
 
     try {
-      const pullRequestContext = await this.diffService.getPullRequestContext(preview.document, { promptForGitHubAuth });
+      const pullRequestContext = await this.pullRequestService.getContext(preview.document, { promptForGitHubAuth });
       if (generation !== preview.pullRequestRefreshGeneration || !this.previews.has(preview)) {
         return undefined;
       }
@@ -1005,6 +1008,7 @@ export function getPreviewHtml(
   commentsVisible: boolean,
   diffVisible: boolean,
   inPullRequest: boolean,
+  isWebHost: boolean,
   contributedStylesheets: readonly vscode.Uri[],
 ): string {
   const stylesheet = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'assets', 'markdownPreview.css'));
@@ -1021,6 +1025,7 @@ export function getPreviewHtml(
     hasCommentsPatch ? 'has-comments-patch' : '',
     commentsVisible ? 'comments-visible' : '',
     diffVisible ? 'diff-visible' : '',
+    isWebHost ? 'web-host' : '',
   ].filter(Boolean).join(' ');
 
   return `<!DOCTYPE html>

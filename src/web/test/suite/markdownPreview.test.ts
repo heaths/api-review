@@ -456,6 +456,7 @@ suite('Markdown preview', () => {
       false,
       false,
       true,
+      true,
       [],
     );
 
@@ -470,6 +471,7 @@ suite('Markdown preview', () => {
     assert.ok(html.includes('data-hide-tooltip="Hide documentation"'));
     assert.ok(html.includes('data-action="comment" data-icon="comment"'));
     assert.ok(html.includes('data-action="source" data-icon="go-to-file"'));
+    assert.ok(html.includes('<body class="has-comments-patch web-host">'));
     assert.ok(!html.includes('preview-initial-state'));
     assert.ok(!html.includes('Please rename this.'));
   });
@@ -574,6 +576,8 @@ suite('Markdown preview', () => {
     assert.ok(css.includes('--preview-code-block-background: var(--vscode-textCodeBlock-background);'));
     assert.ok(css.includes('--comment-icon-margin: 4px;'));
     assert.ok(css.includes('--preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));'));
+    assert.ok(css.includes('--preview-code-line-gutter-width: var(--preview-comment-badge-hit-size);'));
+    assert.ok(css.includes('body.web-host {\n  --comment-icon-margin: 8px;\n  --preview-code-line-gutter-width: 32px;\n}'));
     assert.ok(css.includes('.markdown-body pre {\n  overflow: auto;\n  padding: var(--preview-code-block-padding);\n  padding-inline-start: 0;'));
     assert.ok(css.includes('left: var(--comment-icon-margin);'));
     assert.ok(css.includes('--preview-comment-history-gap: 8px;'));
@@ -675,8 +679,9 @@ suite('Markdown preview', () => {
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
+      {} as never,
       {
-        async getPullRequestContext() {
+        async getContext() {
           return pullRequestContext;
         },
       } as never,
@@ -768,6 +773,7 @@ suite('Markdown preview', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
       createLogger(loggerCalls),
     );
 
@@ -807,6 +813,64 @@ suite('Markdown preview', () => {
     ]);
   });
 
+  test('requests pull request context on preview load before any diff action', async () => {
+    const requests: string[] = [];
+    const previewProvider = new ReviewMarkdownPreview(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        isGitHubDocument() {
+          return false;
+        },
+      } as never,
+      {
+        async getAvailability() {
+          return { candidates: [], canPickFile: true };
+        },
+      } as never,
+      {
+        async getContext(document: vscode.TextDocument) {
+          requests.push(document.uri.toString());
+          return undefined;
+        },
+      } as never,
+      {} as never,
+      createLogger(),
+    );
+    const document = {
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+      getText() {
+        return '# API';
+      },
+    } as vscode.TextDocument;
+    const webviewPanel = {
+      active: false,
+      webview: {
+        options: undefined,
+        html: '',
+        async postMessage() {
+          return true;
+        },
+        onDidReceiveMessage() {
+          return { dispose() { } };
+        },
+      },
+      onDidChangeViewState() {
+        return { dispose() { } };
+      },
+      onDidDispose() {
+        return { dispose() { } };
+      },
+    } as unknown as vscode.WebviewPanel;
+
+    (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
+
+    await previewProvider.resolveCustomTextEditor(document, webviewPanel);
+    await Promise.resolve();
+
+    assert.deepStrictEqual(requests, ['file:///workspace/sdk/keyvault/API.md']);
+  });
+
   test('logs review start and completion actions', async () => {
     const loggerCalls = { info: [] as string[] };
     const pullRequest = {
@@ -834,8 +898,9 @@ suite('Markdown preview', () => {
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {} as never,
+      {} as never,
       {
-        async getPullRequestContext() {
+        async getContext() {
           return pullRequestContext;
         },
       } as never,
@@ -928,6 +993,7 @@ suite('Markdown preview', () => {
     const previewProvider = new ReviewMarkdownPreview(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
+      {} as never,
       {} as never,
       {} as never,
       {

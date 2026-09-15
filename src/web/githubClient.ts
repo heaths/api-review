@@ -33,6 +33,7 @@ export interface GitHubDocumentRef {
   readonly repository: GitHubRepositoryRef;
   readonly ref: string;
   readonly path: string;
+  readonly pullRequestNumber?: number;
 }
 
 export interface GitHubTag {
@@ -271,23 +272,106 @@ export function parseGitHubDocument(url: string | undefined): GitHubDocumentRef 
     /^https:\/\/(?:www\.)?(?:github\.com|github\.dev|vscode\.dev)\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+?)(?:[?#].*)?$/iu,
   );
   if (webMatch) {
+    const ref = decodeURIComponent(webMatch[3]);
+    const pullRequestNumber = parsePullRequestNumber(ref);
     return {
       repository: { owner: decodeURIComponent(webMatch[1]), repo: decodeURIComponent(webMatch[2]) },
-      ref: decodeURIComponent(webMatch[3]),
+      ref,
       path: decodeURIComponent(webMatch[4]),
+      ...(pullRequestNumber === undefined ? {} : { pullRequestNumber }),
+    };
+  }
+
+  const encodedVirtualMatch = url.match(
+    /^vscode-vfs:\/\/([^/]+)\/([^/]+)\/([^/]+)\/(.+?)(?:[?#].*)?$/iu,
+  );
+  if (encodedVirtualMatch) {
+    const virtualRef = parseGitHubVirtualRef(encodedVirtualMatch[1]);
+    if (virtualRef) {
+      return {
+        repository: {
+          owner: decodeURIComponent(encodedVirtualMatch[2]),
+          repo: decodeURIComponent(encodedVirtualMatch[3]),
+        },
+        ref: virtualRef.ref,
+        path: decodeURIComponent(encodedVirtualMatch[4]),
+        ...(virtualRef.pullRequestNumber === undefined
+          ? {}
+          : { pullRequestNumber: virtualRef.pullRequestNumber }),
+      };
+    }
+  }
+
+  const pullRequestVirtualMatch = url.match(
+    /^vscode-vfs:\/\/github\/([^/]+)\/([^/]+)\/(?:refs\/)?pull\/(\d+)(?:\/(head|merge))?\/(.+?)(?:[?#].*)?$/iu,
+  );
+  if (pullRequestVirtualMatch) {
+    const pullRequestNumber = Number.parseInt(pullRequestVirtualMatch[3], 10);
+    if (!Number.isSafeInteger(pullRequestNumber)) {
+      return undefined;
+    }
+
+    return {
+      repository: {
+        owner: decodeURIComponent(pullRequestVirtualMatch[1]),
+        repo: decodeURIComponent(pullRequestVirtualMatch[2]),
+      },
+      ref: `refs/pull/${pullRequestNumber}/${pullRequestVirtualMatch[4] ?? 'head'}`,
+      path: decodeURIComponent(pullRequestVirtualMatch[5]),
+      pullRequestNumber,
     };
   }
 
   const virtualMatch = url.match(/^vscode-vfs:\/\/github\/([^/]+)\/([^/]+)\/([^/]+)\/(.+?)(?:[?#].*)?$/iu);
   if (virtualMatch) {
+    const ref = decodeURIComponent(virtualMatch[3]);
+    const pullRequestNumber = parsePullRequestNumber(ref);
     return {
       repository: { owner: decodeURIComponent(virtualMatch[1]), repo: decodeURIComponent(virtualMatch[2]) },
-      ref: decodeURIComponent(virtualMatch[3]),
+      ref,
       path: decodeURIComponent(virtualMatch[4]),
+      ...(pullRequestNumber === undefined ? {} : { pullRequestNumber }),
     };
   }
 
   return undefined;
+}
+
+function parseGitHubVirtualRef(authority: string): { readonly ref: string; readonly pullRequestNumber?: number } | undefined {
+  const decodedAuthority = decodeURIComponent(authority);
+  const match = decodedAuthority.match(/^github\+([0-9a-f]+)$/iu);
+  if (!match || match[1].length % 2 !== 0) {
+    return undefined;
+  }
+
+  try {
+    const bytes = Uint8Array.from(match[1].match(/.{2}/gu) ?? [], value => Number.parseInt(value, 16));
+    const metadata: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (!isRecord(metadata)) {
+      return undefined;
+    }
+
+    const legacyPullRequestNumber = parsePullRequestNumber(`pull/${String(metadata.pr)}/head`);
+    if (legacyPullRequestNumber !== undefined) {
+      return { ref: `refs/pull/${legacyPullRequestNumber}/head`, pullRequestNumber: legacyPullRequestNumber };
+    }
+    if (typeof metadata.ref === 'string') {
+      return { ref: metadata.ref };
+    }
+    if (!isRecord(metadata.ref) || typeof metadata.ref.type !== 'number' || typeof metadata.ref.id !== 'string') {
+      return undefined;
+    }
+    if (metadata.ref.type !== 3) {
+      return { ref: metadata.ref.id };
+    }
+
+    const pullRequestNumber = parsePullRequestNumber(`pull/${metadata.ref.id}/head`);
+    return pullRequestNumber !== undefined
+      ? { ref: `refs/pull/${pullRequestNumber}/head`, pullRequestNumber }
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 class OctokitGitHubClient implements GitHubClient {
@@ -317,17 +401,6 @@ class OctokitGitHubClient implements GitHubClient {
         { pull_number: explicitPullRequestNumber },
         normalizeRestPullRequest,
       );
-    }
-
-    const associatedPullRequest = await this.loadRest(
-      request,
-      `pull-by-ref:${repositoryCacheKey(request.repository)}:${request.headOwner ?? request.repository.owner}:${request.ref}`,
-      'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls',
-      { commit_sha: request.ref, per_page: maxPullRequestSearchResults },
-      payload => normalizeAssociatedPullRequest(payload, request.ref, request.headOwner),
-    );
-    if (associatedPullRequest || looksLikeCommitSha(request.ref)) {
-      return associatedPullRequest;
     }
 
     return this.loadRest(
@@ -988,11 +1061,6 @@ function normalizeAssociatedPullRequest(
     return undefined;
   }
 
-  const explicitPullRequestNumber = parsePullRequestNumber(ref);
-  if (explicitPullRequestNumber !== undefined) {
-    return normalized.find(value => value.number === explicitPullRequestNumber) ?? normalized[0];
-  }
-
   const openPullRequests = normalized.filter(value => value.state === 'open');
   const candidates = openPullRequests.length > 0 ? openPullRequests : normalized;
   return candidates
@@ -1005,9 +1073,6 @@ function scorePullRequest(pullRequest: GitHubPullRequest, ref: string, headOwner
   if (pullRequest.state === 'open') {
     score += 4;
   }
-  if (sameIgnoreCase(pullRequest.headSha, ref)) {
-    score += 3;
-  }
   if (pullRequest.headRef === ref) {
     score += 2;
   }
@@ -1017,7 +1082,7 @@ function scorePullRequest(pullRequest: GitHubPullRequest, ref: string, headOwner
   return score;
 }
 
-function parsePullRequestNumber(ref: string): number | undefined {
+export function parsePullRequestNumber(ref: string): number | undefined {
   const match = ref.match(/^(?:refs\/)?pull\/(\d+)\/(?:head|merge)$/u);
   if (!match) {
     return undefined;
@@ -1025,10 +1090,6 @@ function parsePullRequestNumber(ref: string): number | undefined {
 
   const pullRequestNumber = Number.parseInt(match[1], 10);
   return Number.isSafeInteger(pullRequestNumber) ? pullRequestNumber : undefined;
-}
-
-function looksLikeCommitSha(ref: string): boolean {
-  return /^[0-9a-f]{7,40}$/iu.test(ref);
 }
 
 function normalizeTags(payload: unknown): readonly GitHubTag[] | undefined {

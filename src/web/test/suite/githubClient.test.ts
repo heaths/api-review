@@ -50,10 +50,63 @@ suite('GitHub client', () => {
       ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
     });
     assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github/heaths/api-review/pull/26/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'refs/pull/26/head',
+      pullRequestNumber: 26,
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github/heaths/api-review/refs/pull/26/merge/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'refs/pull/26/merge',
+      pullRequestNumber: 26,
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'refs/pull/26/head',
+      pullRequestNumber: 26,
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a322c226964223a2265393531666530313465366638383032373536316462383039616261306533653630353461336336227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a342c226964223a22666561747572652f686973746f7279227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'feature/history',
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
       'https://vscode.dev/heaths/api-review/blob/feature%2Fhistory/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
     ), {
       ...expected,
       ref: 'feature/history',
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'https://vscode.dev/heaths/api-review/blob/refs%2Fpull%2F26%2Fhead/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'refs/pull/26/head',
+      pullRequestNumber: 26,
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github+7b22726566223a22666561747572652f686973746f7279227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'feature/history',
+    });
+    assert.deepStrictEqual(parseGitHubDocument(
+      'vscode-vfs://github+7b227072223a223236227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+    ), {
+      ...expected,
+      ref: 'refs/pull/26/head',
+      pullRequestNumber: 26,
     });
     assert.strictEqual(parseGitHubDocument('https://example.com/heaths/api-review/blob/main/API.md'), undefined);
   });
@@ -121,7 +174,7 @@ suite('GitHub client', () => {
     ]);
   });
 
-  test('resolves the open pull request associated with a commit ref', async () => {
+  test('resolves an explicit pull request ref without searching commits', async () => {
     const routes: string[] = [];
     const client = createGitHubClient({
       cache: new MemoryCache(),
@@ -129,27 +182,18 @@ suite('GitHub client', () => {
       transportFactory() {
         return {
           async graphql<T>() {
-            throw new Error('GraphQL should not be used for commit PR lookup');
+            throw new Error('GraphQL should not be used for explicit PR lookup');
           },
           async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
             routes.push(route);
-            assert.strictEqual(parameters.commit_sha, 'e951fe014e6f88027561db809aba0e3e6054a3c6');
-            return createResponse([
-              createPullRequest({
-                number: 28,
-                state: 'closed',
-                title: 'Merged PR',
-                headRef: 'feature/history',
-                headSha: '1111111111111111111111111111111111111111',
-              }),
-              createPullRequest({
-                number: 42,
-                state: 'open',
-                title: 'Active PR',
-                headRef: 'feature/history',
-                headSha: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
-              }),
-            ]) as unknown as GitHubTransportResponse<T>;
+            assert.strictEqual(parameters.pull_number, 26);
+            return createResponse(createPullRequest({
+              number: 26,
+              state: 'open',
+              title: 'Active PR',
+              headRef: 'feature/history',
+              headSha: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+            })) as unknown as GitHubTransportResponse<T>;
           },
         } satisfies GitHubTransport;
       },
@@ -157,17 +201,14 @@ suite('GitHub client', () => {
 
     const pullRequest = await client.getPullRequest({
       repository: { owner: 'heaths', repo: 'api-review' },
-      ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
+      ref: 'refs/pull/26/head',
     });
 
-    assert.deepStrictEqual(
-      pullRequest,
-      createExpectedPullRequest(42, 'Active PR', 'open', 'feature/history', 'e951fe014e6f88027561db809aba0e3e6054a3c6'),
-    );
-    assert.deepStrictEqual(routes, ['GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls']);
+    assert.strictEqual(pullRequest?.number, 26);
+    assert.deepStrictEqual(routes, ['GET /repos/{owner}/{repo}/pulls/{pull_number}']);
   });
 
-  test('falls back to branch lookup when ref is not a commit sha', async () => {
+  test('looks up an open pull request by branch head', async () => {
     const routes: string[] = [];
     const client = createGitHubClient({
       cache: new MemoryCache(),
@@ -179,11 +220,6 @@ suite('GitHub client', () => {
           },
           async request<T>(route: string, parameters: Record<string, unknown>): Promise<GitHubTransportResponse<T>> {
             routes.push(route);
-            if (route === 'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls') {
-              assert.strictEqual(parameters.commit_sha, 'feature/history');
-              return createResponse([]) as unknown as GitHubTransportResponse<T>;
-            }
-
             assert.strictEqual(route, 'GET /repos/{owner}/{repo}/pulls');
             assert.strictEqual(parameters.head, 'heaths:feature/history');
             return createResponse([
@@ -209,10 +245,7 @@ suite('GitHub client', () => {
       pullRequest,
       createExpectedPullRequest(43, 'Branch PR', 'open', 'feature/history', '2222222222222222222222222222222222222222'),
     );
-    assert.deepStrictEqual(routes, [
-      'GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls',
-      'GET /repos/{owner}/{repo}/pulls',
-    ]);
+    assert.deepStrictEqual(routes, ['GET /repos/{owner}/{repo}/pulls']);
   });
 
   test('classifies inline pull request comments using associated review metadata', async () => {
