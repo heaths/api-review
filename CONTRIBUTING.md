@@ -125,6 +125,10 @@ The generated `CHANGELOG.md` is ignored by Git but included in the VSIX. This
 packaging flow relies on POSIX shell command substitution, so it is supported
 on macOS and Linux shells.
 
+Pull request validation also uploads a prerelease VSIX artifact built from the
+branch so reviewers can download it and try the extension without packaging it
+locally.
+
 Install the generated package from the command line:
 
 ```sh
@@ -134,18 +138,6 @@ code --install-extension azure-api-review-0.0.1.vsix
 Alternatively, run **Extensions: Install from VSIX...** from the VS Code
 Command Palette and select the generated file. Reload VS Code after installing
 or replacing the extension.
-
-## Publish the Extension
-
-Release publishing is handled by `.github/workflows/release.yml` with trusted
-publishing. Push a `v*` tag after the release commit is ready, then approve the
-`marketplace` environment deployment to let GitHub Actions publish with
-`pnpm exec vsce publish --oidc`.
-
-The release workflow reuses `.github/workflows/ci.yml` first so the extension
-is linted, packaged, and tested before it can publish. Pull requests also
-upload a prerelease VSIX artifact built with `--pre-release` for review and
-manual installation.
 
 ## Debug in VS Code
 

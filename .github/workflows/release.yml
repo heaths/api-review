@@ -1,9 +1,7 @@
 name: release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 defaults:
   run:
@@ -21,10 +19,8 @@ jobs:
     needs: test
     environment: marketplace
     permissions:
-      contents: read
+      contents: write
       id-token: write
-    env:
-      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,11 +34,59 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Compute release version
+        id: release
+        run: |
+          version="$(pnpm run -s version:next)"
+          version="${version#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Generate changelog
+        run: pnpm run generate:changelog
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Extract release notes
+        id: notes
+        run: |
+          path="$RUNNER_TEMP/release-notes.md"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"^## {re.escape(version)} \([^)]+\)\n.*?(?=^## |\Z)"
+          match = re.search(pattern, changelog, re.MULTILINE | re.DOTALL)
+          if match is None:
+              raise SystemExit(f"Could not find CHANGELOG entry for {version}")
+
+          notes_path = Path(os.environ["NOTES_PATH"])
+          notes_path.write_text(match.group(0).strip() + "\n", encoding="utf-8")
+          PY
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          NOTES_PATH: ${{ runner.temp }}/release-notes.md
       - name: Publish to Marketplace
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          pnpm exec vsce publish "$version" \
+          pnpm exec vsce publish '${{ steps.release.outputs.version }}' \
             --no-dependencies \
-            --no-update-package-json \
-            --no-git-tag-version \
+            -m 'chore(release): release %s' \
             --oidc
+      - name: Push release commit and tag
+        run: git push origin "HEAD:${{ github.ref_name }}" --follow-tags
+      - name: Create GitHub release
+        run: |
+          gh release create '${{ steps.release.outputs.tag }}' \
+            --notes-file '${{ steps.notes.outputs.path }}' \
+            --title '${{ steps.release.outputs.tag }}' \
+            --verify-tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
