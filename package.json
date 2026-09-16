@@ -309,7 +309,7 @@
     "precompile:web": "pnpm run generate:icon",
     "compile": "webpack",
     "compile:node": "webpack --config-name node",
-    "compile:web": "webpack --config-name web",
+    "compile:web": "webpack --config-name web && node scripts/check-web-bundle.mjs",
     "lint": "eslint src",
     "pretest": "pnpm run compile:web",
     "test": "node scripts/run-tests.mjs",
@@ -319,7 +319,7 @@
     "generate:changelog": "rm -f CHANGELOG.md && (git-cliff --bump --output CHANGELOG.md || [ -s CHANGELOG.md ])",
     "version:next": "git-cliff --bumped-version",
     "package:vsix": "version=$(pnpm run -s version:next) && version=${version#v} && vsce package \"$version\" --no-dependencies --no-update-package-json --no-git-tag-version",
-    "vscode:prepublish": "pnpm run generate:changelog && pnpm run compile -- --mode ${NODE_ENV:=production} --devtool hidden-source-map",
+    "vscode:prepublish": "pnpm run generate:changelog && pnpm run compile -- --mode ${NODE_ENV:=production} --devtool hidden-source-map && node scripts/check-web-bundle.mjs",
     "publish": "version=$(pnpm run -s version:next) && version=${version#v} && vsce publish \"$version\" --no-dependencies -m \"chore(release): release %s\""
   }
 }

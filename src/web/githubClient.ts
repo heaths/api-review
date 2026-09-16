@@ -802,7 +802,7 @@ function createOctokitTransport(accessToken: string, logger?: vscode.LogOutputCh
 }
 
 async function loadOctokit(accessToken: string, logger?: vscode.LogOutputChannel): Promise<OctokitLike> {
-  const { Octokit } = await import('octokit');
+  const { Octokit } = await import(/* webpackMode: "eager" */ 'octokit');
   return new Octokit({
     auth: accessToken,
     log: {
