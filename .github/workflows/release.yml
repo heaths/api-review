@@ -69,19 +69,21 @@ jobs:
         with:
           subject-path: ${{ steps.info.outputs.package }}
       - name: Create release
-        run: >
-          gh release create "$TAG"
-          --target "$GITHUB_SHA"
-          --title "$TAG"
-          --notes-file '${{ steps.changelog.outputs.path }}'
-          '${{ steps.info.outputs.package }}'
+        run: |
+          URL=$(gh release create "$TAG" --target "$GITHUB_SHA" \
+            --title "$TAG" --notes-file '${{ steps.changelog.outputs.path }}' \
+            '${{ steps.info.outputs.package }}')
+          echo "### Release $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL" >> "$GITHUB_STEP_SUMMARY"
         env:
           TAG: ${{ steps.info.outputs.tag }}
 
   publish:
     # Environment must match federated credential environment in Azure.
     # See https://learn.microsoft.com/azure/developer/github/connect-from-azure-openid-connect
-    environment: marketplace
+    environment:
+      name: marketplace
+      url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -104,4 +106,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
       - name: Publish package
-        run: pnpm exec vsce publish --azure-credential --packagePath '${{ steps.info.outputs.package }}'
+        id: publish
+        run: |
+          pnpm exec vsce publish --azure-credential --packagePath '${{ steps.info.outputs.package }}'
+          echo 'url=https://marketplace.visualstudio.com/items?itemName=heaths.azure-api-review' >> "$GITHUB_OUTPUT"
