@@ -42,6 +42,8 @@
   let activeCommentLine;
   let activeCommentDialog;
   let pendingCommentOpen;
+  const commentTextareaResizeObserver = new ResizeObserver(resizeCommentWindow);
+  commentTextareaResizeObserver.observe(commentTextarea);
 
   initializeActionLines();
   refreshDiffHunks();
@@ -401,6 +403,9 @@
   function openCommentWindow(options) {
     activeCommentDialog = options;
     activeCommentLine = options.anchorLine;
+    commentWindow.style.width = '';
+    commentTextarea.style.width = '';
+    commentTextarea.style.height = '';
     renderCommentHistory(options.comments ?? []);
     commentTextarea.value = options.body;
     commentTextarea.placeholder = options.placeholder;
@@ -425,7 +430,10 @@
     commentWindow.hidden = false;
     commentWindow.style.left = '0px';
     commentWindow.style.top = '0px';
-    commentWindow.style.width = '';
+    const preserveWidth = commentTextarea.style.width !== '';
+    if (!preserveWidth) {
+      commentWindow.style.width = '';
+    }
     const bounds = commentWindow.getBoundingClientRect();
     const margin = getCssPixels('--preview-hover-min-margin', 8);
     if (anchorMode === 'center') {
@@ -447,6 +455,7 @@
 
     const lineBounds = line.getBoundingClientRect();
     const codeGap = getCssPixels('--preview-comment-window-code-gap', 8);
+    const minWidth = getCssPixels('--preview-comment-window-min-width', 300);
     const maxWidth = window.innerWidth - margin;
     const popupBounds = popup.getBoundingClientRect();
     const preferredLeft = anchorMode === 'popup'
@@ -458,11 +467,34 @@
       ? popupBounds.bottom + getCssPixels('--preview-hover-gap', 8)
       : lineBounds.bottom;
     const rightLimit = getCodeFenceRight(line) - codeGap;
-    const width = Math.min(bounds.width, Math.max(200, rightLimit - left));
+    const width = preserveWidth
+      ? bounds.width
+      : Math.min(bounds.width, Math.max(minWidth, rightLimit - left));
+    const constrainedWidth = Math.min(width, window.innerWidth - left - margin);
+    const constrainedTop = Math.min(top, window.innerHeight - bounds.height - margin);
 
     commentWindow.style.left = `${left}px`;
-    commentWindow.style.top = `${Math.max(margin, top)}px`;
-    commentWindow.style.width = `${Math.min(width, window.innerWidth - left - margin)}px`;
+    commentWindow.style.top = `${Math.max(margin, constrainedTop)}px`;
+    commentWindow.style.width = `${constrainedWidth}px`;
+  }
+
+  function resizeCommentWindow() {
+    if (!isCommentWindowVisible() || !activeCommentDialog) {
+      return;
+    }
+
+    const textareaBounds = commentTextarea.getBoundingClientRect();
+    const windowBounds = commentWindow.getBoundingClientRect();
+    const styles = window.getComputedStyle(commentWindow);
+    const horizontalFrame = Number.parseFloat(styles.paddingLeft)
+      + Number.parseFloat(styles.paddingRight)
+      + Number.parseFloat(styles.borderLeftWidth)
+      + Number.parseFloat(styles.borderRightWidth);
+    const width = textareaBounds.width + horizontalFrame;
+    if (Math.abs(width - windowBounds.width) > 0.5) {
+      commentWindow.style.width = `${width}px`;
+    }
+    positionCommentWindow(activeCommentLine, activeCommentDialog?.anchorMode ?? 'inline');
   }
 
   function submitComment() {

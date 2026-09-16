@@ -42,8 +42,10 @@
   --preview-comment-badge-size: 16px;
   --preview-comment-badge-hit-size: calc(var(--preview-comment-badge-size) + (2 * var(--comment-icon-margin)));
   --preview-code-line-gutter-width: var(--preview-comment-badge-hit-size);
+  --preview-comment-window-min-width: 300px;
   --preview-comment-window-width: 360px;
   --preview-comment-window-padding: 12px;
+  --preview-comment-window-horizontal-frame: calc((2 * var(--preview-comment-window-padding)) + (2 * var(--preview-hover-border-width)));
   --preview-comment-window-footer-gap: 8px;
   --preview-comment-window-code-gap: 8px;
   --preview-comment-history-gap: 8px;
@@ -466,6 +468,7 @@ body.web-host {
   display: none;
   flex-direction: column;
   box-sizing: border-box;
+  min-inline-size: min(var(--preview-comment-window-min-width), calc(100vw - (2 * var(--preview-hover-min-margin))));
   inline-size: min(var(--preview-comment-window-width), calc(100vw - (2 * var(--preview-hover-min-margin))));
   max-block-size: calc(100vh - (2 * var(--preview-hover-min-margin)));
   padding: var(--preview-comment-window-padding);
@@ -565,6 +568,11 @@ body.web-host {
 
 #preview-comment-window textarea {
   inline-size: 100%;
+  min-inline-size: min(
+    calc(var(--preview-comment-window-min-width) - var(--preview-comment-window-horizontal-frame)),
+    calc(100vw - (2 * var(--preview-hover-min-margin)) - var(--preview-comment-window-horizontal-frame))
+  );
+  max-inline-size: calc(100vw - (2 * var(--preview-hover-min-margin)) - var(--preview-comment-window-horizontal-frame));
   min-block-size: var(--preview-comment-window-textarea-min-height);
   max-block-size: calc(100vh - 200px);
   box-sizing: border-box;
