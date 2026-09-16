@@ -55,11 +55,14 @@ jobs:
           echo 'tag=v${{ needs.test.outputs.version }}' >> "$GITHUB_OUTPUT"
           echo 'package=${{ steps.download.outputs.download-path }}/${{ needs.test.outputs.name }}' >> "$GITHUB_OUTPUT"
       - name: Draft release
-        # Creates the tag used to generate the CHANGELOG for just the `--current` version.
+        # Creates the tag used to generate the CHANGELOG for just the `--current`
+        # version. A draft release does not create a real tag ref until it is
+        # published, so the tag is created and pushed explicitly first.
         run: |
           TAG='${{ steps.info.outputs.tag }}'
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "$TAG" --notes ''
-          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          git tag "$TAG" "$GITHUB_SHA"
+          git push origin "$TAG"
+          gh release create "$TAG" --draft --title "$TAG" --notes ''
       - name: Generate CHANGELOG
         id: changelog
         run: |
