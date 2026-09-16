@@ -79,8 +79,7 @@ jobs:
           TAG: ${{ steps.info.outputs.tag }}
 
   publish:
-    # Environment must match federated credential environment in Azure.
-    # See https://learn.microsoft.com/azure/developer/github/connect-from-azure-openid-connect
+    # Environment must match the Marketplace trusted publishing policy.
     environment: marketplace
     runs-on: ubuntu-latest
     permissions:
