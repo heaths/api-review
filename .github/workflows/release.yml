@@ -97,11 +97,5 @@ jobs:
       - *install-dependencies
       - *download-package
       - *package-info
-      - name: Log into Azure
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
       - name: Publish package
-        run: pnpm exec vsce publish --azure-credential --packagePath '${{ steps.info.outputs.package }}'
+        run: pnpm exec vsce publish --oidc --packagePath '${{ steps.info.outputs.package }}'
