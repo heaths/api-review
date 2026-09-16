@@ -64,6 +64,7 @@ commit_parsers = [
   { sha = "7b8367f4dfa7b9f2e19627fa3ac35e45a35c4ace", group = "<!-- 6 -->Other" }, # Remove example APIs (#23)
   { sha = "fa295dd9ea7d6b7caeacda9ca0e7ed7a57b69c74", skip = true }, # Prepare 0.4.0 release (#36)
   { sha = "bf24f86db8639790cf7806d76f7c2ba244266d07", group = "<!-- 2 -->Fixed", scope = "github" },
+  { sha = "6e810bf7147996da3b93d99cebdc4dad8885f36c", group = "<!-- 6 -->Other" }, # Add `id-token: write` permission to release (#45)
 
   # Groups
   { message = "^feat(?:\\(|:|!)", group = "<!-- 0 -->Added", continue = true },
