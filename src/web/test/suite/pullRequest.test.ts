@@ -15,6 +15,9 @@ function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
     async getTags() {
       return undefined;
     },
+    async getCommit() {
+      return undefined;
+    },
     async getCommits() {
       return undefined;
     },

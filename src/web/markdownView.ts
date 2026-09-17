@@ -32,6 +32,7 @@ const viewDiffVisibleContext = 'heaths.azureApiReview.preview.diffVisible';
 const viewCanNavigatePreviousDiffContext = 'heaths.azureApiReview.preview.canNavigatePreviousDiff';
 const viewCanNavigateNextDiffContext = 'heaths.azureApiReview.preview.canNavigateNextDiff';
 const viewInPullRequestContext = 'heaths.azureApiReview.preview.inPullRequest';
+const maxQuickPickDetailLength = 50;
 
 interface ViewPanel {
   readonly document: vscode.TextDocument;
@@ -176,6 +177,12 @@ interface ViewPullRequestCommentEntryState {
 type DiffQuickPickItem =
   | DiffBaselineQuickPickItem
   | DiffChooseFileQuickPickItem
+  | DiffHideQuickPickItem
+  | DiffSeparatorQuickPickItem;
+
+type DiffActionQuickPickItem =
+  | DiffBaselineQuickPickItem
+  | DiffChooseFileQuickPickItem
   | DiffHideQuickPickItem;
 
 interface DiffBaselineQuickPickItem extends vscode.QuickPickItem {
@@ -189,6 +196,10 @@ interface DiffChooseFileQuickPickItem extends vscode.QuickPickItem {
 
 interface DiffHideQuickPickItem extends vscode.QuickPickItem {
   readonly action: 'hide';
+}
+
+interface DiffSeparatorQuickPickItem extends vscode.QuickPickItem {
+  readonly kind: vscode.QuickPickItemKind.Separator;
 }
 
 const markdownRenderer = new MarkdownIt({
@@ -309,17 +320,10 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       return;
     }
 
-    const availability = await this.refreshDiffAvailability(preview, true);
-    if (!availability) {
-      return;
-    }
-    await this.refreshPullRequestContext(preview, true);
+    const availabilityPromise = this.refreshDiffAvailability(preview, true);
+    void this.refreshPullRequestContext(preview, true);
 
-    if (!preview.diffBaseline && availability.defaultBaseline) {
-      await this.openDiff(preview, availability.defaultBaseline);
-    }
-
-    const item = await showDiffQuickPick(preview, availability);
+    const item = await showDiffQuickPick(preview, availabilityPromise);
     if (!item) {
       return;
     }
@@ -1211,28 +1215,29 @@ function describeDiffBaseline(baseline: DiffBaselineSelection): string {
 
 async function showDiffQuickPick(
   preview: ViewPanel,
-  availability: DiffAvailability,
-): Promise<DiffQuickPickItem | undefined> {
+  availability: Promise<DiffAvailability | undefined>,
+): Promise<DiffActionQuickPickItem | undefined> {
   const quickPick = vscode.window.createQuickPick<DiffQuickPickItem>();
 
   return new Promise(resolve => {
-    const items = createDiffQuickPickItems(preview, availability);
+    let done = false;
     quickPick.title = 'Display diff';
     quickPick.placeholder = 'Select a baseline revision or choose a file';
-    quickPick.items = items;
-    quickPick.activeItems = getActiveQuickPickItems(items, preview, availability);
+    quickPick.busy = true;
+    quickPick.items = createLoadingDiffQuickPickItems();
+    quickPick.activeItems = [];
     quickPick.matchOnDescription = true;
     quickPick.matchOnDetail = true;
 
     const disposables = [
       quickPick.onDidAccept(() => {
-        const [item] = quickPick.selectedItems;
-        resolve(item);
-        dispose();
+        const [item] = quickPick.selectedItems.length > 0 ? quickPick.selectedItems : quickPick.activeItems;
+        if (isDiffActionQuickPickItem(item)) {
+          finish(item);
+        }
       }),
       quickPick.onDidHide(() => {
-        resolve(undefined);
-        dispose();
+        finish(createCancelDiffQuickPickItem());
       }),
     ];
 
@@ -1243,63 +1248,67 @@ async function showDiffQuickPick(
       quickPick.dispose();
     };
 
+    const finish = (item: DiffActionQuickPickItem | undefined): void => {
+      if (done) {
+        return;
+      }
+      done = true;
+      resolve(item);
+      dispose();
+    };
+
+    void availability.then(value => {
+      if (done) {
+        return;
+      }
+
+      const items = value ? createDiffQuickPickItems(value) : createLoadingDiffQuickPickItems();
+      quickPick.items = items;
+      quickPick.busy = false;
+      quickPick.activeItems = value ? getActiveQuickPickItems(items, preview, value) : [];
+    }, () => {
+      if (!done) {
+        quickPick.busy = false;
+      }
+    });
+
     quickPick.show();
   });
 }
 
-function createDiffQuickPickItems(
-  preview: ViewPanel,
+export function createLoadingDiffQuickPickItems(): readonly DiffActionQuickPickItem[] {
+  return [
+    createChooseFileQuickPickItem(),
+    createCancelDiffQuickPickItem(),
+  ];
+}
+
+export function createDiffQuickPickItems(
   availability: DiffAvailability,
 ): readonly DiffQuickPickItem[] {
-  const items: DiffQuickPickItem[] = [];
-  const duplicateTagLabels = getDuplicateTagLabels(availability.candidates);
-
-  if (preview.diffBaseline) {
-    items.push({
-      action: 'hide',
-      label: '$(close) Close diff',
-      description: 'Return to the normal preview',
-    });
-  }
-
-  const currentFileBaseline = preview.diffBaseline?.kind === 'file'
-    ? {
+  const tags = availability.candidates.filter(candidate => candidate.baseline.kind === 'tag');
+  const commits = availability.candidates.filter(candidate => candidate.baseline.kind === 'commit');
+  const duplicateTagLabels = getDuplicateTagLabels(tags);
+  const items: DiffQuickPickItem[] = [
+    ...tags.map(candidate => ({
       action: 'baseline',
-      baseline: preview.diffBaseline,
-      label: `$(file) ${getPathLabel(preview.diffBaseline.uri)}`,
-      description: 'Current file baseline',
-      detail: preview.diffBaseline.uri,
-    } satisfies DiffBaselineQuickPickItem
-    : undefined;
-  if (currentFileBaseline) {
-    items.push(currentFileBaseline);
-  }
+      baseline: candidate.baseline,
+      ...createDiffQuickPickCandidate(candidate, duplicateTagLabels),
+    } satisfies DiffBaselineQuickPickItem)),
+  ];
 
-  const currentRevisionBaseline = preview.diffBaseline && preview.diffBaseline.kind !== 'file'
-    && !availability.candidates.some(candidate => isSameBaseline(candidate.baseline, preview.diffBaseline!))
-    ? {
-      action: 'baseline',
-      baseline: preview.diffBaseline,
-      ...createCurrentBaselineQuickPickCandidate(preview.diffBaseline, availability),
-    } satisfies DiffBaselineQuickPickItem
-    : undefined;
-  if (currentRevisionBaseline) {
-    items.push(currentRevisionBaseline);
-  }
-
-  items.push(...availability.candidates.map(candidate => ({
+  appendSeparator(items, tags.length > 0 && commits.length > 0);
+  items.push(...commits.map(candidate => ({
     action: 'baseline',
     baseline: candidate.baseline,
-    ...createDiffQuickPickCandidate(candidate, duplicateTagLabels),
+    ...createDiffQuickPickCandidate(candidate),
   } satisfies DiffBaselineQuickPickItem)));
 
-  if (availability.canPickFile) {
-    items.push({
-      action: 'chooseFile',
-      label: '$(folder-opened) Choose file...',
-      description: 'Compare against another API.md file',
-    });
-  }
+  const actions = availability.canPickFile
+    ? [createChooseFileQuickPickItem(), createCancelDiffQuickPickItem()]
+    : [createCancelDiffQuickPickItem()];
+  appendSeparator(items, items.length > 0 && actions.length > 0);
+  items.push(...actions);
 
   return items;
 }
@@ -1308,42 +1317,16 @@ export function createDiffQuickPickCandidate(
   candidate: DiffAvailability['candidates'][number],
   duplicateTagLabels: ReadonlySet<string> = new Set(),
 ): vscode.QuickPickItem {
+  const detail = truncateQuickPickDetail(candidate.detail);
   return {
     label: candidate.baseline.kind === 'tag'
       ? `$(tag) ${candidate.label}`
       : `$(git-commit) ${candidate.label}`,
     description: candidate.description,
     detail: candidate.baseline.kind === 'tag' && duplicateTagLabels.has(candidate.label)
-      ? candidate.baseline.ref
-      : candidate.detail,
+      ? [candidate.baseline.ref, detail].filter(value => value && value.length > 0).join(' — ')
+      : detail,
   };
-}
-
-function createCurrentBaselineQuickPickCandidate(
-  baseline: Exclude<DiffBaselineSelection, { kind: 'file' }>,
-  availability: DiffAvailability,
-): vscode.QuickPickItem {
-  const isDefaultBaseline = availability.defaultBaseline !== undefined
-    && isSameBaseline(availability.defaultBaseline, baseline);
-
-  if (baseline.kind === 'tag') {
-    return {
-      label: `$(tag) ${getDisplayedTagBaselineLabel(baseline.ref)}`,
-      description: isDefaultBaseline ? 'Pull request base' : 'Current baseline',
-      detail: baseline.ref,
-    };
-  }
-
-  return {
-    label: `$(git-commit) ${baseline.ref.slice(0, 8)}`,
-    description: isDefaultBaseline ? 'Pull request base' : 'Current baseline',
-    detail: baseline.ref,
-  };
-}
-
-function getDisplayedTagBaselineLabel(ref: string): string {
-  const separator = ref.lastIndexOf('@');
-  return separator >= 0 ? ref.slice(separator + 1) : ref;
 }
 
 function getDuplicateTagLabels(candidates: readonly DiffAvailability['candidates'][number][]): ReadonlySet<string> {
@@ -1363,16 +1346,27 @@ function getDuplicateTagLabels(candidates: readonly DiffAvailability['candidates
   );
 }
 
+function appendSeparator(items: DiffQuickPickItem[], include: boolean): void {
+  if (!include || items.length === 0 || items[items.length - 1]?.kind === vscode.QuickPickItemKind.Separator) {
+    return;
+  }
+
+  items.push({
+    kind: vscode.QuickPickItemKind.Separator,
+    label: '',
+  });
+}
+
 function getActiveQuickPickItems(
   items: readonly DiffQuickPickItem[],
   preview: ViewPanel,
   availability: DiffAvailability,
-): readonly DiffQuickPickItem[] {
+): readonly DiffActionQuickPickItem[] {
   const currentBaseline = preview.diffBaseline;
   const current = currentBaseline
-    ? items.find(item => item.action === 'baseline' && isSameBaseline(item.baseline, currentBaseline))
+    ? items.find(item => isDiffBaselineQuickPickItem(item) && isSameBaseline(item.baseline, currentBaseline))
     : undefined;
-  if (current) {
+  if (current && isDiffActionQuickPickItem(current)) {
     return [current];
   }
 
@@ -1381,10 +1375,42 @@ function getActiveQuickPickItems(
   }
 
   const fallback = items.find(item =>
-    item.action === 'baseline' && availability.defaultBaseline !== undefined
+    isDiffBaselineQuickPickItem(item) && availability.defaultBaseline !== undefined
     && isSameBaseline(item.baseline, availability.defaultBaseline),
   );
-  return fallback ? [fallback] : [];
+  return fallback && isDiffActionQuickPickItem(fallback) ? [fallback] : [];
+}
+
+function createChooseFileQuickPickItem(): DiffChooseFileQuickPickItem {
+  return {
+    action: 'chooseFile',
+    label: '$(folder-opened) Choose file...',
+    description: 'Compare against another API.md file',
+  };
+}
+
+function createCancelDiffQuickPickItem(): DiffHideQuickPickItem {
+  return {
+    action: 'hide',
+    label: '$(close) Cancel',
+    description: 'Return to the normal preview',
+  };
+}
+
+function isDiffActionQuickPickItem(item: DiffQuickPickItem | undefined): item is DiffActionQuickPickItem {
+  return item !== undefined && 'action' in item;
+}
+
+function isDiffBaselineQuickPickItem(item: DiffQuickPickItem): item is DiffBaselineQuickPickItem {
+  return 'action' in item && item.action === 'baseline';
+}
+
+function truncateQuickPickDetail(detail: string | undefined): string | undefined {
+  if (!detail || detail.length <= maxQuickPickDetailLength) {
+    return detail;
+  }
+
+  return `${detail.slice(0, maxQuickPickDetailLength - 3).trimEnd()}...`;
 }
 
 function isSameBaseline(left: DiffBaselineSelection, right: DiffBaselineSelection): boolean {

@@ -3,19 +3,21 @@ import { getGitConfiguration } from './configuration';
 import {
   GitClient,
   GitCommit,
-  GitRef,
   GitRepository,
   getRepositoryRelativePath,
 } from './gitClient';
 import {
   GitHubClient,
+  GitHubCommit,
   GitHubDocumentRef,
   GitHubTag,
 } from './githubClient';
 import { PullRequestService, getPullRequestBaseBaseline } from './pullRequestService';
+import { parseVersion, sortByVersionDescending, Version } from './semver';
 
 const gitTagRefType = 2;
 const maxLogEntries = 64;
+const maxTagHistoryEntries = 256;
 
 export type DiffBaselineSelection =
   | DiffTagSelection
@@ -56,18 +58,9 @@ export interface ResolvedBaseline {
   readonly markdown: string;
 }
 
-export interface ParsedVersion {
-  readonly raw: string;
-  readonly normalized: string;
-  readonly major: number;
-  readonly minor: number;
-  readonly patch: number;
-  readonly prerelease: readonly (string | number)[];
-}
-
 export interface TagCandidate {
   readonly candidate: DiffCandidate;
-  readonly version: ParsedVersion;
+  readonly version: Version;
   readonly commit?: string;
 }
 
@@ -77,7 +70,6 @@ interface TagVersionPattern {
 
 interface CargoPackageMetadata {
   readonly name?: string;
-  readonly version?: string;
 }
 
 export class DiffService {
@@ -186,16 +178,26 @@ export class DiffService {
     }
 
     const currentPackage = await getCurrentPackageMetadata(document.uri, repository.rootUri);
-    const commits = await repository.log({ path: relativePath, maxEntries: maxLogEntries });
-    const tagCandidates = await this.getTagCandidates(document.uri, repository, relativePath, currentPackage.name);
+    const [commits, history] = await Promise.all([
+      repository.log({ path: relativePath, maxEntries: maxLogEntries }),
+      repository.log({ maxEntries: maxTagHistoryEntries }),
+    ]);
+    const tagCandidates = await this.getTagCandidates(
+      document.uri,
+      repository,
+      relativePath,
+      currentPackage.name,
+      createCommitDetailsByHash([...history, ...commits]),
+    );
     const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
+    const headCommit = repository.state.HEAD?.commit;
     const commitCandidates = commits
-      .filter(commit => !taggedCommits.has(commit.hash))
+      .filter(commit => commit.hash !== headCommit && !taggedCommits.has(commit.hash))
       .map(commit => ({
         baseline: { kind: 'commit', ref: commit.hash } as const,
         label: shortSha(commit.hash),
         description: commit.commitDate ? formatCommitDate(commit.commitDate) : undefined,
-        detail: firstLine(commit.message),
+        detail: getDisplayDetail(commit.message),
       }));
 
     const pullRequestBase = await this.getPullRequestBase(
@@ -215,7 +217,6 @@ export class DiffService {
       defaultBaseline: selectDefaultBaseline(
         tagCandidates,
         commitCandidates,
-        currentPackage.version ? parseVersion(currentPackage.version) : undefined,
         pullRequestBase,
       ),
       canPickFile,
@@ -231,7 +232,7 @@ export class DiffService {
     const historyDocument = pullRequestContext
       ? { ...githubDocument, ref: pullRequestContext.pullRequest.headSha }
       : githubDocument;
-    const [tagsResult, commitsResult] = await Promise.allSettled([
+    const [tagsResult, commitsResult, headCommitResult] = await Promise.allSettled([
       this.githubClient.getTags({
         repository: githubDocument.repository,
         promptForAuth: promptForGitHubAuth,
@@ -241,6 +242,11 @@ export class DiffService {
         ref: historyDocument.ref,
         path: historyDocument.path,
         maxEntries: maxLogEntries,
+        promptForAuth: promptForGitHubAuth,
+      }),
+      this.githubClient.getCommit({
+        repository: historyDocument.repository,
+        ref: historyDocument.ref,
         promptForAuth: promptForGitHubAuth,
       }),
     ]);
@@ -254,6 +260,10 @@ export class DiffService {
         this.logger.warn(`Unable to load GitHub commits for ${previewDocument.uri.toString()}: ${formatError(error)}`);
         return [];
       });
+      const headCommit = settledValue(headCommitResult, error => {
+        this.logger.warn(`Unable to load GitHub head commit for ${previewDocument.uri.toString()}: ${formatError(error)}`);
+        return undefined;
+      });
       const tagCandidates = await this.getGitHubTagCandidates(
         previewDocument.uri,
         githubDocument,
@@ -262,12 +272,12 @@ export class DiffService {
       );
       const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
       const commitCandidates = (commits ?? [])
-        .filter(commit => !taggedCommits.has(commit.hash))
+        .filter(commit => commit.hash !== headCommit?.hash && !taggedCommits.has(commit.hash))
         .map(commit => ({
           baseline: { kind: 'commit', ref: commit.hash } as const,
           label: shortSha(commit.hash),
           description: commit.committedAt ? formatCommitDate(commit.committedAt) : undefined,
-          detail: firstLine(commit.message),
+          detail: getDisplayDetail(commit.message),
         }));
       const pullRequestBase = await this.getGitHubPullRequestBase(
         historyDocument,
@@ -278,7 +288,7 @@ export class DiffService {
 
       return {
         candidates: [...tagCandidates.map(candidate => candidate.candidate), ...commitCandidates],
-        defaultBaseline: selectDefaultBaseline(tagCandidates, commitCandidates, undefined, pullRequestBase),
+        defaultBaseline: selectDefaultBaseline(tagCandidates, commitCandidates, pullRequestBase),
         canPickFile: true,
       };
     } catch (error) {
@@ -314,19 +324,21 @@ export class DiffService {
         return undefined;
       }
 
+      const commit = await this.getGitHubCommitDetails(document.repository, tag.commit, promptForGitHubAuth);
+
       return {
         candidate: {
           baseline: { kind: 'tag', ref: tag.name } as const,
           label: version.raw,
+          description: commit?.committedAt ? formatCommitDate(commit.committedAt) : undefined,
+          detail: getDisplayDetail(commit?.message),
         },
         version,
         commit: tag.commit,
       } satisfies TagCandidate;
     }));
 
-    return candidates
-      .filter(isDefined)
-      .sort((left, right) => compareVersions(right.version, left.version));
+    return sortByVersionDescending(candidates.filter(isDefined));
   }
 
   private async getGitHubPullRequestBase(
@@ -368,6 +380,7 @@ export class DiffService {
     repository: GitRepository,
     relativePath: string,
     packageName: string | undefined,
+    commitDetails: ReadonlyMap<string, GitCommit>,
   ): Promise<readonly TagCandidate[]> {
     const refs = await repository.getRefs({ sort: 'creatordate' });
     const patterns = getTagVersionPatterns(documentUri, this.logger);
@@ -392,17 +405,34 @@ export class DiffService {
         continue;
       }
 
+      const tagCommit = ref.commit ? commitDetails.get(ref.commit) : undefined;
+
       candidates.push({
         candidate: {
           baseline: { kind: 'tag', ref: ref.name },
           label: version.raw,
+          description: tagCommit?.commitDate ? formatCommitDate(tagCommit.commitDate) : undefined,
+          detail: getDisplayDetail(tagCommit?.message),
         },
         version,
         commit: ref.commit,
       });
     }
 
-    return candidates.sort((left, right) => compareVersions(right.version, left.version));
+    return sortByVersionDescending(candidates);
+  }
+
+  private async getGitHubCommitDetails(
+    repository: GitHubDocumentRef['repository'],
+    ref: string,
+    promptForAuth: boolean,
+  ): Promise<GitHubCommit | undefined> {
+    try {
+      return await this.githubClient.getCommit({ repository, ref, promptForAuth });
+    } catch (error) {
+      this.logger.warn(`Unable to load GitHub commit ${ref}: ${formatError(error)}`);
+      return undefined;
+    }
   }
 
   private async getPullRequestBase(
@@ -465,14 +495,9 @@ async function findNearestFile(
   return undefined;
 }
 
-export function parseCargoVersion(content: string): string | undefined {
-  return parseCargoPackage(content).version;
-}
-
 function parseCargoPackage(content: string): CargoPackageMetadata {
   let inPackage = false;
   let name: string | undefined;
-  let version: string | undefined;
 
   for (const line of content.split(/\r?\n/)) {
     const section = line.match(/^\s*\[([^\]]+)\]\s*$/);
@@ -487,16 +512,10 @@ function parseCargoPackage(content: string): CargoPackageMetadata {
     const packageName = line.match(/^\s*name\s*=\s*"([^"]+)"\s*$/);
     if (packageName) {
       name = packageName[1];
-      continue;
-    }
-
-    const packageVersion = line.match(/^\s*version\s*=\s*"([^"]+)"\s*$/);
-    if (packageVersion) {
-      version = packageVersion[1];
     }
   }
 
-  return { name, version };
+  return { name };
 }
 
 function matchesPackageTag(tagName: string, packageName: string): boolean {
@@ -530,65 +549,19 @@ function formatBaselineLabel(documentUri: vscode.Uri, baseline: DiffBaselineSele
 export function selectDefaultBaseline(
   tagCandidates: readonly TagCandidate[],
   commitCandidates: readonly DiffCandidate[],
-  currentVersion: ParsedVersion | undefined,
   pullRequestBase: DiffBaselineSelection | undefined,
 ): DiffBaselineSelection | undefined {
   if (pullRequestBase) {
     return pullRequestBase;
   }
 
-  const stableTags = tagCandidates.filter(candidate => isStableVersion(candidate.version));
-  const unstableTags = tagCandidates.filter(candidate => isUnstableVersion(candidate.version));
-
-  if (currentVersion) {
-    if (isBetaVersion(currentVersion)) {
-      const previousBeta = tagCandidates.find(candidate =>
-        sameRelease(candidate.version, currentVersion)
-        && isBetaVersion(candidate.version)
-        && compareVersions(candidate.version, currentVersion) < 0,
-      );
-      if (previousBeta) {
-        return previousBeta.candidate.baseline;
-      }
-    }
-
-    if (!isUnstableVersion(currentVersion)) {
-      const previousStable = stableTags.find(candidate => compareVersions(candidate.version, currentVersion) < 0);
-      if (previousStable) {
-        return previousStable.candidate.baseline;
-      }
-    }
-
-    const previousUnstable = unstableTags.find(candidate => compareVersions(candidate.version, currentVersion) < 0);
-    if (previousUnstable) {
-      return previousUnstable.candidate.baseline;
-    }
-  }
-
   return tagCandidates[0]?.candidate.baseline ?? commitCandidates[0]?.baseline;
-}
-
-export function parseVersion(value: string): ParsedVersion | undefined {
-  const normalized = value.trim().replace(/^v/i, '');
-  const match = normalized.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$/u);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    raw: value,
-    normalized,
-    major: Number(match[1]),
-    minor: Number(match[2] ?? '0'),
-    patch: Number(match[3] ?? '0'),
-    prerelease: parsePrerelease(match[4]),
-  };
 }
 
 export function parseConfiguredTagVersion(
   tagName: string,
   patterns: readonly TagVersionPattern[],
-): ParsedVersion | undefined {
+): Version | undefined {
   for (const pattern of patterns) {
     const match = pattern.expression.exec(tagName);
     if (!match) {
@@ -609,83 +582,6 @@ export function parseConfiguredTagVersion(
   }
 
   return undefined;
-}
-
-function parsePrerelease(value: string | undefined): readonly (string | number)[] {
-  if (!value) {
-    return [];
-  }
-
-  return value.split('.').map(part => /^\d+$/u.test(part) ? Number(part) : part.toLowerCase());
-}
-
-export function compareVersions(left: ParsedVersion, right: ParsedVersion): number {
-  const release = compareRelease(left, right);
-  if (release !== 0) {
-    return release;
-  }
-
-  if (left.prerelease.length === 0 && right.prerelease.length === 0) {
-    return 0;
-  }
-  if (left.prerelease.length === 0) {
-    return 1;
-  }
-  if (right.prerelease.length === 0) {
-    return -1;
-  }
-
-  const length = Math.max(left.prerelease.length, right.prerelease.length);
-  for (let index = 0; index < length; index++) {
-    const leftPart = left.prerelease[index];
-    const rightPart = right.prerelease[index];
-    if (leftPart === undefined) {
-      return -1;
-    }
-    if (rightPart === undefined) {
-      return 1;
-    }
-    if (typeof leftPart === 'number' && typeof rightPart === 'number') {
-      if (leftPart !== rightPart) {
-        return leftPart - rightPart;
-      }
-      continue;
-    }
-    if (typeof leftPart === 'number') {
-      return -1;
-    }
-    if (typeof rightPart === 'number') {
-      return 1;
-    }
-    const comparison = leftPart.localeCompare(rightPart);
-    if (comparison !== 0) {
-      return comparison;
-    }
-  }
-
-  return 0;
-}
-
-function compareRelease(left: ParsedVersion, right: ParsedVersion): number {
-  return left.major - right.major
-    || left.minor - right.minor
-    || left.patch - right.patch;
-}
-
-function sameRelease(left: ParsedVersion, right: ParsedVersion): boolean {
-  return compareRelease(left, right) === 0;
-}
-
-export function isBetaVersion(version: ParsedVersion): boolean {
-  return version.prerelease.some(part => part === 'beta');
-}
-
-export function isStableVersion(version: ParsedVersion): boolean {
-  return version.major > 0 && version.prerelease.length === 0;
-}
-
-export function isUnstableVersion(version: ParsedVersion): boolean {
-  return version.major === 0;
 }
 
 async function readText(uri: vscode.Uri): Promise<string> {
@@ -718,8 +614,21 @@ function shortSha(commit: string): string {
   return commit.slice(0, 8);
 }
 
-function firstLine(message: string): string {
-  return message.split(/\r?\n/u, 1)[0] ?? message;
+function getDisplayDetail(message: string | undefined): string | undefined {
+  if (!message) {
+    return undefined;
+  }
+
+  for (const line of message.split(/\r?\n/u)) {
+    if (line.startsWith('----- BEGIN')) {
+      return undefined;
+    }
+    if (line.trim().length > 0) {
+      return line;
+    }
+  }
+
+  return undefined;
 }
 
 function settledValue<T>(
@@ -739,6 +648,16 @@ function formatError(error: unknown): string {
 
 function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
+}
+
+function createCommitDetailsByHash(commits: readonly GitCommit[]): ReadonlyMap<string, GitCommit> {
+  const values = new Map<string, GitCommit>();
+  for (const commit of commits) {
+    if (!values.has(commit.hash)) {
+      values.set(commit.hash, commit);
+    }
+  }
+  return values;
 }
 
 function getTagVersionPatterns(

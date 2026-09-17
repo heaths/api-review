@@ -47,6 +47,10 @@ export interface GitHubCommit {
   readonly committedAt?: string;
 }
 
+export interface GitHubCommitRequest extends GitHubRepositoryRequest {
+  readonly ref: string;
+}
+
 export interface GitHubRepositoryRequest {
   readonly repository: GitHubRepositoryRef;
   readonly promptForAuth?: boolean;
@@ -177,6 +181,7 @@ export interface GitHubClient {
   submitPullRequestReview(request: GitHubSubmitPullRequestReviewRequest): Promise<void>;
   getPullRequestBase(request: GitHubPullRequestBaseRequest): Promise<GitHubPullRequestBase | undefined>;
   getTags(request: GitHubRepositoryRequest): Promise<readonly GitHubTag[] | undefined>;
+  getCommit(request: GitHubCommitRequest): Promise<GitHubCommit | undefined>;
   getCommits(request: GitHubHistoryRequest): Promise<readonly GitHubCommit[] | undefined>;
   getFileContent(request: GitHubFileContentRequest): Promise<string | undefined>;
 }
@@ -618,6 +623,16 @@ class OctokitGitHubClient implements GitHubClient {
       'GET /repos/{owner}/{repo}/tags',
       { per_page: 100 },
       normalizeTags,
+    );
+  }
+
+  public async getCommit(request: GitHubCommitRequest): Promise<GitHubCommit | undefined> {
+    return this.loadRest(
+      request,
+      `commit:${repositoryCacheKey(request.repository)}:${request.ref}`,
+      'GET /repos/{owner}/{repo}/commits/{ref}',
+      { ref: request.ref },
+      normalizeCommit,
     );
   }
 
@@ -1128,18 +1143,23 @@ function normalizeCommits(payload: unknown): readonly GitHubCommit[] | undefined
   }
 
   return payload.flatMap(value => {
-    if (!isRecord(value) || typeof value.sha !== 'string' || !isRecord(value.commit)
-      || typeof value.commit.message !== 'string') {
-      return [];
-    }
-
-    const committer = isRecord(value.commit.committer) ? value.commit.committer : undefined;
-    return [{
-      hash: value.sha,
-      message: value.commit.message,
-      committedAt: typeof committer?.date === 'string' ? committer.date : undefined,
-    }];
+    const commit = normalizeCommit(value);
+    return commit ? [commit] : [];
   });
+}
+
+function normalizeCommit(payload: unknown): GitHubCommit | undefined {
+  if (!isRecord(payload) || typeof payload.sha !== 'string' || !isRecord(payload.commit)
+    || typeof payload.commit.message !== 'string') {
+    return undefined;
+  }
+
+  const committer = isRecord(payload.commit.committer) ? payload.commit.committer : undefined;
+  return {
+    hash: payload.sha,
+    message: payload.commit.message,
+    committedAt: typeof committer?.date === 'string' ? committer.date : undefined,
+  };
 }
 
 function repositoryCacheKey(repository: GitHubRepositoryRef): string {

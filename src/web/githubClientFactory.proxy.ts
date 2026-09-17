@@ -3,6 +3,7 @@ import {
   GitHubClient,
   GitHubClientOptions,
   GitHubCommit,
+  GitHubCommitRequest,
   GitHubCreatePullRequestCommentReplyRequest,
   GitHubCreatePullRequestCommentRequest,
   GitHubDeletePullRequestCommentRequest,
@@ -73,6 +74,10 @@ class GitHubProxyClient implements GitHubClient {
 
   public getTags(_request: GitHubRepositoryRequest): Promise<readonly GitHubTag[]> {
     return this.getJson<readonly GitHubTag[]>('/tags');
+  }
+
+  public getCommit(request: GitHubCommitRequest): Promise<GitHubCommit | undefined> {
+    return this.getJsonOrUndefined<GitHubCommit>('/commit', { ref: request.ref });
   }
 
   public getCommits(request: GitHubHistoryRequest): Promise<readonly GitHubCommit[]> {

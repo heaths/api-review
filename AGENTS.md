@@ -47,10 +47,12 @@
   and review submission belong together in `pullRequestService.ts`. Do not split
   PR workflow logic between views or route PR operations directly through
   `githubClient.ts`.
-- Diff baseline discovery, version sorting, baseline labeling, and content
-  resolution belong in `diffService.ts`. Keep `diffView.ts` focused on diff HTML
-  rendering and keep `markdownView.ts` focused on the main markdown view, webview
-  lifecycle, and final document rendering.
+- Diff baseline discovery, baseline matching/default selection, and content
+  resolution belong in `diffService.ts`. Keep shared semantic-version parsing
+  and comparison in a browser-safe utility, keep picker ordering/layout in
+  `markdownView.ts`, keep `diffView.ts` focused on diff HTML rendering, and
+  keep `markdownView.ts` focused on the main markdown view, webview lifecycle,
+  and final document rendering.
 - Prefer local-first diff behavior: use `gitClient.ts` when a local repository is
   available, and fall back to `githubClient.ts` only for GitHub-backed documents
   or operations that require published GitHub state.
@@ -85,6 +87,13 @@
   source of truth is the local repository, update `githubClient.ts` if the
   source of truth is GitHub, and update `diffService.ts` only for orchestration,
   baseline selection, and fallback order.
+- Sort version tags by semantic version descending. Compare prerelease numeric
+  identifiers numerically (`beta.12` > `beta.2`), and treat a stable release as
+  newer than prereleases of the same release.
+- After diff history loads, match the selected baseline to the current listed
+  baseline when possible; otherwise default to the newest reachable listed tag,
+  and fall back to the newest listed commit. Keep tags ahead of commits, omit
+  `HEAD` from commits, and omit commits already represented by listed tags.
 - Write commit messages and pull request titles and descriptions as described in
   `.github/instructions/commits.instructions.md`.
 - Keep dependency and Playwright caching in sync across workflows, including

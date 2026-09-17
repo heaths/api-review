@@ -6,6 +6,10 @@ import express from 'express';
 const execFileAsync = promisify(execFile);
 const mockUserLogin = 'heaths';
 const mockUserAvatarUrl = 'https://avatars.githubusercontent.com/u/1532486?v=4';
+const historyResponseDelayMs = 2000;
+const mockHistoryPath = 'scripts/github-proxy.mjs';
+const mockHistorySourceRef = 'api-review';
+const mockHistorySourcePath = 'sdk/keyvault/azure_security_keyvault_keys/api/API.md';
 
 export async function startGitHubProxy(repositoryRoot) {
   const app = express();
@@ -34,20 +38,8 @@ export async function startGitHubProxy(repositoryRoot) {
 
   app.get('/tags', async (_request, response) => {
     try {
-      const names = (await runGit(repositoryRoot, ['tag', '--list']))
-        .split('\n')
-        .filter(Boolean);
-      const tags = (await Promise.all(names.map(async name => {
-        try {
-          return {
-            name,
-            commit: await runGit(repositoryRoot, ['rev-list', '-n', '1', name]),
-          };
-        } catch {
-          return undefined;
-        }
-      }))).filter(Boolean);
-      response.json(tags);
+      await delay(historyResponseDelayMs);
+      response.json(await getMockTags(repositoryRoot));
     } catch (error) {
       sendError(response, error);
     }
@@ -63,6 +55,12 @@ export async function startGitHubProxy(repositoryRoot) {
     }
 
     try {
+      await delay(historyResponseDelayMs);
+      if (filePath === mockHistoryPath) {
+        response.json(await getMockHistoryCommits(repositoryRoot, maxEntries));
+        return;
+      }
+
       const output = await runGit(repositoryRoot, [
         'log',
         `--max-count=${maxEntries}`,
@@ -77,6 +75,26 @@ export async function startGitHubProxy(repositoryRoot) {
     }
   });
 
+  app.get('/commit', async (request, response) => {
+    const ref = readQuery(request.query.ref);
+    if (!ref) {
+      response.status(400).json({ error: 'ref is required' });
+      return;
+    }
+
+    try {
+      const output = await runGit(repositoryRoot, [
+        'log',
+        '--max-count=1',
+        '--format=%H%x00%cI%x00%B%x00%x1e',
+        ref,
+      ]);
+      response.json(parseCommits(output)[0] ?? null);
+    } catch (error) {
+      sendError(response, error);
+    }
+  });
+
   app.get('/content', async (request, response) => {
     const ref = readQuery(request.query.ref);
     const filePath = readRepositoryPath(request.query.path);
@@ -86,7 +104,10 @@ export async function startGitHubProxy(repositoryRoot) {
     }
 
     try {
-      response.type('text/plain').send(await runGit(repositoryRoot, ['show', `${ref}:${filePath}`]));
+      response.type('text/plain').send(await runGit(
+        repositoryRoot,
+        ['show', `${ref}:${filePath === mockHistoryPath ? mockHistorySourcePath : filePath}`],
+      ));
     } catch (error) {
       if (isMissingContentError(error)) {
         response.sendStatus(404);
@@ -259,6 +280,61 @@ function parseCommits(output) {
     const [hash, committedAt, message] = record.trim().split('\x00');
     return hash && message ? [{ hash, committedAt, message: message.trim() }] : [];
   });
+}
+
+async function getMockTags(repositoryRoot) {
+  const names = (await runGit(repositoryRoot, [
+    'tag',
+    '--merged',
+    mockHistorySourceRef,
+    '--sort=-creatordate',
+  ]))
+    .split('\n')
+    .filter(Boolean);
+
+  return (await Promise.all(names.map(async name => {
+    try {
+      await runGit(repositoryRoot, ['show', `${name}:${mockHistorySourcePath}`]);
+      return {
+        name,
+        commit: await runGit(repositoryRoot, ['rev-list', '-n', '1', name]),
+      };
+    } catch {
+      return undefined;
+    }
+  }))).filter(Boolean);
+}
+
+async function getMockHistoryCommits(repositoryRoot, maxEntries) {
+  const output = await runGit(repositoryRoot, [
+    'log',
+    `--max-count=${Math.max(maxEntries, 1)}`,
+    '--format=%H%x00%cI%x00%B%x00%x1e',
+    mockHistorySourceRef,
+    '--',
+    mockHistorySourcePath,
+  ]);
+
+  return appendMockHistory(parseCommits(output).slice(1), maxEntries);
+}
+
+function appendMockHistory(commits, maxEntries) {
+  return [
+    ...commits,
+    {
+      hash: '95f95f95f95f95f95f95f95f95f95f95f95f95f9',
+      committedAt: '2024-09-17T00:00:00Z',
+      message: [
+        'Update MSRV to 1.95',
+        '',
+        'Update the minimum rust-version to version 1.95',
+      ].join('\n'),
+    },
+  ].slice(0, maxEntries);
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 function readQuery(value) {

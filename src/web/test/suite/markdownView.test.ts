@@ -4,6 +4,9 @@ import { GitHubDocumentRef, GitHubPullRequest } from '../../githubClient';
 import { createMarkdownViewLineMetadata } from '../../lineMetadata';
 import { PullRequestLineComment } from '../../pullRequestService';
 import {
+  createDiffQuickPickCandidate,
+  createDiffQuickPickItems,
+  createLoadingDiffQuickPickItems,
   getContributedMarkdownViewStyles,
   getPathLabel,
   getMarkdownViewHtml,
@@ -92,6 +95,137 @@ suite('Markdown view', () => {
     assert.strictEqual(getPathLabel('/sdk/keyvault/API.md'), 'API.md');
     assert.strictEqual(getPathLabel('my_crate@1.2.3:/sdk/keyvault/API.md'), 'API.md');
     assert.strictEqual(getPathLabel('file:///sdk/keyvault/API.md'), 'API.md');
+  });
+
+  test('shows only choose file and cancel while diff history loads', () => {
+    const items = createLoadingDiffQuickPickItems();
+
+    assert.deepStrictEqual(items, [
+      {
+        action: 'chooseFile',
+        label: '$(folder-opened) Choose file...',
+        description: 'Compare against another API.md file',
+      },
+      {
+        action: 'hide',
+        label: '$(close) Cancel',
+        description: 'Return to the normal preview',
+      },
+    ]);
+  });
+
+  test('groups loaded diff items with separators only between populated sections', () => {
+    const items = createDiffQuickPickItems({
+      candidates: [
+        {
+          baseline: { kind: 'tag', ref: 'crate@1.2.0' },
+          label: '1.2.0',
+          description: '2026-09-10',
+          detail: 'latest stable release',
+        },
+        {
+          baseline: { kind: 'commit', ref: '1234567890abcdef' },
+          label: '12345678',
+          description: '2026-09-09',
+          detail: 'previous api change',
+        },
+      ],
+      defaultBaseline: { kind: 'tag', ref: 'crate@1.2.0' },
+      canPickFile: true,
+    });
+
+    assert.deepStrictEqual(items.map(item => ({
+      kind: item.kind,
+      label: item.label,
+      description: item.description,
+      detail: item.detail,
+      action: 'action' in item ? item.action : undefined,
+    })), [
+      {
+        kind: undefined,
+        label: '$(tag) 1.2.0',
+        description: '2026-09-10',
+        detail: 'latest stable release',
+        action: 'baseline',
+      },
+      {
+        kind: vscode.QuickPickItemKind.Separator,
+        label: '',
+        description: undefined,
+        detail: undefined,
+        action: undefined,
+      },
+      {
+        kind: undefined,
+        label: '$(git-commit) 12345678',
+        description: '2026-09-09',
+        detail: 'previous api change',
+        action: 'baseline',
+      },
+      {
+        kind: vscode.QuickPickItemKind.Separator,
+        label: '',
+        description: undefined,
+        detail: undefined,
+        action: undefined,
+      },
+      {
+        kind: undefined,
+        label: '$(folder-opened) Choose file...',
+        description: 'Compare against another API.md file',
+        detail: undefined,
+        action: 'chooseFile',
+      },
+      {
+        kind: undefined,
+        label: '$(close) Cancel',
+        description: 'Return to the normal preview',
+        detail: undefined,
+        action: 'hide',
+      },
+    ]);
+  });
+
+  test('omits separators when only quick-pick actions remain', () => {
+    const items = createDiffQuickPickItems({
+      candidates: [],
+      defaultBaseline: undefined,
+      canPickFile: true,
+    });
+
+    assert.deepStrictEqual(items.map(item => item.label), [
+      '$(folder-opened) Choose file...',
+      '$(close) Cancel',
+    ]);
+    assert.ok(items.every(item => item.kind !== vscode.QuickPickItemKind.Separator));
+  });
+
+  test('truncates long quick-pick details and preserves duplicate tag refs', () => {
+    const item = createDiffQuickPickCandidate({
+      baseline: { kind: 'tag', ref: 'crate@1.0.0' },
+      label: '1.0.0',
+      detail: 'a'.repeat(140),
+    }, new Set(['1.0.0']));
+
+    assert.strictEqual(item.label, '$(tag) 1.0.0');
+    assert.ok(item.detail?.startsWith('crate@1.0.0 — '));
+    assert.ok(item.detail?.endsWith('...'));
+    assert.ok((item.detail?.length ?? 0) <= 65);
+  });
+
+  test('keeps short first-line commit titles unchanged', () => {
+    const item = createDiffQuickPickCandidate({
+      baseline: { kind: 'commit', ref: '1234567890abcdef' },
+      label: '12345678',
+      description: '2026-09-09',
+      detail: 'Update MSRV to 1.95',
+    });
+
+    assert.deepStrictEqual(item, {
+      label: '$(git-commit) 12345678',
+      description: '2026-09-09',
+      detail: 'Update MSRV to 1.95',
+    });
   });
 
   test('maps actionable preview lines to patched markdown lines', () => {

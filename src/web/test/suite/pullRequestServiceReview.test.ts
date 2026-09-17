@@ -76,6 +76,9 @@ suite('Pull request service review workflows', () => {
       async getPullRequestBase() {
         return undefined;
       },
+      async getCommit() {
+        return undefined;
+      },
       async getTags() {
         return undefined;
       },
@@ -179,6 +182,9 @@ suite('Pull request service review workflows', () => {
       async getPullRequestBase() {
         return undefined;
       },
+      async getCommit() {
+        return undefined;
+      },
       async getTags() {
         return undefined;
       },
@@ -268,6 +274,9 @@ suite('Pull request service review workflows', () => {
         submissions.push(request);
       },
       async getPullRequestBase() {
+        return undefined;
+      },
+      async getCommit() {
         return undefined;
       },
       async getTags() {
