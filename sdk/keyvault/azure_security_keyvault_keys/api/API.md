@@ -2,7 +2,7 @@
 
 - **Description**: Rust wrappers around Microsoft Azure REST APIs - Azure Key Vault Keys
 - **Edition**: 2021
-- **Rust version**: 1.88
+- **Rust version**: 1.92
 
 ## Features
 
