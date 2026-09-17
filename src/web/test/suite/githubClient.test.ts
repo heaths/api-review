@@ -111,7 +111,7 @@ suite('GitHub client', () => {
     assert.strictEqual(parseGitHubDocument('https://example.com/heaths/api-review/blob/main/API.md'), undefined);
   });
 
-  test('loads and caches GitHub tags, commits, and file content', async () => {
+  test('loads and caches GitHub tags, commit details, commits, and file content', async () => {
     const routes: string[] = [];
     const client = createGitHubClient({
       cache: new MemoryCache(),
@@ -132,6 +132,12 @@ suite('GitHub client', () => {
                 return createResponse([
                   { name: 'crate@1.0.0', commit: { sha: 'tag-sha' } },
                 ]) as unknown as GitHubTransportResponse<T>;
+              case 'GET /repos/{owner}/{repo}/commits/{ref}':
+                assert.strictEqual(parameters.ref, 'tag-sha');
+                return createResponse({
+                  sha: 'tag-sha',
+                  commit: { message: 'Tag commit', committer: { date: '2026-09-09T12:00:00Z' } },
+                }) as unknown as GitHubTransportResponse<T>;
               case 'GET /repos/{owner}/{repo}/commits':
                 assert.strictEqual(parameters.sha, 'main');
                 assert.strictEqual(parameters.path, 'api/API.md');
@@ -155,6 +161,10 @@ suite('GitHub client', () => {
 
     assert.deepStrictEqual(await client.getTags({ repository }), [{ name: 'crate@1.0.0', commit: 'tag-sha' }]);
     assert.deepStrictEqual(await client.getTags({ repository }), [{ name: 'crate@1.0.0', commit: 'tag-sha' }]);
+    assert.deepStrictEqual(await client.getCommit({
+      repository,
+      ref: 'tag-sha',
+    }), { hash: 'tag-sha', message: 'Tag commit', committedAt: '2026-09-09T12:00:00Z' });
     assert.deepStrictEqual(await client.getCommits({
       repository,
       ref: 'main',
@@ -169,6 +179,7 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(routes, [
       'GET /repos/{owner}/{repo}/tags',
       'GET /repos/{owner}/{repo}/tags',
+      'GET /repos/{owner}/{repo}/commits/{ref}',
       'GET /repos/{owner}/{repo}/commits',
       'GET /repos/{owner}/{repo}/contents/{path}',
     ]);

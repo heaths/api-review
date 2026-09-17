@@ -3,11 +3,8 @@ import * as vscode from 'vscode';
 import {
   DiffCandidate,
   DiffService,
-  compareVersions,
   getFileBaselineLabel,
   parseConfiguredTagVersion,
-  parseCargoVersion,
-  parseVersion,
   selectDefaultBaseline,
   TagCandidate,
 } from '../../diffService';
@@ -17,6 +14,7 @@ import { PullRequestService } from '../../pullRequestService';
 import { renderDiffView } from '../../diffView';
 import { createDiffLineMetadata, createMarkdownViewLineMetadata } from '../../lineMetadata';
 import { createDiffQuickPickCandidate } from '../../markdownView';
+import { compareVersions, parseVersion } from '../../semver';
 
 function createLogger(): vscode.LogOutputChannel {
   return {
@@ -47,6 +45,9 @@ function createGitHubClient(overrides: Partial<GitHubClient>): GitHubClient {
       return undefined;
     },
     async getTags() {
+      return undefined;
+    },
+    async getCommit() {
       return undefined;
     },
     async getCommits() {
@@ -135,6 +136,9 @@ suite('Diff service', () => {
         commitRefs.push(request.ref);
         return [{ hash: headSha, message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
       },
+      async getCommit() {
+        return { hash: headSha, message: 'Update API', committedAt: '2026-09-10T12:00:00Z' };
+      },
       async getFileContent() {
         return '# Baseline';
       },
@@ -170,7 +174,6 @@ suite('Diff service', () => {
     assert.deepStrictEqual(commitRefs, [headSha]);
     assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
       { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
-      { kind: 'commit', ref: headSha },
     ]);
     assert.deepStrictEqual(availability.defaultBaseline, {
       kind: 'tag',
@@ -197,7 +200,13 @@ suite('Diff service', () => {
         return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
       },
       async getCommits() {
-        return [{ hash: 'newer-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
+        return [
+          { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' },
+          { hash: 'newer-commit', message: 'Earlier API update', committedAt: '2026-09-09T12:00:00Z' },
+        ];
+      },
+      async getCommit() {
+        return { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' };
       },
       async getFileContent() {
         return '# Baseline';
@@ -244,7 +253,13 @@ suite('Diff service', () => {
         throw new Error('tags failed');
       },
       async getCommits() {
-        return [{ hash: 'newer-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }];
+        return [
+          { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' },
+          { hash: 'newer-commit', message: 'Earlier API update', committedAt: '2026-09-09T12:00:00Z' },
+        ];
+      },
+      async getCommit() {
+        return { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' };
       },
       async getFileContent() {
         return '# Baseline';
@@ -286,6 +301,9 @@ suite('Diff service', () => {
       },
       async getTags() {
         return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
+      },
+      async getCommit() {
+        return { hash: 'tagged-commit', message: 'Tagged API', committedAt: '2026-09-10T12:00:00Z' };
       },
       async getCommits() {
         throw new Error('commits failed');
@@ -331,8 +349,14 @@ suite('Diff service', () => {
       async getTags() {
         return [{ name: '0.1.0', commit: 'tagged-commit' }];
       },
+      async getCommit() {
+        return { hash: 'head-commit', message: 'Add fixture API', committedAt: '2026-09-10T12:00:00Z' };
+      },
       async getCommits() {
-        return [{ hash: 'newer-commit', message: 'Add fixture API', committedAt: '2026-09-10T12:00:00Z' }];
+        return [
+          { hash: 'head-commit', message: 'Add fixture API', committedAt: '2026-09-10T12:00:00Z' },
+          { hash: 'newer-commit', message: 'Earlier fixture API', committedAt: '2026-09-09T12:00:00Z' },
+        ];
       },
       async getFileContent(request) {
         return request.ref === '0.1.0' ? undefined : '# Baseline';
@@ -355,6 +379,70 @@ suite('Diff service', () => {
       kind: 'commit',
       ref: 'newer-commit',
     });
+  });
+
+  test('uses safe first-line details for tags and commits', async () => {
+    const document = {
+      uri: vscode.Uri.parse(
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      ),
+    } as vscode.TextDocument;
+    const gitClient = createGitClient();
+    const githubClient = createGitHubClient({
+      resolveDocument() {
+        return {
+          repository: { owner: 'heaths', repo: 'api-review' },
+          ref: 'main',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        };
+      },
+      async getTags() {
+        return [{ name: 'azure_security_keyvault_keys@1.0.0', commit: 'tagged-commit' }];
+      },
+      async getCommit(request) {
+        if (request.ref === 'main') {
+          return { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' };
+        }
+        return {
+          hash: 'tagged-commit',
+          message: 'Release API\n\n----- BEGIN PGP SIGNATURE-----',
+          committedAt: '2026-09-09T12:00:00Z',
+        };
+      },
+      async getCommits() {
+        return [
+          { hash: 'head-commit', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' },
+          { hash: 'older-commit', message: '----- BEGIN PGP SIGNATURE-----', committedAt: '2026-09-08T12:00:00Z' },
+        ];
+      },
+      async getFileContent() {
+        return '# Baseline';
+      },
+      async getPullRequest() {
+        return undefined;
+      },
+      async getPullRequestBase() {
+        return undefined;
+      },
+    });
+    const service = new DiffService(createLogger(), githubClient, gitClient, createPullRequestService());
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.candidates, [
+      {
+        baseline: { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+        label: '1.0.0',
+        description: '2026-09-09',
+        detail: 'Release API',
+      },
+      {
+        baseline: { kind: 'commit', ref: 'older-commit' },
+        label: 'older-co',
+        description: '2026-09-08',
+        detail: undefined,
+      },
+    ]);
   });
 
   test('uses the dedicated pull request context for local repository baselines', async () => {
@@ -421,19 +509,6 @@ suite('Diff service', () => {
     });
   });
 
-  test('parses Cargo package versions', () => {
-    const version = parseCargoVersion([
-      '[workspace]',
-      'members = []',
-      '',
-      '[package]',
-      'name = "crate"',
-      'version = "1.2.3-beta.4"',
-    ].join('\n'));
-
-    assert.strictEqual(version, '1.2.3-beta.4');
-  });
-
   test('orders semver tags in descending order', () => {
     const versions = ['0.9', '1.1.0-beta.2', '1.1.0', '1.0.0']
       .map(value => parseVersion(value))
@@ -442,6 +517,16 @@ suite('Diff service', () => {
       .map(value => value.raw);
 
     assert.deepStrictEqual(versions, ['1.1.0', '1.1.0-beta.2', '1.0.0', '0.9']);
+  });
+
+  test('orders numeric prerelease identifiers numerically', () => {
+    const versions = ['1.1.0-beta.2', '1.1.0-beta.12']
+      .map(value => parseVersion(value))
+      .filter((value): value is NonNullable<typeof value> => value !== undefined)
+      .sort((left, right) => compareVersions(right, left))
+      .map(value => value.raw);
+
+    assert.deepStrictEqual(versions, ['1.1.0-beta.12', '1.1.0-beta.2']);
   });
 
   test('extracts versions from capture group 1 tag patterns', () => {
@@ -460,7 +545,7 @@ suite('Diff service', () => {
     assert.strictEqual(version?.normalized, '1.0.0');
   });
 
-  test('selects the previous beta for beta versions', () => {
+  test('selects the newest tag when tags are available', () => {
     const baseline = selectDefaultBaseline(
       [
         createTag('1.2.0'),
@@ -468,26 +553,20 @@ suite('Diff service', () => {
         createTag('1.1.0'),
       ],
       [createCommit('abc1234')],
-      parseVersion('1.2.0-beta.3'),
       undefined,
     );
 
-    assert.deepStrictEqual(baseline, { kind: 'tag', ref: '1.2.0-beta.2' });
+    assert.deepStrictEqual(baseline, { kind: 'tag', ref: '1.2.0' });
   });
 
-  test('falls back to the previous stable version for stable releases', () => {
+  test('falls back to the newest commit when no tags are available', () => {
     const baseline = selectDefaultBaseline(
-      [
-        createTag('2.0.0'),
-        createTag('1.9.0'),
-        createTag('0.9.0'),
-      ],
+      [],
       [createCommit('abc1234')],
-      parseVersion('2.0.0'),
       undefined,
     );
 
-    assert.deepStrictEqual(baseline, { kind: 'tag', ref: '1.9.0' });
+    assert.deepStrictEqual(baseline, { kind: 'commit', ref: 'abc1234' });
   });
 
   test('formats tag picker rows with the captured version only', () => {
