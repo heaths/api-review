@@ -44,13 +44,14 @@ export function createMarkdownViewLineMetadata(
     .map(entry => {
       const documentationGroup = documentationGroups.get(entry.line);
       const hasDocumentation = entry.hasDocumentation && documentationGroup !== undefined;
+      const documentationGroupLine = entry.documentationGroupLine ?? documentationGroup?.groupLine ?? entry.line;
       const lineComments = pullRequestComments?.get(entry.line);
       return {
         ...entry,
         sourceLine: entry.line,
         viewLine: viewLineMap.sourceToView[entry.line] ?? entry.line,
         hasDocumentation,
-        documentationGroupId: hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
+        documentationGroupId: hasDocumentation ? getDocumentationGroupId(documentationGroupLine) : undefined,
         documentationViewLines: hasDocumentation ? documentationGroup.documentationViewLines : [],
         pullRequestComments: lineComments,
         hasPullRequestDiscussion: (lineComments?.length ?? 0) > 1,
@@ -77,7 +78,9 @@ export function createDiffLineMetadata(
       viewLine: entry.line,
       hasDocumentation: entry.hasDocumentation,
       hasSource: entry.hasSource,
-      documentationGroupId: entry.hasDocumentation ? getDocumentationGroupId(entry.line) : undefined,
+      documentationGroupId: entry.hasDocumentation
+        ? getDocumentationGroupId(entry.documentationGroupLine ?? entry.line)
+        : undefined,
       documentationViewLines: [],
       pullRequestComments: pullRequestComments?.get(entry.line),
       hasPullRequestDiscussion: (pullRequestComments?.get(entry.line)?.length ?? 0) > 1,

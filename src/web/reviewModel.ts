@@ -8,6 +8,7 @@ export interface ReviewEntry {
   readonly line: number;
   readonly language: string;
   readonly documentation?: readonly string[];
+  readonly documentationGroupLine?: number;
   readonly source?: vscode.Location;
 }
 

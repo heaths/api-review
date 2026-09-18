@@ -1,13 +1,18 @@
 import { applyPatch, parsePatch } from 'diff';
 
 export interface DocumentationAnchor {
+  readonly lines: readonly DocumentationAnchorLine[];
+  readonly documentation: readonly string[];
+}
+
+export interface DocumentationAnchorLine {
   readonly line: number;
   readonly declaration: string;
-  readonly documentation: readonly string[];
 }
 
 export interface ViewDocumentationGroup {
   readonly line: number;
+  readonly groupLine: number;
   readonly viewLine: number;
   readonly documentationViewLines: readonly number[];
 }
@@ -29,8 +34,15 @@ export function extractDocumentationAnchors(patch: string): DocumentationAnchor[
 
   for (const file of parsePatch(patch)) {
     for (const hunk of file.hunks) {
-      let documentation: string[] = [];
+      let pendingDocumentation: string[] = [];
+      let anchor: { lines: DocumentationAnchorLine[]; documentation: readonly string[] } | undefined;
       let oldLine = hunk.oldStart;
+      const finishAnchor = (): void => {
+        if (anchor?.lines.length) {
+          anchors.push(anchor);
+        }
+        anchor = undefined;
+      };
 
       for (const line of hunk.lines) {
         const marker = line[0];
@@ -38,24 +50,33 @@ export function extractDocumentationAnchors(patch: string): DocumentationAnchor[
 
         if (marker === '+') {
           if (documentationLine.test(content)) {
-            documentation.push(content);
+            finishAnchor();
+            pendingDocumentation.push(content);
           } else if (content.trim().length > 0) {
-            documentation = [];
+            finishAnchor();
+            pendingDocumentation = [];
           }
           continue;
         }
 
-        if (marker === ' ' && documentation.length > 0 && content.trim().length > 0) {
-          anchors.push({ line: oldLine - 1, declaration: content, documentation });
-          documentation = [];
+        if (marker === ' ' && content.trim().length > 0) {
+          if (pendingDocumentation.length > 0) {
+            finishAnchor();
+            anchor = { lines: [], documentation: pendingDocumentation };
+            pendingDocumentation = [];
+          }
+          anchor?.lines.push({ line: oldLine - 1, declaration: content });
         } else if (marker !== '\\') {
-          documentation = [];
+          finishAnchor();
+          pendingDocumentation = [];
         }
 
         if (marker === ' ' || marker === '-') {
           oldLine++;
         }
       }
+
+      finishAnchor();
     }
   }
 
@@ -78,7 +99,10 @@ export function mapViewLines(source: string, patch: string): ViewLineMap {
         newLine++;
       }
 
-      let documentationViewLines: number[] = [];
+      let pendingDocumentationViewLines: number[] = [];
+      let documentationGroup:
+        { groupLine: number; documentationViewLines: readonly number[] }
+        | undefined;
       for (const line of hunk.lines) {
         const marker = line[0];
         const content = line.slice(1);
@@ -86,23 +110,33 @@ export function mapViewLines(source: string, patch: string): ViewLineMap {
         switch (marker) {
           case '+':
             if (documentationLine.test(content)) {
-              documentationViewLines.push(newLine);
+              documentationGroup = undefined;
+              pendingDocumentationViewLines.push(newLine);
             } else if (content.trim().length > 0) {
-              documentationViewLines = [];
+              documentationGroup = undefined;
+              pendingDocumentationViewLines = [];
             }
             newLine++;
             break;
 
           case ' ':
-            if (documentationViewLines.length > 0 && content.trim().length > 0) {
+            if (content.trim().length > 0 && pendingDocumentationViewLines.length > 0) {
+              documentationGroup = {
+                groupLine: oldLine,
+                documentationViewLines: pendingDocumentationViewLines,
+              };
+              pendingDocumentationViewLines = [];
+            }
+            if (content.trim().length > 0 && documentationGroup) {
               documentationGroups.push({
                 line: oldLine,
+                groupLine: documentationGroup.groupLine,
                 viewLine: newLine,
-                documentationViewLines,
+                documentationViewLines: documentationGroup.documentationViewLines,
               });
-              documentationViewLines = [];
             } else {
-              documentationViewLines = [];
+              documentationGroup = undefined;
+              pendingDocumentationViewLines = [];
             }
             sourceToView[oldLine] = newLine;
             oldLine++;
@@ -110,7 +144,8 @@ export function mapViewLines(source: string, patch: string): ViewLineMap {
             break;
 
           case '-':
-            documentationViewLines = [];
+            documentationGroup = undefined;
+            pendingDocumentationViewLines = [];
             oldLine++;
             break;
 

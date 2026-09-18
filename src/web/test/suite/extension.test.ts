@@ -144,9 +144,12 @@ suite('Web Extension Test Suite', function () {
       uri,
     );
 
-    const documentation = codeLenses.find(
+    const documentationLenses = codeLenses.filter(
       lens => lens.command?.command === 'heaths.azureApiReview.showDocumentation',
     );
+    assert.strictEqual(documentationLenses.length, 1,
+      'Documentation CodeLens should only be provided on the last hunk line');
+    const [documentation] = documentationLenses;
     assert.ok(documentation,
       `Documentation CodeLens missing from ${codeLenses.length} results`);
     assert.strictEqual(documentation.command?.title, '$(file-text) Documentation');
@@ -255,9 +258,11 @@ suite('Web Extension Test Suite', function () {
 
       assert.strictEqual(preview.hasCommentsPatch, true);
       assert.ok(preview.markdown.includes('/// Greets the caller.'));
-      assert.ok(preview.markdown.includes('/// Greets the gamma audience.'));
+      assert.strictEqual(
+        (preview.markdown.match(/\/\/\/ Greets the caller\./gu) ?? []).length,
+        1,
+      );
       assert.ok(!document.getText().includes('/// Greets the caller.'));
-      assert.ok(!document.getText().includes('/// Greets the gamma audience.'));
     } finally {
       output.dispose();
     }

@@ -2,6 +2,7 @@ import type { DocumentationAnchor } from './commentPatch';
 
 export interface DeclarationDocumentation {
   readonly line: number;
+  readonly documentationGroupLine: number;
   readonly language: string;
   readonly documentation: readonly string[];
 }
@@ -17,11 +18,27 @@ export function mapDocumentation(markdown: string, anchors: readonly Documentati
   const results: DeclarationDocumentation[] = [];
 
   for (const anchor of anchors) {
-    const candidate = fencedLines.find(line => line.line === anchor.line);
+    const candidates = anchor.lines.map(anchorLine => {
+      const candidate = fencedLines.find(line => line.line === anchorLine.line);
+      return candidate && normalize(candidate.text) === normalize(anchorLine.declaration)
+        ? candidate
+        : undefined;
+    });
+    if (candidates.some(candidate => candidate === undefined)) {
+      continue;
+    }
 
-    if (candidate && normalize(candidate.text) === normalize(anchor.declaration)) {
+    const documentationGroupLine = anchor.lines[0]?.line;
+    if (documentationGroupLine === undefined) {
+      continue;
+    }
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
       results.push({
         line: candidate.line,
+        documentationGroupLine,
         language: candidate.language,
         documentation: anchor.documentation,
       });

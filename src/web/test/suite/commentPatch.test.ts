@@ -39,8 +39,10 @@ suite('Comment patch', () => {
     ].join('\n');
 
     assert.deepStrictEqual(extractDocumentationAnchors(patch), [{
-      line: 0,
-      declaration: 'pub fn hello(target: Option<String>);',
+      lines: [{
+        line: 0,
+        declaration: 'pub fn hello(target: Option<String>);',
+      }],
       documentation: [
         '/// Prints "Hello, world".',
         '///',
@@ -80,9 +82,31 @@ suite('Comment patch', () => {
     ].join('\n');
 
     assert.deepStrictEqual(extractDocumentationAnchors(documentationPatch), [{
-      line: 10,
-      declaration: 'last();',
+      lines: [{
+        line: 10,
+        declaration: 'last();',
+      }],
       documentation: ['/// Documents last.'],
+    }]);
+  });
+
+  test('anchors documentation to every declaration line in the hunk', () => {
+    const patch = [
+      '@@ -74,2 +74,3 @@',
+      '+/// Options used when creating a client.',
+      ' #[derive(Clone, Debug)]',
+      ' pub struct ClientOptions {',
+    ].join('\n');
+
+    assert.deepStrictEqual(extractDocumentationAnchors(patch), [{
+      lines: [{
+        line: 73,
+        declaration: '#[derive(Clone, Debug)]',
+      }, {
+        line: 74,
+        declaration: 'pub struct ClientOptions {',
+      }],
+      documentation: ['/// Options used when creating a client.'],
     }]);
   });
 
@@ -106,8 +130,39 @@ suite('Comment patch', () => {
       sourceToView: [0, 1, 2, 4, 5],
       documentationGroups: [{
         line: 3,
+        groupLine: 3,
         viewLine: 4,
         documentationViewLines: [3],
+      }],
+    });
+  });
+
+  test('maps every declaration line to one preview documentation group', () => {
+    const source = [
+      '```rust',
+      '#[derive(Clone, Debug)]',
+      'pub struct ClientOptions {',
+      '```',
+    ].join('\n');
+    const patch = [
+      '@@ -2,2 +2,3 @@',
+      '+/// Options used when creating a client.',
+      ' #[derive(Clone, Debug)]',
+      ' pub struct ClientOptions {',
+    ].join('\n');
+
+    assert.deepStrictEqual(mapViewLines(source, patch), {
+      sourceToView: [0, 2, 3, 4],
+      documentationGroups: [{
+        line: 1,
+        groupLine: 1,
+        viewLine: 2,
+        documentationViewLines: [1],
+      }, {
+        line: 2,
+        groupLine: 1,
+        viewLine: 3,
+        documentationViewLines: [1],
       }],
     });
   });
