@@ -14,7 +14,7 @@
   --preview-inline-code-padding-block: 0.1em;
   --preview-inline-code-padding-inline: 0.3em;
   --preview-inline-code-radius: 3px;
-  --preview-code-block-padding: 16px;
+  --preview-code-block-padding: 0;
   --preview-code-line-min-height: 1lh;
   --preview-table-cell-padding-block: 6px;
   --preview-table-cell-padding-inline: 13px;
