@@ -7,7 +7,13 @@ import {
   showDocumentationTooltip,
 } from './codeLensProvider';
 import { createDateService, DateService } from './dateService';
-import { DiffAvailability, DiffBaselineSelection, DiffService, ResolvedBaseline } from './diffService';
+import {
+  DiffAvailability,
+  DiffBaselineSelection,
+  DiffService,
+  PullRequestBaseCandidate,
+  ResolvedBaseline,
+} from './diffService';
 import { renderDiffView } from './diffView';
 import hljs, { normalizeHighlightLanguage } from './highlight';
 import { createDiffLineMetadata, createMarkdownViewLineMetadata, ViewLineMetadata } from './lineMetadata';
@@ -47,6 +53,7 @@ interface ViewPanel {
   canNavigateNextDiff: boolean;
   diffRefreshGeneration: number;
   pullRequestContext?: PullRequestContext;
+  suppressedPullRequestDiffKey?: string;
   pullRequestRefreshGeneration: number;
   generation: number;
 }
@@ -175,19 +182,28 @@ interface ViewPullRequestCommentEntryState {
 }
 
 type DiffQuickPickItem =
+  | DiffPullRequestBaseQuickPickItem
   | DiffBaselineQuickPickItem
   | DiffChooseFileQuickPickItem
   | DiffHideQuickPickItem
   | DiffSeparatorQuickPickItem;
 
 type DiffActionQuickPickItem =
+  | DiffPullRequestBaseQuickPickItem
   | DiffBaselineQuickPickItem
   | DiffChooseFileQuickPickItem
   | DiffHideQuickPickItem;
 
+interface DiffPullRequestBaseQuickPickItem extends vscode.QuickPickItem {
+  readonly action: 'baseline';
+  readonly baseline: DiffBaselineSelection;
+  readonly source: 'pullRequestBase';
+}
+
 interface DiffBaselineQuickPickItem extends vscode.QuickPickItem {
   readonly action: 'baseline';
   readonly baseline: DiffBaselineSelection;
+  readonly source?: 'history';
 }
 
 interface DiffChooseFileQuickPickItem extends vscode.QuickPickItem {
@@ -251,10 +267,11 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       contributedStyles,
       commentsVisible: false,
       hasCommentsPatch: false,
-      diffAvailable: false,
+      diffAvailable: true,
       canNavigatePreviousDiff: false,
       canNavigateNextDiff: false,
       diffRefreshGeneration: 0,
+      suppressedPullRequestDiffKey: undefined,
       pullRequestRefreshGeneration: 0,
       generation: 0,
     };
@@ -292,7 +309,6 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       this.setActivePreview(preview);
     }
     await this.render(preview);
-    void this.refreshDiffAvailability(preview);
     void this.refreshPullRequestContext(preview, this.pullRequestService.isGitHubDocument(document.uri));
   }
 
@@ -300,7 +316,6 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
     for (const preview of this.previews) {
       if (!uri || preview.document.uri.toString() === uri.toString()) {
         void this.render(preview);
-        void this.refreshDiffAvailability(preview);
         void this.refreshPullRequestContext(preview);
       }
     }
@@ -353,9 +368,7 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
     if (!preview) {
       throw new Error('Unable to open the Azure API Review preview.');
     }
-
     await this.openDiff(preview, baseline);
-    await this.refreshDiffAvailability(preview);
   }
 
   public async hideDiff(documentUri: string): Promise<void> {
@@ -566,7 +579,9 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       }
 
       preview.diffAvailability = availability;
-      preview.diffAvailable = availability.candidates.length > 0 || availability.canPickFile;
+      preview.diffAvailable = availability.pullRequestBase !== undefined
+        || availability.candidates.length > 0
+        || availability.canPickFile;
       if (!preview.diffAvailable) {
         preview.diffBaseline = undefined;
       }
@@ -576,8 +591,7 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       return availability;
     } catch (error) {
       preview.diffAvailability = undefined;
-      preview.diffAvailable = false;
-      preview.diffBaseline = undefined;
+      preview.diffAvailable = true;
       if (this.activePreview === preview) {
         this.updateContexts(preview);
       }
@@ -603,11 +617,17 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
       const previousKey = getPullRequestContextKey(preview.pullRequestContext);
       const nextKey = getPullRequestContextKey(pullRequestContext);
       preview.pullRequestContext = pullRequestContext;
+      if (nextKey && nextKey !== preview.suppressedPullRequestDiffKey) {
+        preview.suppressedPullRequestDiffKey = undefined;
+      }
       if (this.activePreview === preview) {
         this.updateContexts(preview);
       }
       if (previousKey !== nextKey) {
         await this.render(preview);
+        if (nextKey && !preview.diffBaseline && preview.suppressedPullRequestDiffKey !== nextKey) {
+          await this.openPullRequestDiff(preview, promptForGitHubAuth);
+        }
       }
       return pullRequestContext;
     } catch (error) {
@@ -637,8 +657,22 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
     await this.render(preview);
   }
 
+  private async openPullRequestDiff(preview: ViewPanel, promptForGitHubAuth: boolean): Promise<void> {
+    const availability = await this.refreshDiffAvailability(preview, promptForGitHubAuth);
+    const pullRequestBase = availability?.pullRequestBase;
+    if (!pullRequestBase || preview.diffBaseline) {
+      return;
+    }
+
+    await this.openDiff(preview, pullRequestBase.baseline);
+  }
+
   private async closeDiff(preview: ViewPanel): Promise<void> {
     const baseline = preview.diffBaseline;
+    const pullRequestKey = getPullRequestContextKey(preview.pullRequestContext);
+    if (baseline && pullRequestKey) {
+      preview.suppressedPullRequestDiffKey = pullRequestKey;
+    }
     preview.diffBaseline = undefined;
     await this.render(preview);
     if (baseline) {
@@ -1289,18 +1323,30 @@ export function createDiffQuickPickItems(
   const tags = availability.candidates.filter(candidate => candidate.baseline.kind === 'tag');
   const commits = availability.candidates.filter(candidate => candidate.baseline.kind === 'commit');
   const duplicateTagLabels = getDuplicateTagLabels(tags);
-  const items: DiffQuickPickItem[] = [
-    ...tags.map(candidate => ({
+  const items: DiffQuickPickItem[] = [];
+
+  if (availability.pullRequestBase) {
+    items.push(createPullRequestBaseQuickPickItem(availability.pullRequestBase));
+  }
+
+  appendSeparator(
+    items,
+    availability.pullRequestBase !== undefined
+      && (tags.length > 0 || commits.length > 0 || availability.canPickFile),
+  );
+
+  items.push(...tags.map(candidate => ({
       action: 'baseline',
       baseline: candidate.baseline,
+      source: 'history',
       ...createDiffQuickPickCandidate(candidate, duplicateTagLabels),
-    } satisfies DiffBaselineQuickPickItem)),
-  ];
+    } satisfies DiffBaselineQuickPickItem)));
 
   appendSeparator(items, tags.length > 0 && commits.length > 0);
   items.push(...commits.map(candidate => ({
     action: 'baseline',
     baseline: candidate.baseline,
+    source: 'history',
     ...createDiffQuickPickCandidate(candidate),
   } satisfies DiffBaselineQuickPickItem)));
 
@@ -1326,6 +1372,19 @@ export function createDiffQuickPickCandidate(
     detail: candidate.baseline.kind === 'tag' && duplicateTagLabels.has(candidate.label)
       ? [candidate.baseline.ref, detail].filter(value => value && value.length > 0).join(' — ')
       : detail,
+  };
+}
+
+export function createPullRequestBaseQuickPickItem(
+  candidate: PullRequestBaseCandidate,
+): DiffPullRequestBaseQuickPickItem {
+  return {
+    action: 'baseline',
+    baseline: candidate.baseline,
+    source: 'pullRequestBase',
+    label: `$(git-pull-request) ${candidate.label}`,
+    description: candidate.description,
+    detail: truncateQuickPickDetail(candidate.detail),
   };
 }
 

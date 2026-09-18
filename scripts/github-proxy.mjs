@@ -11,9 +11,11 @@ const mockHistoryPath = 'scripts/github-proxy.mjs';
 const mockHistorySourceRef = 'api-review';
 const mockHistorySourcePath = 'sdk/keyvault/azure_security_keyvault_keys/api/API.md';
 
-export async function startGitHubProxy(repositoryRoot) {
+export async function startGitHubProxy(repositoryRoot, options = {}) {
   const app = express();
   const token = randomUUID();
+  const simulatePullRequest = options.simulatePullRequest === true;
+  const seededPullRequest = simulatePullRequest ? await getSeededPullRequest(repositoryRoot) : undefined;
   const seededCommitId = await getSeededPullRequestCommitId(repositoryRoot);
   const pullRequests = new Map([
     [1, createSeededPullRequestStore(seededCommitId)],
@@ -117,7 +119,22 @@ export async function startGitHubProxy(repositoryRoot) {
     }
   });
 
+  app.get('/pull-request', (request, response) => {
+    const ref = readQuery(request.query.ref);
+    if (!seededPullRequest || !ref || !matchesSeededPullRequestRef(ref, seededPullRequest)) {
+      response.sendStatus(404);
+      return;
+    }
+
+    response.json(seededPullRequest);
+  });
+
   app.get('/pull-request-comments', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.query.prNumber);
     if (!prNumber) {
       response.status(400).json({ error: 'prNumber is required' });
@@ -129,6 +146,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.post('/pull-request-comments', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.body?.prNumber);
     const commitId = readQuery(request.body?.commitId);
     const path = readRepositoryPath(request.body?.path);
@@ -154,6 +176,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.patch('/pull-request-comments/:commentId', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.body?.prNumber);
     const commentId = readPositiveInteger(request.params.commentId);
     const body = typeof request.body?.body === 'string' ? request.body.body : undefined;
@@ -173,6 +200,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.post('/pull-request-comments/:commentId/replies', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.body?.prNumber);
     const commentId = readPositiveInteger(request.params.commentId);
     const body = typeof request.body?.body === 'string' ? request.body.body : undefined;
@@ -203,6 +235,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.delete('/pull-request-comments/:commentId', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.query.prNumber);
     const commentId = readPositiveInteger(request.params.commentId);
     if (!prNumber || !commentId) {
@@ -220,6 +257,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.get('/pull-request-reviews', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.query.prNumber);
     if (!prNumber) {
       response.status(400).json({ error: 'prNumber is required' });
@@ -231,6 +273,11 @@ export async function startGitHubProxy(repositoryRoot) {
   });
 
   app.post('/pull-request-reviews', (request, response) => {
+    if (!simulatePullRequest) {
+      response.sendStatus(404);
+      return;
+    }
+
     const prNumber = readPullRequestNumber(request.body?.prNumber);
     const commitId = readQuery(request.body?.commitId);
     const event = readReviewEvent(request.body?.event);
@@ -518,6 +565,56 @@ async function getSeededPullRequestCommitId(repositoryRoot) {
   } catch {
     return runGit(repositoryRoot, ['rev-parse', 'HEAD']);
   }
+}
+
+async function getSeededPullRequest(repositoryRoot) {
+  const headRef = await getSeededPullRequestRef(repositoryRoot);
+  const headSha = await getSeededPullRequestCommitId(repositoryRoot);
+  const base = await getSeededPullRequestBase(repositoryRoot);
+
+  return {
+    number: 1,
+    title: `Pull request for ${shortRef(headRef)}`,
+    state: 'open',
+    baseRef: base.ref,
+    baseSha: base.sha,
+    headRef,
+    headSha,
+    headOwner: mockUserLogin,
+  };
+}
+
+async function getSeededPullRequestRef(repositoryRoot) {
+  try {
+    const upstream = await runGit(repositoryRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']);
+    const separator = upstream.indexOf('/');
+    return separator >= 0 ? upstream.slice(separator + 1) : upstream;
+  } catch {
+    return runGit(repositoryRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  }
+}
+
+async function getSeededPullRequestBase(repositoryRoot) {
+  const tags = await getMockTags(repositoryRoot);
+  const taggedBase = tags.find(tag => tag.name.endsWith('@1.0.0')) ?? tags[0];
+  if (taggedBase) {
+    return { ref: taggedBase.name, sha: taggedBase.commit };
+  }
+
+  return {
+    ref: 'main',
+    sha: await getSeededPullRequestCommitId(repositoryRoot),
+  };
+}
+
+function matchesSeededPullRequestRef(ref, seededPullRequest) {
+  return ref === seededPullRequest.headRef
+    || ref === seededPullRequest.headSha
+    || ref === `refs/pull/${seededPullRequest.number}/head`;
+}
+
+function shortRef(ref) {
+  return ref.slice(0, 8);
 }
 
 function createReview(store, commitId, event, body, comments) {

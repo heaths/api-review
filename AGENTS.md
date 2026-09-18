@@ -53,6 +53,10 @@
   `markdownView.ts`, keep `diffView.ts` focused on diff HTML rendering, and
   keep `markdownView.ts` focused on the main markdown view, webview lifecycle,
   and final document rendering.
+- Pull-request-aware diff activation and picker behavior belong in
+  `markdownView.ts`; baseline resolution in `diffService.ts` should surface the
+  PR base, prefer a matching eligible tag when available, and leave baseline
+  ordering/filtering there instead of duplicating it in the view.
 - Prefer local-first diff behavior: use `gitClient.ts` when a local repository is
   available, and fall back to `githubClient.ts` only for GitHub-backed documents
   or operations that require published GitHub state.
@@ -87,6 +91,10 @@
   source of truth is the local repository, update `githubClient.ts` if the
   source of truth is GitHub, and update `diffService.ts` only for orchestration,
   baseline selection, and fallback order.
+- Keep diff rendering structurally aligned with normal Markdown rendering: reuse
+  semantic list HTML and normal block spacing where possible, preserve ordered
+  list start values and nested lists, and avoid synthetic spacer/layout nodes
+  that make non-diff content shift.
 - Sort version tags by semantic version descending. Compare prerelease numeric
   identifiers numerically (`beta.12` > `beta.2`), and treat a stable release as
   newer than prereleases of the same release.

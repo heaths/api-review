@@ -286,18 +286,8 @@ body.web-host {
 
 .preview-diff-hunk,
 .preview-diff-block {
-  margin: 0;
   padding: 0;
   border: 0;
-}
-
-.preview-diff-markdown > * {
-  margin: 0;
-}
-
-.preview-diff-markdown > ul,
-.preview-diff-markdown > ol {
-  padding-inline-start: 1.5em;
 }
 
 .preview-diff-added.preview-diff-markdown {
@@ -308,8 +298,15 @@ body.web-host {
   background: var(--preview-diff-removed-background);
 }
 
+.preview-diff-list-item-added {
+  background: var(--preview-diff-added-background);
+}
+
+.preview-diff-list-item-removed {
+  background: var(--preview-diff-removed-background);
+}
+
 .preview-diff-code {
-  margin: 0;
   padding: 0;
   overflow: visible;
   background: none;

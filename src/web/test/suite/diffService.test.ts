@@ -13,7 +13,7 @@ import { GitHubClient } from '../../githubClient';
 import { PullRequestService } from '../../pullRequestService';
 import { renderDiffView } from '../../diffView';
 import { createDiffLineMetadata, createMarkdownViewLineMetadata } from '../../lineMetadata';
-import { createDiffQuickPickCandidate } from '../../markdownView';
+import { createDiffQuickPickCandidate, renderMarkdown } from '../../markdownView';
 import { compareVersions, parseVersion } from '../../semver';
 
 function createLogger(): vscode.LogOutputChannel {
@@ -175,6 +175,12 @@ suite('Diff service', () => {
     assert.deepStrictEqual(availability.candidates.map(candidate => candidate.baseline), [
       { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
     ]);
+    assert.deepStrictEqual(availability.pullRequestBase, {
+      baseline: { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+      label: 'azure_security_keyvault_keys@1.0.0',
+      description: '2026-09-10',
+      detail: 'Update API',
+    });
     assert.deepStrictEqual(availability.defaultBaseline, {
       kind: 'tag',
       ref: 'azure_security_keyvault_keys@1.0.0',
@@ -503,9 +509,94 @@ suite('Diff service', () => {
 
     const availability = await service.getAvailability(document);
 
+    assert.deepStrictEqual(availability.pullRequestBase, {
+      baseline: { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
+      label: 'azure_security_keyvault_keys@1.0.0',
+      description: undefined,
+      detail: undefined,
+    });
     assert.deepStrictEqual(availability.defaultBaseline, {
       kind: 'tag',
       ref: 'azure_security_keyvault_keys@1.0.0',
+    });
+  });
+
+  test('exposes a pull request base commit candidate when the base is not tagged', async () => {
+    const document = {
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
+    } as vscode.TextDocument;
+    const baseSha = '0123456789abcdef0123456789abcdef01234567';
+    const service = new DiffService(
+      createLogger(),
+      createGitHubClient({}),
+      createGitClient({
+        async getRepository() {
+          return {
+            rootUri: vscode.Uri.parse('file:///workspace'),
+            state: {
+              HEAD: {
+                name: 'pr/26',
+                commit: 'head-sha',
+              },
+              remotes: [],
+            },
+            async getRefs() {
+              return [];
+            },
+            async log(options) {
+              if (options?.path) {
+                return [{ hash: 'head-sha', message: 'Update API', commitDate: new Date('2026-09-10T12:00:00Z') }];
+              }
+
+              return [{
+                hash: baseSha,
+                message: 'Create API baseline',
+                commitDate: new Date('2026-09-08T12:00:00Z'),
+              }];
+            },
+            async show(ref) {
+              if (ref !== baseSha) {
+                throw new Error(`Unexpected ref ${ref}`);
+              }
+              return '# Baseline';
+            },
+          };
+        },
+      }),
+      createPullRequestService({
+        async getContext() {
+          return {
+            document: {
+              repository: { owner: 'heaths', repo: 'api-review' },
+              ref: 'feature/history',
+              path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+            },
+            pullRequest: {
+              number: 26,
+              title: 'Active PR',
+              state: 'open',
+              baseRef: 'main',
+              baseSha,
+              headRef: 'feature/history',
+              headSha: 'head-sha',
+              headOwner: 'heaths',
+            },
+          };
+        },
+      }),
+    );
+
+    const availability = await service.getAvailability(document);
+
+    assert.deepStrictEqual(availability.pullRequestBase, {
+      baseline: { kind: 'commit', ref: baseSha },
+      label: baseSha,
+      description: '2026-09-08',
+      detail: 'Create API baseline',
+    });
+    assert.deepStrictEqual(availability.defaultBaseline, {
+      kind: 'commit',
+      ref: baseSha,
     });
   });
 
@@ -722,6 +813,85 @@ suite('Diff service', () => {
     assert.ok(rendered.html.includes('<h1>Heading</h1>'));
   });
 
+  test('preserves blank spacing between a changed metadata list and the next header', () => {
+    const baseline = [
+      '# mock_crate',
+      '',
+      '- **Package**: mock_crate',
+      '- **Rust version**: 1.94',
+      '',
+      '## Features',
+      '',
+      '- `default`',
+    ].join('\n');
+    const target = [
+      '# mock_crate',
+      '',
+      '- **Package**: mock_crate',
+      '- **Rust version**: 1.95',
+      '',
+      '## Features',
+      '',
+      '- `default`',
+    ].join('\n');
+
+    const rendered = renderDiffView(baseline, target, [], '1.0.0');
+
+    assert.ok(!rendered.html.includes('preview-diff-spacer'));
+    assert.match(
+      rendered.html,
+      /<div class="preview-diff-block preview-diff-list">[\s\S]*<\/div>\n<div class="preview-diff-block preview-diff-unchanged preview-diff-markdown"><h2>Features<\/h2>[\s\S]*<\/div>/u,
+    );
+  });
+
+  test('renders unchanged lists with the same semantic markdown list HTML', () => {
+    const markdown = [
+      '# mock_crate',
+      '',
+      '- **Package**: mock_crate',
+      '- **Rust version**: 1.95',
+      '',
+      '1. one',
+      '2. two',
+      '',
+      '- `default`',
+      '  - `foo`',
+      '  - `bar`',
+    ].join('\n');
+
+    const rendered = renderDiffView(markdown, markdown, [], '1.0.0');
+    const expectedListMarkup = renderMarkdown(markdown);
+
+    assert.ok(expectedListMarkup.includes('<ul>\n<li><strong>Package</strong>: mock_crate</li>'));
+    assert.match(
+      rendered.html,
+      /<div class="preview-diff-block preview-diff-list"><ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="2"><strong>Package<\/strong>: mock_crate<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="3"><strong>Rust version<\/strong>: 1\.95<\/li>\s*<\/ul>\s*<ol>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="5">one<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="6">two<\/li>\s*<\/ol>\s*<ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="8"><code>default<\/code>\s*<ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="9"><code>foo<\/code><\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="10"><code>bar<\/code><\/li>\s*<\/ul>\s*<\/li>\s*<\/ul>\s*<\/div>/u,
+    );
+  });
+
+  test('preserves ordered list start values in diff mode', () => {
+    const rendered = renderDiffView('', [
+      '3. third',
+      '4. fourth',
+    ].join('\n'), [], 'base');
+
+    assert.ok(rendered.html.includes('<ol start="3">'));
+    assert.ok(rendered.html.includes('>third</li>'));
+    assert.ok(rendered.html.includes('>fourth</li>'));
+  });
+
+  test('keeps lazy continuation lines inside list items in diff mode', () => {
+    const rendered = renderDiffView('', [
+      '- first line',
+      'continued paragraph',
+    ].join('\n'), [], 'base');
+
+    assert.match(
+      rendered.html,
+      /<div class="preview-diff-block preview-diff-list"><ul>\s*<li class="preview-diff-list-item preview-diff-list-item-added" data-line="0" data-diff-hunk="0">first line\s+continued paragraph<\/li>\s*<\/ul>\s*<\/div>/u,
+    );
+  });
+
   test('renders versioned fixture diffs with markdown blocks and compact code blocks', async () => {
     const baseline = await readFixture('v1/API.md');
     const target = await readFixture('v2/API.md');
@@ -740,11 +910,15 @@ suite('Diff service', () => {
     );
 
     assert.ok(rendered.html.includes('<h1>mock_crate</h1>'));
-    assert.ok(rendered.html.includes('<span class="preview-diff-list-marker">-</span> <strong>Package</strong>: mock_crate'));
-    assert.ok(rendered.html.includes('<span class="preview-diff-list-marker">-</span> <strong>Rust version</strong>: 1.95'));
-    assert.ok(rendered.html.includes('<span class="preview-diff-list-marker">-</span> <code>default</code>'));
-    assert.ok(rendered.html.includes('&nbsp;&nbsp;<span class="preview-diff-list-marker">-</span> <code>foo</code>'));
-    assert.ok(rendered.html.includes('&nbsp;&nbsp;<span class="preview-diff-list-marker">-</span> <code>bar</code>'));
+    assert.match(
+      rendered.html,
+      /<div class="preview-diff-block preview-diff-list"><ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="2"><strong>Package<\/strong>: mock_crate<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-removed" data-diff-hunk="0"><strong>Version<\/strong>: 0\.1\.0<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-removed" data-diff-hunk="0"><strong>Rust version<\/strong>: 1\.94<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-added" data-line="3" data-diff-hunk="0"><strong>Version<\/strong>: 0\.2\.0<\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-added" data-line="4" data-diff-hunk="0"><strong>Rust version<\/strong>: 1\.95<\/li>\s*<\/ul><\/div>/u,
+    );
+    assert.match(
+      rendered.html,
+      /<div class="preview-diff-block preview-diff-list"><ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="8"><code>default<\/code>\s*<ul>\s*<li class="preview-diff-list-item preview-diff-list-item-unchanged" data-line="9"><code>foo<\/code><\/li>\s*<li class="preview-diff-list-item preview-diff-list-item-added" data-line="10" data-diff-hunk="1"><code>bar<\/code><\/li>\s*<\/ul><\/li>\s*<\/ul><\/div>/u,
+    );
+    assert.ok(!rendered.html.includes('preview-diff-spacer'));
     assert.ok(rendered.html.includes('<pre class="preview-diff-block preview-diff-code">'));
     assert.ok(rendered.html.includes('preview-diff-line-added'));
     assert.ok(!rendered.html.includes('```rust'));

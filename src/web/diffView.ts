@@ -22,6 +22,25 @@ interface DiffRenderedLine {
   readonly hunkIndex?: number;
 }
 
+interface ParsedListLine {
+  readonly indent: number;
+  readonly ordered: boolean;
+  readonly start?: number;
+  readonly content: string;
+}
+
+interface DiffRenderedList {
+  readonly ordered: boolean;
+  readonly start: number;
+  readonly items: DiffRenderedListItem[];
+}
+
+interface DiffRenderedListItem {
+  readonly line: DiffRenderedLine;
+  readonly contentLines: string[];
+  readonly children: DiffRenderedList[];
+}
+
 interface ParsedFence {
   readonly markerCharacter: string;
   readonly markerLength: number;
@@ -163,9 +182,10 @@ function renderDiffBody(
       return;
     }
 
-    rendered.push(
-      `<div class="preview-diff-block preview-diff-list">${renderListLines(listLines)}</div>`,
-    );
+    const contentLines = trimTrailingBlankLines(listLines);
+    if (contentLines.length > 0) {
+      rendered.push(`<div class="preview-diff-block preview-diff-list">${renderListLines(contentLines)}</div>`);
+    }
     listLines = [];
   };
 
@@ -232,8 +252,42 @@ function renderDiffBody(
         continue;
       }
 
+      if (line.text.length === 0) {
+        if (listLines.length > 0) {
+          listLines.push({
+            text: line.text,
+            targetLine: line.targetLine,
+            kind: chunk.kind,
+            hunkIndex: chunkHunkIndex,
+          });
+        } else {
+          flushCode();
+          flushList();
+          flushMarkdown();
+        }
+        pendingRenderedHunkIndex = undefined;
+        continue;
+      }
+
       flushCode();
-      if (isListMarkdownLine(line.text)) {
+      const parsedListLine = parseListLine(line.text);
+      const continuationLine = parsedListLine === undefined && isListContinuationLine(line.text);
+      if (listLines.length > 0) {
+        if (parsedListLine || continuationLine) {
+          listLines.push({
+            text: line.text,
+            targetLine: line.targetLine,
+            kind: chunk.kind,
+            hunkIndex: chunkHunkIndex,
+          });
+          pendingRenderedHunkIndex = undefined;
+          continue;
+        }
+
+        flushList();
+      }
+
+      if (parsedListLine) {
         flushMarkdown();
         listLines.push({
           text: line.text,
@@ -489,56 +543,115 @@ function renderDocumentationLine(line: string, groupId: string | undefined): str
 }
 
 function renderListLines(lines: readonly DiffRenderedLine[]): string {
-  return lines.map(line => renderListLine(line)).join('');
-}
+  const lists: DiffRenderedList[] = [];
+  const stack: { indent: number; list: DiffRenderedList; parentItem?: DiffRenderedListItem }[] = [];
 
-function renderListLine(line: DiffRenderedLine): string {
-  if (line.text.length === 0) {
-    return renderDiffLine('', line);
+  for (const line of lines) {
+    const parsed = parseListLine(line.text);
+    if (parsed) {
+      while (stack.length > 0 && parsed.indent < stack[stack.length - 1].indent) {
+        stack.pop();
+      }
+
+      let current = stack[stack.length - 1];
+      if (!current || parsed.indent > current.indent || parsed.ordered !== current.list.ordered) {
+        const parentItem = parsed.indent > (current?.indent ?? -1)
+          ? current?.list.items[current.list.items.length - 1]
+          : current?.parentItem;
+        const list: DiffRenderedList = {
+          ordered: parsed.ordered,
+          start: parsed.start ?? 1,
+          items: [],
+        };
+        if (parentItem) {
+          parentItem.children.push(list);
+        } else {
+          lists.push(list);
+        }
+        current = { indent: parsed.indent, list, parentItem };
+        stack.push(current);
+      }
+
+      current.list.items.push({
+        line,
+        contentLines: [parsed.content],
+        children: [],
+      });
+      continue;
+    }
+
+    const current = stack[stack.length - 1];
+    const item = current?.list.items[current.list.items.length - 1];
+    if (item) {
+      item.contentLines.push(line.text);
+    }
   }
 
-  const parsed = parseListLine(line.text);
-  if (!parsed) {
-    return renderDiffLine(escapeHtml(line.text), line);
-  }
-
-  const indent = parsed.indent.replace(/ /gu, '&nbsp;');
-  const bullet = escapeHtml(parsed.marker);
-  const content = markdownRenderer.renderInline(parsed.content);
-  return renderDiffLine(
-    `${indent}<span class="preview-diff-list-marker">${bullet}</span> ${content}`,
-    line,
-  );
+  return lists.map(renderList).join('\n');
 }
 
-function renderDiffLine(content: string, line: DiffRenderedLine): string {
-  const classes = ['preview-diff-line', `preview-diff-line-${line.kind}`];
-  const attributes: string[] = [];
+function renderList(list: DiffRenderedList): string {
+  const tag = list.ordered ? 'ol' : 'ul';
+  const start = list.ordered && list.start !== 1 ? ` start="${list.start}"` : '';
+  return `<${tag}${start}>\n${list.items.map(renderListItem).join('\n')}\n</${tag}>`;
+}
+
+function renderListItem(item: DiffRenderedListItem): string {
+  const children = item.children.map(renderList).join('\n');
+  const content = renderListItemContent(item.contentLines);
+  return `<li${renderListItemAttributes(item.line)}>${content}${children ? `\n${children}` : ''}</li>`;
+}
+
+function renderListItemContent(contentLines: readonly string[]): string {
+  const trimmedLines = [...contentLines];
+  while (trimmedLines.length > 0 && trimmedLines[trimmedLines.length - 1].length === 0) {
+    trimmedLines.pop();
+  }
+
+  const content = trimmedLines.join('\n');
+  if (trimmedLines.some(line => line.length === 0)) {
+    return markdownRenderer.render(content).trim();
+  }
+  return markdownRenderer.renderInline(content);
+}
+
+function renderListItemAttributes(line: DiffRenderedLine): string {
+  const classes = ['preview-diff-list-item', `preview-diff-list-item-${line.kind}`];
+  const attributes = [`class="${classes.join(' ')}"`];
   if (line.targetLine !== undefined) {
     attributes.push(`data-line="${line.targetLine}"`);
   }
   if (line.hunkIndex !== undefined) {
     attributes.push(`data-diff-hunk="${line.hunkIndex}"`);
   }
-
-  return `<span class="${classes.join(' ')}"${attributes.length > 0 ? ` ${attributes.join(' ')}` : ''}>${content}</span>`;
+  return ` ${attributes.join(' ')}`;
 }
 
 function isListMarkdownLine(text: string): boolean {
   return parseListLine(text) !== undefined;
 }
 
-function parseListLine(text: string): { indent: string; marker: string; content: string } | undefined {
+function parseListLine(text: string): ParsedListLine | undefined {
   const match = text.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/u);
   if (!match) {
     return undefined;
   }
 
   return {
-    indent: match[1],
-    marker: match[2],
+    indent: match[1].replace(/\t/gu, '    ').length,
+    ordered: /\d+\./u.test(match[2]),
+    start: /^\d+\./u.test(match[2]) ? Number.parseInt(match[2], 10) : undefined,
     content: match[3],
   };
+}
+
+function isListContinuationLine(text: string): boolean {
+  return !/^#{1,6}\s/u.test(text)
+    && !/^>\s?/u.test(text)
+    && !/^ {0,3}(?:`{3,}|~{3,})/u.test(text)
+    && !/^[-*_]{3,}\s*$/u.test(text)
+    && !/^\s*</u.test(text)
+    && !isListMarkdownLine(text);
 }
 
 function splitLines(text: string): string[] {
@@ -551,6 +664,14 @@ function splitChunkLines(text: string): string[] {
     lines.pop();
   }
   return lines;
+}
+
+function trimTrailingBlankLines<T extends { text: string }>(lines: readonly T[]): readonly T[] {
+  let end = lines.length;
+  while (end > 0 && lines[end - 1].text.length === 0) {
+    end--;
+  }
+  return end === lines.length ? lines : lines.slice(0, end);
 }
 
 function escapeHtml(value: string): string {
