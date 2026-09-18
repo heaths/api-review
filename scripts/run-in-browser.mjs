@@ -34,26 +34,21 @@ export function parseRunInBrowserArgs(args) {
 async function main() {
   const { pullRequestMode, browserPath, forwardedArgs } = parseRunInBrowserArgs(process.argv.slice(2));
   const repository = resolveRepository(browserPath);
-  let proxy;
+  const proxy = await startGitHubProxy(repository.root, {
+    simulatePullRequest: pullRequestMode,
+  });
+  Object.assign(process.env, {
+    GITHUB_PROXY_URL: proxy.url,
+    GITHUB_PROXY_TOKEN: proxy.token,
+    GITHUB_PROXY_OWNER: repository.owner,
+    GITHUB_PROXY_REPO: repository.repo,
+    GITHUB_PROXY_REF: repository.ref,
+  });
 
-  if (pullRequestMode) {
-    proxy = await startGitHubProxy(repository.root);
-    Object.assign(process.env, {
-      GITHUB_PROXY_URL: proxy.url,
-      GITHUB_PROXY_TOKEN: proxy.token,
-      GITHUB_PROXY_OWNER: repository.owner,
-      GITHUB_PROXY_REPO: repository.repo,
-      GITHUB_PROXY_REF: repository.ref,
-    });
-
-    console.log(`[run-in-browser] GitHub proxy ${proxy.url} for ${repository.root} (${repository.owner}/${repository.repo}@${repository.ref})`);
-  } else {
-    delete process.env.GITHUB_PROXY_URL;
-    delete process.env.GITHUB_PROXY_TOKEN;
-    delete process.env.GITHUB_PROXY_OWNER;
-    delete process.env.GITHUB_PROXY_REPO;
-    delete process.env.GITHUB_PROXY_REF;
-  }
+  console.log(
+    `[run-in-browser] GitHub proxy ${proxy.url} for ${repository.root} `
+    + `(${repository.owner}/${repository.repo}@${repository.ref}, pr=${pullRequestMode ? 'on' : 'off'})`,
+  );
 
   run('pnpm', ['run', 'compile:web'], proxy);
 

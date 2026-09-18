@@ -7,6 +7,7 @@ import {
   createDiffQuickPickCandidate,
   createDiffQuickPickItems,
   createLoadingDiffQuickPickItems,
+  createPullRequestBaseQuickPickItem,
   getContributedMarkdownViewStyles,
   getPathLabel,
   getMarkdownViewHtml,
@@ -186,6 +187,85 @@ suite('Markdown view', () => {
     ]);
   });
 
+  test('puts the pull request base first and keeps separators singular', () => {
+    const items = createDiffQuickPickItems({
+      pullRequestBase: {
+        baseline: { kind: 'commit', ref: '1234567890abcdef' },
+        label: '1234567890abcdef',
+        description: '2026-09-11',
+        detail: 'merge latest baseline',
+      },
+      candidates: [
+        {
+          baseline: { kind: 'tag', ref: 'crate@1.2.0' },
+          label: '1.2.0',
+          description: '2026-09-10',
+          detail: 'latest stable release',
+        },
+      ],
+      defaultBaseline: { kind: 'commit', ref: '1234567890abcdef' },
+      canPickFile: true,
+    });
+
+    assert.deepStrictEqual(items.map(item => ({
+      kind: item.kind,
+      label: item.label,
+      description: item.description,
+      detail: item.detail,
+      action: 'action' in item ? item.action : undefined,
+      source: 'source' in item ? item.source : undefined,
+    })), [
+      {
+        kind: undefined,
+        label: '$(git-pull-request) 1234567890abcdef',
+        description: '2026-09-11',
+        detail: 'merge latest baseline',
+        action: 'baseline',
+        source: 'pullRequestBase',
+      },
+      {
+        kind: vscode.QuickPickItemKind.Separator,
+        label: '',
+        description: undefined,
+        detail: undefined,
+        action: undefined,
+        source: undefined,
+      },
+      {
+        kind: undefined,
+        label: '$(tag) 1.2.0',
+        description: '2026-09-10',
+        detail: 'latest stable release',
+        action: 'baseline',
+        source: 'history',
+      },
+      {
+        kind: vscode.QuickPickItemKind.Separator,
+        label: '',
+        description: undefined,
+        detail: undefined,
+        action: undefined,
+        source: undefined,
+      },
+      {
+        kind: undefined,
+        label: '$(folder-opened) Choose file...',
+        description: 'Compare against another API.md file',
+        detail: undefined,
+        action: 'chooseFile',
+        source: undefined,
+      },
+      {
+        kind: undefined,
+        label: '$(close) Cancel',
+        description: 'Return to the normal preview',
+        detail: undefined,
+        action: 'hide',
+        source: undefined,
+      },
+    ]);
+  });
+
   test('omits separators when only quick-pick actions remain', () => {
     const items = createDiffQuickPickItems({
       candidates: [],
@@ -225,6 +305,24 @@ suite('Markdown view', () => {
       label: '$(git-commit) 12345678',
       description: '2026-09-09',
       detail: 'Update MSRV to 1.95',
+    });
+  });
+
+  test('renders pull request base entries with the pull request icon', () => {
+    const item = createPullRequestBaseQuickPickItem({
+      baseline: { kind: 'tag', ref: 'crate@1.2.0' },
+      label: 'crate@1.2.0',
+      description: '2026-09-10',
+      detail: 'latest stable release',
+    });
+
+    assert.deepStrictEqual(item, {
+      action: 'baseline',
+      baseline: { kind: 'tag', ref: 'crate@1.2.0' },
+      source: 'pullRequestBase',
+      label: '$(git-pull-request) crate@1.2.0',
+      description: '2026-09-10',
+      detail: 'latest stable release',
     });
   });
 
@@ -713,6 +811,14 @@ suite('Markdown view', () => {
     assert.ok(css.includes('--preview-code-line-gutter-width: var(--preview-comment-badge-hit-size);'));
     assert.ok(css.includes('body.web-host {\n  --comment-icon-margin: 8px;\n  --preview-code-line-gutter-width: 32px;\n}'));
     assert.ok(css.includes('.markdown-body pre {\n  overflow: auto;\n  padding: var(--preview-code-block-padding);\n  padding-inline-start: 0;'));
+    assert.ok(!css.includes('.preview-diff-markdown > * {\n  margin: 0;\n}'));
+    assert.ok(!css.includes('.preview-diff-markdown > :first-child'));
+    assert.ok(!css.includes('.preview-diff-markdown > :last-child'));
+    assert.ok(!css.includes('.preview-diff-markdown > :only-child'));
+    assert.ok(!css.includes('.preview-diff-spacer'));
+    assert.ok(css.includes('.preview-diff-list-item-added {\n  background: var(--preview-diff-added-background);\n}'));
+    assert.ok(css.includes('.preview-diff-list-item-removed {\n  background: var(--preview-diff-removed-background);\n}'));
+    assert.ok(!css.includes('.preview-diff-code {\n  margin: 0;'));
     assert.ok(css.includes('left: var(--comment-icon-margin);'));
     assert.ok(css.includes('--preview-comment-history-gap: 8px;'));
     assert.ok(css.includes('--preview-comment-history-background: color-mix(in srgb, var(--preview-hover-background) 84%, transparent);'));
@@ -961,13 +1067,15 @@ suite('Markdown view', () => {
     ]);
   });
 
-  test('requests pull request context on preview load before any diff action', async () => {
+  test('requests pull request context on preview load without fetching diff history', async () => {
     const requests: string[] = [];
+    let diffAvailabilityRequests = 0;
     const previewProvider = new MarkdownViewProvider(
       {} as never,
       vscode.Uri.parse('test-extension:/extension'),
       {
         async getAvailability() {
+          diffAvailabilityRequests++;
           return { candidates: [], canPickFile: true };
         },
       } as never,
@@ -989,7 +1097,7 @@ suite('Markdown view', () => {
       },
     } as vscode.TextDocument;
     const webviewPanel = {
-      active: false,
+      active: true,
       webview: {
         options: undefined,
         html: '',
@@ -1014,6 +1122,236 @@ suite('Markdown view', () => {
     await Promise.resolve();
 
     assert.deepStrictEqual(requests, ['file:///workspace/sdk/keyvault/API.md']);
+    assert.strictEqual(diffAvailabilityRequests, 0);
+    assert.strictEqual((previewProvider as unknown as {
+      activePreview?: { diffAvailable: boolean };
+    }).activePreview?.diffAvailable, true);
+  });
+
+  test('auto-opens the tagged pull request base diff on preview load', async () => {
+    let diffAvailabilityRequests = 0;
+    const previewProvider = new MarkdownViewProvider(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        async getAvailability() {
+          diffAvailabilityRequests++;
+          return {
+            pullRequestBase: {
+              baseline: { kind: 'tag', ref: 'crate@1.0.0' },
+              label: 'crate@1.0.0',
+              description: '2026-09-11',
+              detail: 'merge latest baseline',
+            },
+            candidates: [],
+            defaultBaseline: { kind: 'tag', ref: 'crate@1.0.0' },
+            canPickFile: true,
+          };
+        },
+      } as never,
+      {
+        isGitHubDocument() {
+          return false;
+        },
+        async getContext() {
+          return {
+            document: {
+              repository: { owner: 'heaths', repo: 'api-review' },
+              ref: 'feature/history',
+              path: 'sdk/keyvault/API.md',
+            } satisfies GitHubDocumentRef,
+            pullRequest: {
+              number: 26,
+              title: 'Active PR',
+              state: 'open',
+              baseRef: 'main',
+              baseSha: '1234567890abcdef',
+              headRef: 'feature/history',
+              headSha: 'fedcba0987654321',
+              headOwner: 'heaths',
+            } satisfies GitHubPullRequest,
+          };
+        },
+      } as never,
+      createLogger(),
+    );
+    (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
+    const activePreview = {
+      document: {
+        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+        getText() {
+          return '# API';
+        },
+      },
+      panel: { webview: { async postMessage() { return true; } } },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: true,
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+    (previewProvider as unknown as { previews: Set<unknown>; activePreview?: unknown }).previews.add(activePreview);
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = activePreview;
+
+    await (previewProvider as unknown as {
+      refreshPullRequestContext(preview: unknown): Promise<void>;
+    }).refreshPullRequestContext(activePreview);
+
+    assert.strictEqual(diffAvailabilityRequests, 1);
+    assert.deepStrictEqual((activePreview as { diffBaseline?: unknown }).diffBaseline, { kind: 'tag', ref: 'crate@1.0.0' });
+  });
+
+  test('preserves an active diff when lazy history loading fails', async () => {
+    const previewProvider = new MarkdownViewProvider(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        async getAvailability() {
+          throw new Error('history unavailable');
+        },
+      } as never,
+      {
+        isGitHubDocument() {
+          return false;
+        },
+      } as never,
+      createLogger(),
+    );
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        getText() {
+          return '# API';
+        },
+      },
+      panel: { webview: { async postMessage() { return true; } } },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: true,
+      diffBaseline: { kind: 'file', uri: 'file:///baseline/API.md' },
+      canNavigatePreviousDiff: true,
+      canNavigateNextDiff: true,
+      diffRefreshGeneration: 0,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    };
+
+    (previewProvider as unknown as { previews: Set<unknown>; activePreview?: unknown }).previews.add(preview);
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
+
+    const availability = await (previewProvider as unknown as {
+      refreshDiffAvailability(preview: unknown): Promise<unknown>;
+    }).refreshDiffAvailability(preview);
+
+    assert.strictEqual(availability, undefined);
+    assert.deepStrictEqual(preview.diffBaseline, { kind: 'file', uri: 'file:///baseline/API.md' });
+    assert.strictEqual(preview.diffAvailable, true);
+  });
+
+  test('does not reopen an auto-opened pull request diff after the user closes it', async () => {
+    let diffAvailabilityRequests = 0;
+    const pullRequestContext = {
+      document: {
+        repository: { owner: 'heaths', repo: 'api-review' },
+        ref: 'feature/history',
+        path: 'sdk/keyvault/API.md',
+      } satisfies GitHubDocumentRef,
+      pullRequest: {
+        number: 26,
+        title: 'Active PR',
+        state: 'open',
+        baseRef: 'main',
+        baseSha: '1234567890abcdef',
+        headRef: 'feature/history',
+        headSha: 'fedcba0987654321',
+        headOwner: 'heaths',
+      } satisfies GitHubPullRequest,
+    };
+    const previewProvider = new MarkdownViewProvider(
+      {} as never,
+      vscode.Uri.parse('test-extension:/extension'),
+      {
+        async getAvailability() {
+          diffAvailabilityRequests++;
+          return {
+            pullRequestBase: {
+              baseline: { kind: 'tag', ref: 'crate@1.0.0' },
+              label: 'crate@1.0.0',
+              description: '2026-09-11',
+              detail: 'merge latest baseline',
+            },
+            candidates: [],
+            defaultBaseline: { kind: 'tag', ref: 'crate@1.0.0' },
+            canPickFile: true,
+          };
+        },
+      } as never,
+      {
+        isGitHubDocument() {
+          return false;
+        },
+        async getContext() {
+          return pullRequestContext;
+        },
+      } as never,
+      createLogger(),
+    );
+    (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
+    const preview = {
+      document: {
+        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+        getText() {
+          return '# API';
+        },
+      } as vscode.TextDocument,
+      panel: { webview: { async postMessage() { return true; } } },
+      contributedStyles: { stylesheets: [], roots: [] },
+      commentsVisible: false,
+      hasCommentsPatch: false,
+      diffAvailable: true,
+      diffBaseline: { kind: 'tag', ref: 'crate@1.0.0' },
+      canNavigatePreviousDiff: false,
+      canNavigateNextDiff: false,
+      diffRefreshGeneration: 0,
+      pullRequestContext,
+      suppressedPullRequestDiffKey: undefined,
+      pullRequestRefreshGeneration: 0,
+      generation: 0,
+    } as {
+      document: vscode.TextDocument;
+      panel: { webview: { postMessage(message: unknown): Promise<boolean> } };
+      contributedStyles: { stylesheets: readonly vscode.Uri[]; roots: readonly vscode.Uri[] };
+      commentsVisible: boolean;
+      hasCommentsPatch: boolean;
+      diffAvailable: boolean;
+      diffBaseline?: { kind: 'tag'; ref: string };
+      canNavigatePreviousDiff: boolean;
+      canNavigateNextDiff: boolean;
+      diffRefreshGeneration: number;
+      pullRequestContext?: typeof pullRequestContext;
+      suppressedPullRequestDiffKey?: string;
+      pullRequestRefreshGeneration: number;
+      generation: number;
+    };
+    (previewProvider as unknown as { previews: Set<unknown>; activePreview?: unknown }).previews.add(preview);
+    (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
+
+    await (previewProvider as unknown as {
+      closeDiff(preview: unknown): Promise<void>;
+      refreshPullRequestContext(preview: unknown): Promise<void>;
+    }).closeDiff(preview);
+    preview.pullRequestContext = undefined;
+    await (previewProvider as unknown as {
+      refreshPullRequestContext(preview: unknown): Promise<void>;
+    }).refreshPullRequestContext(preview);
+
+    assert.strictEqual(diffAvailabilityRequests, 0);
+    assert.strictEqual(preview.diffBaseline, undefined);
   });
 
   test('logs review start and completion actions', async () => {

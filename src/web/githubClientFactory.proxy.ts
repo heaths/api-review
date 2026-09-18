@@ -93,28 +93,10 @@ class GitHubProxyClient implements GitHubClient {
   }
 
   public async getPullRequest(request: GitHubPullRequestRequest): Promise<GitHubPullRequest | undefined> {
-    const resolved = await this.getJsonOrUndefined<GitHubPullRequest>('/pull-request', {
+    return this.getJsonOrUndefined<GitHubPullRequest>('/pull-request', {
       ref: request.ref,
       headOwner: request.headOwner ?? '',
     });
-    if (resolved) {
-      return resolved;
-    }
-
-    if (request.repository.owner === this.owner && request.repository.repo === this.repo && request.ref === this.ref) {
-      return {
-        number: 1,
-        title: `Pull request for ${shortRef(request.ref)}`,
-        state: 'open',
-        baseRef: 'main',
-        baseSha: this.ref,
-        headRef: this.ref,
-        headSha: this.ref,
-        headOwner: this.owner,
-      };
-    }
-
-    return undefined;
   }
 
   public async getPullRequestComments(
@@ -280,8 +262,4 @@ class GitHubProxyClient implements GitHubClient {
     }
     return response;
   }
-}
-
-function shortRef(ref: string): string {
-  return ref.slice(0, 8);
 }

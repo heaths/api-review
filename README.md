@@ -32,13 +32,18 @@ default; use the expand-all and collapse-all actions in the editor title to show
 or hide all comments. The preview can also show a diff against a Git tag,
 commit, pull request base, or another selected Markdown file, and while a diff
 is active the title bar adds next/previous hunk navigation plus a close action.
-The source Markdown file is never modified.
+When the file belongs to an open pull request and the base revision still
+contains the configured API Markdown file, the preview automatically opens the
+diff against that pull request base. The diff picker keeps the pull request base
+as the first choice and shows the matching tag name when that base also matches
+an eligible version tag. The source Markdown file is never modified.
 
 In Node.js extension hosts, tags, commits, and baseline content come from the
 built-in Git extension so local and unpublished history remains available. In
 web hosts, GitHub-backed documents use GitHub APIs for published tags, commits,
-pull request bases, and baseline content. Other documents can still be compared
-against another selected Markdown file.
+pull request bases, and baseline content, so published tag and commit history
+remains available even outside pull request context. Other documents can still
+be compared against another selected Markdown file.
 
 The custom preview applies CSS contributed by installed extensions through
 `markdown.previewStyles`. It does not load contributed preview scripts,

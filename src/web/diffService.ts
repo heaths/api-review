@@ -46,9 +46,17 @@ export interface DiffCandidate {
   readonly detail?: string;
 }
 
+export interface PullRequestBaseCandidate {
+  readonly baseline: DiffBaselineSelection;
+  readonly label: string;
+  readonly description?: string;
+  readonly detail?: string;
+}
+
 export interface DiffAvailability {
   readonly candidates: readonly DiffCandidate[];
   readonly defaultBaseline?: DiffBaselineSelection;
+  readonly pullRequestBase?: PullRequestBaseCandidate;
   readonly canPickFile: boolean;
 }
 
@@ -182,12 +190,13 @@ export class DiffService {
       repository.log({ path: relativePath, maxEntries: maxLogEntries }),
       repository.log({ maxEntries: maxTagHistoryEntries }),
     ]);
+    const commitDetails = createCommitDetailsByHash([...history, ...commits]);
     const tagCandidates = await this.getTagCandidates(
       document.uri,
       repository,
       relativePath,
       currentPackage.name,
-      createCommitDetailsByHash([...history, ...commits]),
+      commitDetails,
     );
     const taggedCommits = new Set(tagCandidates.map(candidate => candidate.commit).filter(isDefined));
     const headCommit = repository.state.HEAD?.commit;
@@ -205,6 +214,7 @@ export class DiffService {
       repository,
       relativePath,
       tagCandidates,
+      commitDetails,
       promptForGitHubAuth,
     );
     const candidates = [
@@ -214,6 +224,7 @@ export class DiffService {
 
     return {
       candidates,
+      pullRequestBase,
       defaultBaseline: selectDefaultBaseline(
         tagCandidates,
         commitCandidates,
@@ -288,6 +299,7 @@ export class DiffService {
 
       return {
         candidates: [...tagCandidates.map(candidate => candidate.candidate), ...commitCandidates],
+        pullRequestBase,
         defaultBaseline: selectDefaultBaseline(tagCandidates, commitCandidates, pullRequestBase),
         canPickFile: true,
       };
@@ -346,7 +358,7 @@ export class DiffService {
     tagCandidates: readonly TagCandidate[],
     promptForGitHubAuth: boolean,
     resolvedPullRequest?: { readonly baseSha: string; readonly baseRef: string },
-  ): Promise<DiffBaselineSelection | undefined> {
+  ): Promise<PullRequestBaseCandidate | undefined> {
     if (looksLikeFullCommitSha(document.ref) && !resolvedPullRequest) {
       return undefined;
     }
@@ -363,7 +375,7 @@ export class DiffService {
 
     const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequest.baseSha);
     if (taggedBase) {
-      return taggedBase.candidate.baseline;
+      return createPullRequestBaseTagCandidate(taggedBase);
     }
 
     const markdown = await this.githubClient.getFileContent({
@@ -372,7 +384,16 @@ export class DiffService {
       path: document.path,
       promptForAuth: promptForGitHubAuth,
     });
-    return markdown === undefined ? undefined : { kind: 'commit', ref: pullRequest.baseSha };
+    if (markdown === undefined) {
+      return undefined;
+    }
+
+    const commit = await this.getGitHubCommitDetails(
+      document.repository,
+      pullRequest.baseSha,
+      promptForGitHubAuth,
+    );
+    return createPullRequestBaseCommitCandidate({ kind: 'commit', ref: pullRequest.baseSha }, commit);
   }
 
   private async getTagCandidates(
@@ -440,15 +461,29 @@ export class DiffService {
     repository: GitRepository,
     relativePath: string,
     tagCandidates: readonly TagCandidate[],
+    commitDetails: ReadonlyMap<string, GitCommit>,
     promptForGitHubAuth: boolean,
-  ): Promise<DiffBaselineSelection | undefined> {
+  ): Promise<PullRequestBaseCandidate | undefined> {
     const pullRequestContext = await this.pullRequestService.getContext(document, { promptForGitHubAuth });
     if (!pullRequestContext) {
       return undefined;
     }
 
     try {
-      return await getPullRequestBaseBaseline(repository, relativePath, pullRequestContext, tagCandidates);
+      const baseline = await getPullRequestBaseBaseline(repository, relativePath, pullRequestContext, tagCandidates);
+      if (!baseline) {
+        return undefined;
+      }
+
+      const taggedBase = tagCandidates.find(candidate => candidate.commit === pullRequestContext.pullRequest.baseSha);
+      if (taggedBase) {
+        return createPullRequestBaseTagCandidate(taggedBase);
+      }
+
+      return createPullRequestBaseCommitCandidate(
+        baseline,
+        commitDetails.get(pullRequestContext.pullRequest.baseSha),
+      );
     } catch (error) {
       const branch = pullRequestContext.document.ref;
       this.logger.warn(`Unable to resolve pull request base for ${branch}: ${formatError(error)}`);
@@ -549,10 +584,13 @@ function formatBaselineLabel(documentUri: vscode.Uri, baseline: DiffBaselineSele
 export function selectDefaultBaseline(
   tagCandidates: readonly TagCandidate[],
   commitCandidates: readonly DiffCandidate[],
-  pullRequestBase: DiffBaselineSelection | undefined,
+  pullRequestBase: DiffBaselineSelection | PullRequestBaseCandidate | undefined,
 ): DiffBaselineSelection | undefined {
-  if (pullRequestBase) {
-    return pullRequestBase;
+  const pullRequestBaseline = pullRequestBase
+    ? ('baseline' in pullRequestBase ? pullRequestBase.baseline : pullRequestBase)
+    : undefined;
+  if (pullRequestBaseline) {
+    return pullRequestBaseline;
   }
 
   return tagCandidates[0]?.candidate.baseline ?? commitCandidates[0]?.baseline;
@@ -640,6 +678,46 @@ function settledValue<T>(
 
 function formatCommitDate(date: Date | string): string {
   return (typeof date === 'string' ? date : date.toISOString()).slice(0, 10);
+}
+
+function createPullRequestBaseTagCandidate(candidate: TagCandidate): PullRequestBaseCandidate {
+  return {
+    baseline: candidate.candidate.baseline,
+    label: candidate.candidate.baseline.kind === 'tag' ? candidate.candidate.baseline.ref : candidate.candidate.label,
+    description: candidate.candidate.description,
+    detail: candidate.candidate.detail,
+  };
+}
+
+function createPullRequestBaseCommitCandidate(
+  baseline: DiffBaselineSelection,
+  commit: GitCommit | GitHubCommit | undefined,
+): PullRequestBaseCandidate {
+  const commitDate = getPullRequestBaseCommitDate(commit);
+  const label = baseline.kind === 'tag'
+    ? baseline.ref
+    : baseline.kind === 'commit'
+      ? shortSha(baseline.ref)
+      : baseline.uri;
+
+  return {
+    baseline,
+    label: baseline.kind === 'commit' ? baseline.ref : label,
+    description: commitDate ? formatCommitDate(commitDate) : undefined,
+    detail: getDisplayDetail(commit?.message),
+  };
+}
+
+function getPullRequestBaseCommitDate(commit: GitCommit | GitHubCommit | undefined): Date | string | undefined {
+  if (!commit) {
+    return undefined;
+  }
+
+  return isGitCommit(commit) ? commit.commitDate : commit.committedAt;
+}
+
+function isGitCommit(commit: GitCommit | GitHubCommit): commit is GitCommit {
+  return 'commitDate' in commit;
 }
 
 function formatError(error: unknown): string {
