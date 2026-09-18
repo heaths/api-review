@@ -448,6 +448,72 @@ suite('Markdown view', () => {
     ]);
   });
 
+  test('adds one documentation group action to every line in a declaration hunk', () => {
+    const source = [
+      '```rust',
+      '#[derive(Clone, Debug)]',
+      'pub struct ClientOptions {',
+      '```',
+    ].join('\n');
+    const documentation = ['/// Options used when creating a client.'];
+    const lineMetadata = createMarkdownViewLineMetadata(source, {
+      markdown: [
+        '```rust',
+        ...documentation,
+        '#[derive(Clone, Debug)]',
+        'pub struct ClientOptions {',
+        '```',
+      ].join('\n'),
+      hasCommentsPatch: true,
+      commentsPatch: [
+        '@@ -2,2 +2,3 @@',
+        `+${documentation[0]}`,
+        ' #[derive(Clone, Debug)]',
+        ' pub struct ClientOptions {',
+      ].join('\n'),
+    }, [{
+      line: 1,
+      documentationGroupLine: 1,
+      language: 'rust',
+      documentation,
+    }, {
+      line: 2,
+      documentationGroupLine: 1,
+      language: 'rust',
+      documentation,
+    }]);
+
+    assert.deepStrictEqual(lineMetadata.map(entry => ({
+      line: entry.line,
+      viewLine: entry.viewLine,
+      documentationGroupId: entry.documentationGroupId,
+      documentationViewLines: entry.documentationViewLines,
+      hasDocumentation: entry.hasDocumentation,
+    })), [{
+      line: 1,
+      viewLine: 2,
+      documentationGroupId: 'line-1',
+      documentationViewLines: [1],
+      hasDocumentation: true,
+    }, {
+      line: 2,
+      viewLine: 3,
+      documentationGroupId: 'line-1',
+      documentationViewLines: [1],
+      hasDocumentation: true,
+    }]);
+
+    const html = renderMarkdownView([
+      '```rust',
+      ...documentation,
+      '#[derive(Clone, Debug)]',
+      'pub struct ClientOptions {',
+      '```',
+    ].join('\n'), lineMetadata);
+    assert.strictEqual((html.match(/data-has-documentation/gu) ?? []).length, 2);
+    assert.strictEqual((html.match(/data-documentation-group="line-1"/gu) ?? []).length, 3);
+  });
+
   test('marks lines with multiple comments as discussions', () => {
     const source = [
       '# Mock API',

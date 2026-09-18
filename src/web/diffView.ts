@@ -388,7 +388,9 @@ function createRenderMetadata(
       hasPullRequestComment: line.pullRequestComments && line.pullRequestComments.length > 0 ? true : undefined,
       hasPullRequestDiscussion: line.hasPullRequestDiscussion ? true : undefined,
       pullRequestCommentCount: line.pullRequestComments?.length,
-      documentation: line.documentation,
+      documentation: line.line === (line.documentationGroupLine ?? line.line)
+        ? line.documentation
+        : undefined,
       documentationGroupId: line.documentationGroupId,
       ariaLabel: line.ariaLabel,
     });

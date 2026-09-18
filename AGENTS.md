@@ -36,7 +36,9 @@
   doc comments as read-only virtual documents that the `Documentation` CodeLens
   opens through a transient definition provider and `editor.action.peekDefinition`,
   so editor associations cannot replace the source text editor. Dispose the
-  provider after each peek. Do not introduce a webview or a hover for this workflow.
+  provider after each peek. For documentation hunks with multiple context lines,
+  show the `Documentation` CodeLens only on the last line so it aligns naturally
+  with `Go to source`. Do not introduce a webview or a hover for this workflow.
 - The custom Markdown editor loads CSS declared by installed extensions through
   `markdown.previewStyles`, after its own base stylesheet. Resolve contributions
   from each extension's `extensionUri` so desktop, remote, and web hosts work.

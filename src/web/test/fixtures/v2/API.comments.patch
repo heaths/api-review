@@ -1,7 +1,6 @@
 --- a/API.md
 +++ b/API.md
-@@ -14,2 +14,4 @@
+@@ -14,2 +14,3 @@
 +/// Greets the caller.
  pub fn alpha();
-+/// Greets the gamma audience.
  pub fn gamma();

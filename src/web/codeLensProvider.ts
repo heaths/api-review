@@ -21,10 +21,23 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
 
   public async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
     const codeLenses: vscode.CodeLens[] = [];
-    for (const entry of createReviewLineMetadata(await this.model.getEntries(document))) {
+    const entries = createReviewLineMetadata(await this.model.getEntries(document));
+    const documentationGroupLastLines = new Map<number, number>();
+    for (const entry of entries) {
+      if (entry.hasDocumentation) {
+        const groupLine = entry.documentationGroupLine ?? entry.line;
+        documentationGroupLastLines.set(
+          groupLine,
+          Math.max(documentationGroupLastLines.get(groupLine) ?? entry.line, entry.line),
+        );
+      }
+    }
+
+    for (const entry of entries) {
       const range = document.lineAt(entry.line).range;
       const argument = { uri: document.uri.toString(), line: entry.line };
-      if (entry.hasDocumentation) {
+      const documentationGroupLine = entry.documentationGroupLine ?? entry.line;
+      if (entry.hasDocumentation && documentationGroupLastLines.get(documentationGroupLine) === entry.line) {
         codeLenses.push(new vscode.CodeLens(range, {
           command: showDocumentationCommand,
           title: '$(file-text) Documentation',

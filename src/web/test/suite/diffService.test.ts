@@ -766,6 +766,33 @@ suite('Diff service', () => {
     assert.ok(!rendered.html.includes('data-diff-hunk="0"><span class="hljs-comment">/// Prints a greeting.</span>'));
   });
 
+  test('renders multi-line documentation once with actions on every hunk line', () => {
+    const target = [
+      '```rust',
+      '#[derive(Clone, Debug)]',
+      'pub struct ClientOptions {',
+      '```',
+    ].join('\n');
+    const documentation = ['/// Options used when creating a client.'];
+    const lineMetadata = createDiffLineMetadata([{
+      line: 1,
+      documentationGroupLine: 1,
+      language: 'rust',
+      documentation,
+    }, {
+      line: 2,
+      documentationGroupLine: 1,
+      language: 'rust',
+      documentation,
+    }]);
+
+    const rendered = renderDiffView(target, target, lineMetadata, 'v1.0.0');
+
+    assert.strictEqual((rendered.html.match(/Options used when creating a client/gu) ?? []).length, 1);
+    assert.strictEqual((rendered.html.match(/data-has-documentation/gu) ?? []).length, 2);
+    assert.strictEqual((rendered.html.match(/data-documentation-group="line-1"/gu) ?? []).length, 3);
+  });
+
   test('keeps partially changed fenced code in one compact code block', () => {
     const target = [
       '```rust',

@@ -48,8 +48,12 @@ suite('Documentation peek', function () {
       'vscode.executeCodeLensProvider',
       uri,
     );
-    const lens = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.showDocumentation');
-    assert.ok(lens?.command?.arguments, 'Documentation CodeLens was not provided');
+    const documentationLenses = codeLenses.filter(
+      candidate => candidate.command?.command === 'heaths.azureApiReview.showDocumentation',
+    );
+    assert.strictEqual(documentationLenses.length, 1, 'Documentation CodeLens should only be on the last hunk line');
+    const [lens] = documentationLenses;
+    assert.ok(lens.command?.arguments, 'Documentation CodeLens was not provided');
     assert.strictEqual(lens.command.title, '$(file-text) Documentation');
     assert.strictEqual(lens.command.tooltip, 'Show documentation');
 
@@ -57,10 +61,12 @@ suite('Documentation peek', function () {
     assert.strictEqual(source?.command?.tooltip, 'Navigate to declaration');
 
     const line = lens.range.start.line;
-    const target = createDocumentationUri(uri, line, 'rust');
-    const peeked = await vscode.workspace.openTextDocument(target);
-    const documentation = peeked.getText().trim();
+    const firstTarget = createDocumentationUri(uri, line - 1, 'rust');
+    const documentation = (await vscode.workspace.openTextDocument(firstTarget)).getText().trim();
     assert.ok(documentation, 'The peeked document should contain the extracted doc comments');
+    const target = createDocumentationUri(uri, line, 'rust');
+    const secondDocumentation = (await vscode.workspace.openTextDocument(target)).getText().trim();
+    assert.strictEqual(secondDocumentation, documentation);
 
     // The command opens the peek widget without allowing the editor association to reopen the
     // declaration in the Azure API Review custom editor.
@@ -85,7 +91,7 @@ suite('Documentation peek', function () {
     );
     assert.strictEqual(input.uri.toString(), uri.toString());
     assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), uri.toString());
-    assert.strictEqual(vscode.window.activeTextEditor?.selection.active.line, line);
+    assert.strictEqual(vscode.window.activeTextEditor?.selection.active.line, lens.range.start.line);
 
     const definitions = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
       'vscode.executeDefinitionProvider',
