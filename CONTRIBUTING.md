@@ -85,6 +85,9 @@ Run them explicitly with:
 pnpm run test:ui
 ```
 
+Like `pnpm test`, `pnpm run test:ui` compiles the web bundle before launching
+the browser tests.
+
 On Linux, `pnpm run test:ui` requires a display and exits with a clear error if
 neither `DISPLAY` nor `WAYLAND_DISPLAY` is available. In CI, run it under Xvfb
 for Ubuntu-hosted jobs.

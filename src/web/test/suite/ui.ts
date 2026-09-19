@@ -20,7 +20,8 @@ export function run(): Promise<void> {
         if (failures > 0) {
           e(new Error(`${failures} tests failed.`));
         } else {
-          c();
+          // Let queued workbench tasks finish before the harness closes the browser.
+          setTimeout(() => c(), 100);
         }
       });
     } catch (err) {

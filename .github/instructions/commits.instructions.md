@@ -33,9 +33,10 @@ Write commit messages and pull request titles as [Conventional Commits](https://
   - pullRequest: resolving or creating and adding comments to pull requests
   - scripts: changes to build scripts
   - sourceMap: source maps for code navigation
-  - tests: test-only changes
 - Never invent a scope but if none listed seem appropriate, prompt to add a new
   one and update this skill accordingly.
+- For `test` commits, do not use a `tests` scope. If no better listed scope
+  fits, use `test: <description>`.
 - Prefer a scope that matches the changed source module, extension setting, or
   workflow directory.
 - Write the description in lowercase imperative mood: "add", not "adds" or
