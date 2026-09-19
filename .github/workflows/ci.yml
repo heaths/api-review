@@ -71,11 +71,10 @@ jobs:
       - name: Install Playwright
         run: pnpm exec playwright install --with-deps chromium
       - name: Test
+        run: pnpm test
+      - name: Test (UI)
         if: runner.os == 'Linux'
-        run: xvfb-run -a pnpm test
-      - name: Test (headless)
-        if: runner.os != 'Linux'
-        run: pnpm run test
+        run: xvfb-run -a pnpm run test:ui
 
   pack:
     if: inputs.release || github.event_name == 'pull_request'
