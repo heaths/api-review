@@ -312,6 +312,7 @@
     "compile:web": "webpack --config-name web && node scripts/check-web-bundle.mjs",
     "lint": "eslint src",
     "pretest": "pnpm run compile:web",
+    "pretest:ui": "pnpm run compile:web",
     "test": "node scripts/run-tests.mjs",
     "test:ui": "node scripts/run-ui-tests.mjs",
     "run-in-browser": "node scripts/run-in-browser.mjs",

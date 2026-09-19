@@ -118,9 +118,10 @@ default browser suite is always headless and requires Chromium system
 dependencies.
 
 Run `pnpm run test:ui` only when a task specifically needs the visible browser
-or editor UI. Before running UI tests, prompt the user because the headed
-browser can steal focus and disrupt concurrent work. On Linux, UI tests require
-an available display such as the X server provided by `xvfb-run`.
+or editor UI. It compiles the web bundle before launching the headed suite.
+Before running UI tests, prompt the user because the browser can steal focus
+and disrupt concurrent work. On Linux, UI tests require an available display
+such as the X server provided by `xvfb-run`.
 
 ## License
 
