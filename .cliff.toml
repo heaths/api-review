@@ -74,13 +74,15 @@ commit_parsers = [
   { body = ".*security", group = "<!-- 5 -->Security", continue = true },
 
   # Scopes
-  { message = "(commentPatch)", scope = "comments" },
-  { message = "(githubClient)", scope = "github" },
-  { message = "(lineMetadata)", scope = "sourceMap" },
-  { message = "(markdownPreview)", scope = "markdown" },
-  { message = "(package)", scope = "packaging" },
-  { message = "(pullRequestReview)", scope = "pullRequest" },
-  { message = "(reviewModel)", scope = "pullRequest" },
+  { message = "\\(commentPatch\\)", scope = "comments" },
+  { message = "\\(githubClient\\)", scope = "github" },
+  { message = "\\(github-proxy\\)", scope = "github" },
+  { message = "\\(lineMetadata\\)", scope = "sourceMap" },
+  { message = "\\(markdownPreview\\)", scope = "markdown" },
+  { message = "\\(package\\)", scope = "packaging" },
+  { message = "\\(pullRequestReview\\)", scope = "pullRequest" },
+  { message = "\\(reviewModel\\)", scope = "pullRequest" },
+  { message = "\\(ui\\)", scope = "UI" },
 ]
 # filter_commits = true
 topo_order_commits = true
