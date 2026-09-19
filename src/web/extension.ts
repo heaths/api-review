@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import {
-  goToSource,
-  goToSourceCommand,
   ReviewCodeLensProvider,
   showDocumentationCommand,
 } from './codeLensProvider';
@@ -25,6 +23,7 @@ import { DiffBaselineSelection, DiffService } from './diffService';
 import { MemoryCache } from './cache';
 import { createGitHubClient } from './githubClientFactory';
 import { createGitClient } from './gitClientFactory';
+import { goToSourceCommand, NavigationService } from './navigationService';
 
 const defaultChannelName = 'Azure API Review';
 const githubResponseCacheSizeLimit = 10 * 1024 * 1024;
@@ -49,6 +48,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
   const diffService = new DiffService(logger, githubClient, gitClient, pullRequestService);
   const provider = new ReviewCodeLensProvider(model);
   const documentation = new DocumentationProvider(model, logger);
+  const navigation = new NavigationService(model);
   const preview = new MarkdownViewProvider(
     model,
     context.extensionUri,
@@ -86,12 +86,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<AzureA
     vscode.window.registerCustomEditorProvider(
       markdownViewType,
       preview,
-      { webviewOptions: { enableFindWidget: true } },
+      { webviewOptions: { enableFindWidget: true, retainContextWhenHidden: true } },
     ),
     vscode.languages.registerCodeLensProvider(selector, provider),
     vscode.workspace.registerTextDocumentContentProvider(documentationScheme, documentation),
     vscode.commands.registerCommand(showDocumentationCommand, argument => provider.showDocumentation(argument)),
-    vscode.commands.registerCommand(goToSourceCommand, argument => goToSource(model, argument)),
+    vscode.commands.registerCommand(goToSourceCommand, argument => navigation.goToSource(argument)),
     vscode.commands.registerCommand(showViewCommentsCommand, () => preview.showComments()),
     vscode.commands.registerCommand(hideViewCommentsCommand, () => preview.hideComments()),
     vscode.commands.registerCommand(showViewDiffCommand, () => preview.showDiffPicker()),

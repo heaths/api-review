@@ -1,8 +1,6 @@
 import MarkdownIt = require('markdown-it');
 import * as vscode from 'vscode';
 import {
-  goToSourceCommand,
-  goToSourceTooltip,
   hideDocumentationTooltip,
   showDocumentationTooltip,
 } from './codeLensProvider';
@@ -17,6 +15,7 @@ import {
 import { renderDiffView } from './diffView';
 import hljs, { normalizeHighlightLanguage } from './highlight';
 import { createDiffLineMetadata, createMarkdownViewLineMetadata, ViewLineMetadata } from './lineMetadata';
+import { goToSourceCommand, goToSourceTooltip } from './navigationService';
 import { PullRequestContext, PullRequestLineComment, PullRequestService } from './pullRequestService';
 import { ReviewModel } from './reviewModel';
 
@@ -416,6 +415,7 @@ export class MarkdownViewProvider implements vscode.CustomTextEditorProvider {
           await vscode.commands.executeCommand(goToSourceCommand, {
             uri: preview.document.uri.toString(),
             line: message.line,
+            view: 'custom',
           });
           break;
 
