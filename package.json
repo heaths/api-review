@@ -135,43 +135,43 @@
         {
           "command": "heaths.azureApiReview.preview.rejectPullRequest",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.inPullRequest",
-           "group": "navigation@-999"
+          "group": "navigation@-999"
         },
         {
           "command": "heaths.azureApiReview.preview.showDiff",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && !heaths.azureApiReview.preview.diffVisible",
-           "group": "navigation@-998"
+          "group": "navigation@-998"
         },
         {
           "command": "heaths.azureApiReview.preview.nextDiffHunk",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-           "group": "navigation@-998"
+          "group": "navigation@-998"
         },
         {
           "command": "heaths.azureApiReview.preview.previousDiffHunk",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-           "group": "navigation@-997"
+          "group": "navigation@-997"
         },
         {
           "command": "heaths.azureApiReview.preview.closeDiff",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff && heaths.azureApiReview.preview.diffVisible",
-           "group": "navigation@-996",
+          "group": "navigation@-996",
           "toggled": "heaths.azureApiReview.preview.diffVisible"
         },
         {
           "command": "heaths.azureApiReview.preview.showComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && !heaths.azureApiReview.preview.commentsVisible",
-           "group": "navigation@-995"
+          "group": "navigation@-995"
         },
         {
           "command": "heaths.azureApiReview.preview.hideComments",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && heaths.azureApiReview.preview.hasComments && heaths.azureApiReview.preview.commentsVisible",
-           "group": "navigation@-995"
+          "group": "navigation@-995"
         },
         {
           "command": "heaths.azureApiReview.preview.reopenAsText",
           "when": "activeCustomEditorId == 'heaths.azureApiReview.preview' && !activeCustomEditorTextDiff",
-           "group": "navigation@-994"
+          "group": "navigation@-994"
         }
       ],
       "commandPalette": [
@@ -270,7 +270,7 @@
   "dependencies": {
     "diff": "^9.0.0",
     "highlight.js": "^11.12.0",
-    "markdown-it": "^15.0.1",
+    "markdown-it": "^15.0.2",
     "octokit": "^5.0.5",
     "source-map-js": "^1.2.1"
   },
@@ -278,14 +278,14 @@
     "@types/assert": "^1.5.11",
     "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
-    "@types/vscode": "^1.136.0",
+    "@types/vscode": "^1.138.0",
     "@types/webpack-env": "^1.18.8",
     "@vscode/test-web": "^0.0.81",
     "@vscode/vsce": "^4.0.0",
     "assert": "^2.1.0",
     "eslint": "^10.10.0",
     "express": "^5.2.1",
-    "git-cliff": "^2.13.1",
+    "git-cliff": "^2.14.2",
     "markdownlint-cli2": "^0.23.2",
     "mocha": "^11.8.0",
     "playwright": "^1.63.0",
@@ -293,8 +293,8 @@
     "sharp": "^0.35.4",
     "ts-loader": "^9.6.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.69.0",
-    "webpack": "^5.110.3",
+    "typescript-eslint": "^8.70.0",
+    "webpack": "^5.111.0",
     "webpack-cli": "^7.2.3"
   },
   "overrides": {
