@@ -1,5 +1,22 @@
 # Release History
 
+## 1.1.0-beta.1 (Unreleased)
+
+### Features Added
+
+- Upgraded to API service version `2026-03-01-preview`.
+
+### Breaking Changes
+
+### Bugs Fixed
+
+- Fixed challenge authentication to cache challenge scopes only after challenge resource verification succeeds, preventing
+  rejected challenges from being reused by later requests.
+
+### Other Changes
+
+- Avoided double-deserializing pager responses by using borrowed `nextLink` parsing in Key Vault keys list operations.
+
 ## 1.0.0 (2026-05-12)
 
 ### Features Added
