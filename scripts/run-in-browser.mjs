@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { startGitHubProxy } from './github-proxy.mjs';
+import { createVsCodeTestWebArgs } from './vscode-test-web-args.mjs';
 import { runVsCodeTestWeb } from './vscode-test-web.mjs';
 
 export function parseRunInBrowserArgs(args) {
@@ -33,6 +34,7 @@ export function parseRunInBrowserArgs(args) {
 
 async function main() {
   const { pullRequestMode, browserPath, forwardedArgs } = parseRunInBrowserArgs(process.argv.slice(2));
+  assertHeadedBrowserArgs(forwardedArgs);
   const repository = resolveRepository(browserPath);
   const proxy = await startGitHubProxy(repository.root, {
     simulatePullRequest: pullRequestMode,
@@ -52,12 +54,11 @@ async function main() {
 
   run('pnpm', ['run', 'compile:web'], proxy);
 
-  const child = runVsCodeTestWeb([
-    '--browserType=chromium',
-    '--extensionDevelopmentPath=.',
-    browserPath,
-    ...forwardedArgs,
-  ]);
+  const child = runVsCodeTestWeb(createVsCodeTestWebArgs({
+    folderPath: browserPath,
+    headless: false,
+    additionalArgs: forwardedArgs,
+  }));
 
   child.once('exit', () => void proxy?.close());
   child.once('error', () => void proxy?.close());
@@ -90,6 +91,25 @@ function parseGitHubRepository(url) {
   return match ? { owner: match[1], repo: match[2] } : undefined;
 }
 
+function assertHeadedBrowserArgs(args) {
+  if (args.some(isHeadlessEnabledArg)) {
+    throw new Error('run-in-browser always opens a visible browser window. Remove --headless from forwarded arguments.');
+  }
+}
+
+function isHeadlessEnabledArg(arg) {
+  if (arg === '--headless') {
+    return true;
+  }
+
+  const match = /^--headless=(.+)$/u.exec(arg);
+  if (!match) {
+    return false;
+  }
+
+  return !/^(0|false|no)$/iu.test(match[1]);
+}
+
 function runGit(cwd, args, required = true) {
   const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
   if (result.status === 0) {
@@ -110,5 +130,10 @@ function run(command, args, proxy) {
 }
 
 if (typeof process.argv[1] === 'string' && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }

@@ -112,8 +112,15 @@
 
 ## Validation
 
-Run `pnpm run lint`, `pnpm run package:vsix`, and `pnpm test`. Browser tests
-require Chromium system dependencies.
+Run `pnpm run lint`, `pnpm run package:vsix`, and `pnpm test`. Keep the
+produced VSIX for manual testing; do not delete it as part of validation. The
+default browser suite is always headless and requires Chromium system
+dependencies.
+
+Run `pnpm run test:ui` only when a task specifically needs the visible browser
+or editor UI. Before running UI tests, prompt the user because the headed
+browser can steal focus and disrupt concurrent work. On Linux, UI tests require
+an available display such as the X server provided by `xvfb-run`.
 
 ## License
 

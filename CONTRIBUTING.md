@@ -74,9 +74,20 @@ pnpm run package:vsix
 pnpm test
 ```
 
-`pnpm test` compiles the extension before launching the VS Code web extension
-tests in Chromium. Tests are under `src/web/test/suite` and are discovered by
-the webpack test entry.
+`pnpm test` compiles the extension before launching the default VS Code web
+extension tests in headless Chromium. Tests are under `src/web/test/suite` and
+are discovered by the webpack test entry.
+
+Tests that require a visible browser or editor UI live in `*.ui.test.ts` files.
+Run them explicitly with:
+
+```sh
+pnpm run test:ui
+```
+
+On Linux, `pnpm run test:ui` requires a display and exits with a clear error if
+neither `DISPLAY` nor `WAYLAND_DISPLAY` is available. In CI, run it under Xvfb
+for Ubuntu-hosted jobs.
 
 For a faster browser development loop, run the **watch:web** build task or:
 
@@ -91,7 +102,8 @@ pnpm run run-in-browser
 ```
 
 Pass a workspace directory as the first argument to open that folder instead of
-`.`. Any additional arguments are forwarded to `vscode-test-web`.
+`.`. Any additional arguments are forwarded to `vscode-test-web`, except
+`--headless`, because this command always opens a full browser UI.
 
 By default, this opens the browser session without pull request simulation, so
 Markdown files render with their normal preview behavior.

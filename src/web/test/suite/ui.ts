@@ -10,7 +10,7 @@ export function run(): Promise<void> {
     });
 
     const importAll = (r: __WebpackModuleApi.RequireContext) => r.keys()
-      .filter(key => !key.includes('.ui.test'))
+      .filter(key => key.includes('.ui.test'))
       .forEach(r);
     importAll(require.context('.', true, /\.test$/));
 

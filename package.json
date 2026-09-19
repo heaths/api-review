@@ -313,6 +313,7 @@
     "lint": "eslint src",
     "pretest": "pnpm run compile:web",
     "test": "node scripts/run-tests.mjs",
+    "test:ui": "node scripts/run-ui-tests.mjs",
     "run-in-browser": "node scripts/run-in-browser.mjs",
     "update-icons": "node scripts/update-icons.mjs",
     "generate:icon": "node scripts/generate-icon.mjs",
