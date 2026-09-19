@@ -265,7 +265,7 @@
     }
   },
   "engines": {
-    "vscode": "^1.136.0"
+    "vscode": "^1.138.0"
   },
   "dependencies": {
     "diff": "^9.0.0",
