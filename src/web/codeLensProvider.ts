@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import { createDocumentationUri } from './documentation';
 import { createReviewLineMetadata } from './lineMetadata';
+import { goToSourceCommand, goToSourceTooltip, ReviewLineCommandArgument } from './navigationService';
 import { ReviewModel } from './reviewModel';
 
 export const showDocumentationCommand = 'heaths.azureApiReview.showDocumentation';
-export const goToSourceCommand = 'heaths.azureApiReview.goToSource';
 export const showDocumentationTooltip = 'Show documentation';
 export const hideDocumentationTooltip = 'Hide documentation';
-export const goToSourceTooltip = 'Navigate to declaration';
 
 export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
   private readonly changed = new vscode.EventEmitter<void>();
@@ -35,7 +34,7 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
 
     for (const entry of entries) {
       const range = document.lineAt(entry.line).range;
-      const argument = { uri: document.uri.toString(), line: entry.line };
+      const argument: ReviewLineCommandArgument = { uri: document.uri.toString(), line: entry.line };
       const documentationGroupLine = entry.documentationGroupLine ?? entry.line;
       if (entry.hasDocumentation && documentationGroupLastLines.get(documentationGroupLine) === entry.line) {
         codeLenses.push(new vscode.CodeLens(range, {
@@ -93,18 +92,4 @@ export class ReviewCodeLensProvider implements vscode.CodeLensProvider {
       registration.dispose();
     }
   }
-}
-
-export async function goToSource(
-  model: ReviewModel,
-  argument: { uri: string; line: number },
-): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(argument.uri));
-  const entry = (await model.getEntries(document)).find(candidate => candidate.line === argument.line);
-  if (!entry?.source) {
-    void vscode.window.showWarningMessage('The source location is no longer available.');
-    return;
-  }
-
-  await vscode.window.showTextDocument(entry.source.uri, { selection: entry.source.range });
 }
