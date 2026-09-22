@@ -1,6 +1,6 @@
 --- a/API.md
 +++ b/API.md
-@@ -13,1 +13,340 @@
+@@ -13,2 +13,341 @@
 +//! # Azure Key Vault keys client library for Rust
 +//!
 +//! Azure Key Vault is a cloud service that provides secure storage of keys for encrypting your data. Multiple keys, and multiple versions of the same key, can be kept in the Azure Key Vault. Cryptographic keys in Azure Key Vault are represented as [JSON Web Key (JWK)](https://tools.ietf.org/html/rfc7517) objects.
@@ -170,12 +170,12 @@
 +//! use azure_security_keyvault_keys::models::KeyClientGetKeyOptions;
 +//!
 +//! // Retrieve a public key as a JWK using the key client.
-+//! let key_options = KeyClientGetKeyOptions {
++//! let get_options = KeyClientGetKeyOptions {
 +//!     key_version: Some("key-version".to_string()),
 +//!     ..Default::default()
 +//! };
 +//! let key = client
-+//!     .get_key("key-name", None)
++//!     .get_key("key-name", Some(get_options))
 +//!     .await?
 +//!     .into_model()?;
 +//!
@@ -341,11 +341,13 @@
 +//! [access control]: https://learn.microsoft.com/azure/key-vault/general/assign-access-policy
 +//! [RBAC]: https://learn.microsoft.com/azure/key-vault/general/rbac-guide
  #![cfg_attr(docsrs, feature(doc_cfg))]
-@@ -16,1 +355,4 @@
+ pub use azure_security_keyvault_keys::generated::clients::key_client::KeyClient;
+@@ -16,2 +355,5 @@
 +/// Information about the resource.
 +///
 +/// Call [`ResourceExt::resource_id()`] on supported models e.g., [`Key`](crate::models::Key) to get this information.
  #[derive(Clone, Debug, Eq, PartialEq)]
+ pub struct ResourceId {
 @@ -18,1 +360,2 @@
 +    /// The source URL of the resource.
      pub source_id: String,
@@ -652,7 +654,47 @@
 +        /// * `key_name` - The name of key to be rotated. The system will generate a new version in the specified key.
 +        /// * `options` - Optional parameters for the request.
          async fn rotate_key(&self, key_name: &str, options: Option<KeyClientRotateKeyOptions<'_>>) -> Result<Response<Key>>;
-@@ -65,1 +655,16 @@
+@@ -65,1 +655,19 @@
++        /// Securely unwraps a previously wrapped symmetric key using a specified key, ensuring TEE attestation via Microsoft Azure
++        /// Attestation (MAA) before unwrapping.
++        ///
++        /// The SECURE UNWRAP operation supports decryption of a symmetric key using the target key encryption key. This operation
++        /// is the reverse of the SECURE WRAP operation. The SECURE UNWRAP operation applies to asymmetric and symmetric keys stored
++        /// in Azure Key Vault since it uses the private portion of the key. This operation requires the keys/unwrapKey permission.
++        /// The SECURE UNWRAP operation ensures that MAA (Microsoft Azure Attestation Service) is used to attest the TEE (Trusted
++        /// Execution Environment) before the key is unwrapped.
++        ///
++        /// # Arguments
++        ///
++        /// * `key_name` - The name of the key.
++        /// * `key_version` - The version of the key.
++        /// The version is required and should be recorded when wrapping a data encryption key so you can reliably unwrap using the
++        /// same version. You can pass an empty string to select the latest key version but if you don't record the specific version
++        /// used for wrapping a key, key encryption key rotation can make the data inaccessible.
++        /// * `parameters` - The parameters for unwrap operation.
++        /// * `options` - Optional parameters for the request.
+         async fn secure_unwrap_key(&self, key_name: &str, key_version: &str, parameters: RequestContent<SecureKeyUnWrapOperationParameters>, options: Option<KeyClientSecureUnwrapKeyOptions<'_>>) -> Result<Response<SecureKeyOperationResult>>;
+@@ -66,1 +674,19 @@
++        /// Creates a new 256 bit AES key within the trusted execution environment and wraps this key using a specified key.
++        ///
++        /// The SECURE WRAP operation creates a new 256 bit AES key within the trusted execution environment(TEE) and encrypts the
++        /// same with a key encryption key that has previously been stored in an Azure Key Vault. The WRAP operation is only strictly
++        /// necessary for symmetric keys stored in Azure Key Vault since protection with an asymmetric key can be performed using
++        /// the public portion of the key. This operation is supported for asymmetric keys as a convenience for callers that have
++        /// a key-reference but do not have access to the public key material. This operation requires the keys/wrapKey permission.
++        ///
++        /// You should record the ['KeyOperationResult::kid`] that is returned by this operation
++        /// so you can later parse it with [`ResourceId`](crate::ResourceId) and pass the version to [`KeyClient::secure_unwrap_key()`].
++        /// You can pass an empty string for the version to `secure_unwrap_key()` to select the latest key version
++        /// but if you don't record the specific version used for wrapping a key, key rotation can make the data inaccessible.
++        ///
++        /// # Arguments
++        ///
++        /// * `key_name` - The name of the key.
++        /// * `parameters` - The parameters for wrap operation.
++        /// * `options` - Optional parameters for the request.
+         async fn secure_wrap_key(&self, key_name: &str, parameters: RequestContent<SecureKeyWrapOperationParameters>, options: Option<KeyClientSecureWrapKeyOptions<'_>>) -> Result<Response<SecureKeyOperationResult>>;
+@@ -67,1 +693,16 @@
 +        /// Creates a signature from a digest using the specified key.
 +        ///
 +        /// The SIGN operation is applicable to asymmetric and symmetric keys stored in Azure Key Vault since this operation uses
@@ -669,7 +711,7 @@
 +        /// * `parameters` - The parameters for the signing operation.
 +        /// * `options` - Optional parameters for the request.
          async fn sign(&self, key_name: &str, parameters: RequestContent<SignParameters>, options: Option<KeyClientSignOptions<'_>>) -> Result<Response<KeyOperationResult>>;
-@@ -66,1 +671,16 @@
+@@ -68,1 +709,16 @@
 +        /// Unwraps a symmetric key using the specified key that was initially used for wrapping that key.
 +        ///
 +        /// The UNWRAP operation supports decryption of a symmetric key using the target key encryption key. This operation is the
@@ -686,7 +728,7 @@
 +        /// * `parameters` - The parameters for the key operation.
 +        /// * `options` - Optional parameters for the request.
          async fn unwrap_key(&self, key_name: &str, key_version: &str, parameters: RequestContent<KeyOperationParameters>, options: Option<KeyClientUnwrapKeyOptions<'_>>) -> Result<Response<KeyOperationResult>>;
-@@ -67,1 +687,12 @@
+@@ -69,1 +725,12 @@
 +        /// The update key operation changes specified attributes of a stored key and can be applied to any key type and key version
 +        /// stored in Azure Key Vault.
 +        ///
@@ -699,7 +741,7 @@
 +        /// * `parameters` - The parameters of the key to update.
 +        /// * `options` - Optional parameters for the request.
          async fn update_key_properties(&self, key_name: &str, parameters: RequestContent<UpdateKeyPropertiesParameters>, options: Option<KeyClientUpdateKeyPropertiesOptions<'_>>) -> Result<Response<Key>>;
-@@ -68,1 +699,10 @@
+@@ -70,1 +737,10 @@
 +        /// Updates the rotation policy for a key.
 +        ///
 +        /// Set specified members in the key policy. Leave others as undefined. This operation requires the keys/update permission.
@@ -710,7 +752,7 @@
 +        /// * `key_rotation_policy` - The policy for the key.
 +        /// * `options` - Optional parameters for the request.
          async fn update_key_rotation_policy(&self, key_name: &str, key_rotation_policy: RequestContent<KeyRotationPolicy>, options: Option<KeyClientUpdateKeyRotationPolicyOptions<'_>>) -> Result<Response<KeyRotationPolicy>>;
-@@ -69,1 +709,17 @@
+@@ -71,1 +747,17 @@
 +        /// Verifies a signature using a specified key.
 +        ///
 +        /// The VERIFY operation is applicable to symmetric keys stored in Azure Key Vault. VERIFY is not strictly necessary for asymmetric
@@ -728,7 +770,7 @@
 +        /// * `parameters` - The parameters for verify operations.
 +        /// * `options` - Optional parameters for the request.
          async fn verify(&self, key_name: &str, key_version: &str, parameters: RequestContent<VerifyParameters>, options: Option<KeyClientVerifyOptions<'_>>) -> Result<Response<KeyVerifyResult>>;
-@@ -70,1 +726,19 @@
+@@ -72,1 +764,19 @@
 +        /// Wraps a symmetric key using a specified key.
 +        ///
 +        /// The WRAP operation supports encryption of a symmetric key using a key encryption key that has previously been stored in
@@ -748,506 +790,658 @@
 +        /// * `parameters` - The parameters for wrap operation.
 +        /// * `options` - Optional parameters for the request.
          async fn wrap_key(&self, key_name: &str, parameters: RequestContent<KeyOperationParameters>, options: Option<KeyClientWrapKeyOptions<'_>>) -> Result<Response<KeyOperationResult>>;
-@@ -72,1 +746,2 @@
+@@ -74,2 +784,3 @@
 +    /// Options used when creating a [`KeyClient`]
      #[derive(Clone, Debug)]
-@@ -74,1 +749,2 @@
+     pub struct KeyClientOptions {
+@@ -76,1 +787,2 @@
 +        /// The API version to use for this operation.
          pub api_version: String,
-@@ -75,1 +751,2 @@
+@@ -77,1 +789,2 @@
 +        /// Allows customization of the client.
          pub client_options: azure_core::http::ClientOptions,
-@@ -76,1 +753,3 @@
+@@ -78,1 +791,3 @@
 +        /// Controls whether the client requires the resource specified in authentication
 +        /// challenges to match the Key Vault or Managed HSM domain. True by default.
          pub verify_challenge_resource: Option<bool>,
-@@ -82,1 +761,2 @@
+@@ -84,1 +799,2 @@
 +/// Contains all the data structures and types used by the client library.
  pub mod models {
-@@ -83,1 +763,2 @@
+@@ -85,3 +801,4 @@
 +    /// The backup key result, containing the backup blob.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -86,1 +767,4 @@
+     #[non_exhaustive]
+     pub struct BackupKeyResult {
+@@ -88,2 +805,5 @@
 +        /// The backup blob containing the backed up key.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing)]
-@@ -89,1 +773,2 @@
+         pub value: Option<Vec<u8>>,
+@@ -91,2 +811,3 @@
 +    /// The key create parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -91,1 +776,2 @@
+     pub struct CreateKeyParameters {
+@@ -93,2 +814,3 @@
 +        /// Elliptic curve name. For valid values, see JsonWebKeyCurveName.
          #[serde(rename = "crv", skip_serializing_if = "Option::is_none")]
-@@ -93,1 +779,2 @@
+         pub curve: Option<super::CurveName>,
+@@ -95,2 +817,3 @@
 +        /// The attributes of a key managed by the key vault service.
          #[serde(rename = "attributes", skip_serializing_if = "Option::is_none")]
-@@ -95,1 +782,2 @@
+         pub key_attributes: Option<KeyAttributes>,
+@@ -97,2 +820,3 @@
 +        /// Json web key operations. For more information on possible key operations, see JsonWebKeyOperation.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -97,1 +785,2 @@
+         pub key_ops: Option<Vec<super::KeyOperation>>,
+@@ -99,2 +823,3 @@
 +        /// The key size in bits. For example: 2048, 3072, or 4096 for RSA.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -99,1 +788,2 @@
+         pub key_size: Option<i32>,
+@@ -101,2 +826,3 @@
 +        /// The type of key to create. For valid values, see JsonWebKeyType.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -101,1 +791,2 @@
+         pub kty: Option<super::KeyType>,
+@@ -103,2 +829,3 @@
 +        /// The public exponent for a RSA key.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -103,1 +794,2 @@
+         pub public_exponent: Option<i32>,
+@@ -105,2 +832,3 @@
 +        /// The policy rules under which the key can be exported.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -105,1 +797,2 @@
+         pub release_policy: Option<KeyReleasePolicy>,
+@@ -107,2 +835,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -112,1 +805,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -114,3 +843,4 @@
 +    /// A DeletedKeyBundle consisting of a WebKey plus its Attributes and deletion info
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -115,1 +809,2 @@
+     #[non_exhaustive]
+     pub struct DeletedKey {
+@@ -117,2 +847,3 @@
 +        /// The key management attributes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -117,1 +812,4 @@
+         pub attributes: Option<KeyAttributes>,
+@@ -119,2 +850,5 @@
 +        /// The time when the key was deleted, in UTC
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, rename = "deletedDate", skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -119,1 +817,2 @@
+         pub deleted_date: Option<azure_core::time::OffsetDateTime>,
+@@ -121,2 +855,3 @@
 +        /// The Json web key.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -121,1 +820,4 @@
+         pub key: Option<JsonWebKey>,
+@@ -123,2 +858,5 @@
 +        /// True if the key's lifetime is managed by key vault. If this is a key backing a certificate, then managed will be true.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -123,1 +825,2 @@
+         pub managed: Option<bool>,
+@@ -125,2 +863,3 @@
 +        /// The url of the recovery object, used to identify and recover the deleted key.
          #[serde(rename = "recoveryId", skip_serializing_if = "Option::is_none")]
-@@ -125,1 +828,2 @@
+         pub recovery_id: Option<String>,
+@@ -127,2 +866,3 @@
 +        /// The policy rules under which the key can be exported.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -127,1 +831,4 @@
+         pub release_policy: Option<KeyReleasePolicy>,
+@@ -129,2 +869,5 @@
 +        /// The time when the key is scheduled to be purged, in UTC
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, rename = "scheduledPurgeDate", skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -129,1 +836,2 @@
+         pub scheduled_purge_date: Option<azure_core::time::OffsetDateTime>,
+@@ -131,2 +874,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -132,1 +840,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -134,3 +878,4 @@
 +    /// The deleted key item containing the deleted key metadata and information about deletion.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -135,1 +844,2 @@
+     #[non_exhaustive]
+     pub struct DeletedKeyProperties {
+@@ -137,2 +882,3 @@
 +        /// The key management attributes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -137,1 +847,4 @@
+         pub attributes: Option<KeyAttributes>,
+@@ -139,2 +885,5 @@
 +        /// The time when the key was deleted, in UTC
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, rename = "deletedDate", skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -139,1 +852,2 @@
+         pub deleted_date: Option<azure_core::time::OffsetDateTime>,
+@@ -141,2 +890,3 @@
 +        /// Key identifier.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -141,1 +855,4 @@
+         pub kid: Option<String>,
+@@ -143,2 +893,5 @@
 +        /// True if the key's lifetime is managed by key vault. If this is a key backing a certificate, then managed will be true.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -143,1 +860,2 @@
+         pub managed: Option<bool>,
+@@ -145,2 +898,3 @@
 +        /// The url of the recovery object, used to identify and recover the deleted key.
          #[serde(rename = "recoveryId", skip_serializing_if = "Option::is_none")]
-@@ -145,1 +863,4 @@
+         pub recovery_id: Option<String>,
+@@ -147,2 +901,5 @@
 +        /// The time when the key is scheduled to be purged, in UTC
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, rename = "scheduledPurgeDate", skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -147,1 +868,2 @@
+         pub scheduled_purge_date: Option<azure_core::time::OffsetDateTime>,
+@@ -149,2 +906,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -150,1 +872,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -152,2 +910,3 @@
++    /// External Key parameters.
+     #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+     pub struct ExternalKey {
+@@ -154,2 +913,3 @@
++        /// The external key identifier. The valid id can only contain characters in the set [a-zA-Z0-9-]. Maximum length is 64 characters.
+         #[serde(skip_serializing_if = "Option::is_none")]
+         pub id: Option<String>,
+@@ -157,2 +917,3 @@
 +    /// The get random bytes request object.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -152,1 +875,2 @@
+     pub struct GetRandomBytesParameters {
+@@ -159,2 +920,3 @@
 +        /// The requested number of random bytes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -159,1 +883,2 @@
+         pub count: Option<i32>,
+@@ -166,2 +928,3 @@
 +    /// The key import parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -161,1 +886,2 @@
+     pub struct ImportKeyParameters {
+@@ -168,2 +931,3 @@
 +        /// Whether to import as a hardware key (HSM) or software key.
          #[serde(rename = "Hsm", skip_serializing_if = "Option::is_none")]
-@@ -163,1 +889,2 @@
+         pub hsm: Option<bool>,
+@@ -170,2 +934,3 @@
 +        /// The Json web key
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -165,1 +892,2 @@
+         pub key: Option<JsonWebKey>,
+@@ -172,2 +937,3 @@
 +        /// The key management attributes.
          #[serde(rename = "attributes", skip_serializing_if = "Option::is_none")]
-@@ -167,1 +895,2 @@
+         pub key_attributes: Option<KeyAttributes>,
+@@ -174,2 +940,3 @@
 +        /// The policy rules under which the key can be exported.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -169,1 +898,2 @@
+         pub release_policy: Option<KeyReleasePolicy>,
+@@ -176,2 +943,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -176,1 +906,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -183,2 +951,3 @@
 +    /// As of <http://tools.ietf.org/html/draft-ietf-jose-json-web-key-18>
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -178,1 +909,2 @@
+     pub struct JsonWebKey {
+@@ -185,2 +954,3 @@
 +        /// Elliptic curve name. For valid values, see JsonWebKeyCurveName.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -180,1 +912,2 @@
+         pub crv: Option<super::CurveName>,
+@@ -187,2 +957,3 @@
 +        /// RSA private exponent, or the D component of an EC private key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -182,1 +915,2 @@
+         pub d: Option<Vec<u8>>,
+@@ -189,2 +960,3 @@
 +        /// RSA private key parameter.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -184,1 +918,2 @@
+         pub dp: Option<Vec<u8>>,
+@@ -191,2 +963,3 @@
 +        /// RSA private key parameter.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -186,1 +921,2 @@
+         pub dq: Option<Vec<u8>>,
+@@ -193,2 +966,3 @@
 +        /// RSA public exponent.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -188,1 +924,2 @@
+         pub e: Option<Vec<u8>>,
+@@ -195,2 +969,3 @@
 +        /// Symmetric key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -190,1 +927,2 @@
+         pub k: Option<Vec<u8>>,
+@@ -197,2 +972,3 @@
 +        /// Json web key operations. For more information on possible key operations, see JsonWebKeyOperation.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -192,1 +930,2 @@
+         pub key_ops: Option<Vec<String>>,
+@@ -199,2 +975,3 @@
 +        /// Key identifier.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -194,1 +933,2 @@
+         pub kid: Option<String>,
+@@ -201,2 +978,3 @@
 +        /// JsonWebKey Key Type (kty), as defined in <https://tools.ietf.org/html/draft-ietf-jose-json-web-algorithms-40>.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -196,1 +936,2 @@
+         pub kty: Option<super::KeyType>,
+@@ -203,2 +981,3 @@
 +        /// RSA modulus.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -198,1 +939,2 @@
+         pub n: Option<Vec<u8>>,
+@@ -205,2 +984,3 @@
 +        /// RSA secret prime.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -200,1 +942,2 @@
+         pub p: Option<Vec<u8>>,
+@@ -207,2 +987,3 @@
 +        /// RSA secret prime, with p < q.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -202,1 +945,2 @@
+         pub q: Option<Vec<u8>>,
+@@ -209,2 +990,3 @@
 +        /// RSA private key parameter.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -204,1 +948,2 @@
+         pub qi: Option<Vec<u8>>,
+@@ -211,2 +993,3 @@
 +        /// Protected Key, used with 'Bring Your Own Key'.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "key_hsm", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -206,1 +951,2 @@
+         pub t: Option<Vec<u8>>,
+@@ -213,2 +996,3 @@
 +        /// X component of an EC public key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -208,1 +954,2 @@
+         pub x: Option<Vec<u8>>,
+@@ -215,2 +999,3 @@
 +        /// Y component of an EC public key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -211,1 +958,2 @@
+         pub y: Option<Vec<u8>>,
+@@ -218,3 +1003,4 @@
 +    /// A KeyBundle consisting of a WebKey plus its attributes.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -214,1 +962,2 @@
+     #[non_exhaustive]
+     pub struct Key {
+@@ -221,2 +1007,3 @@
 +        /// The key management attributes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -216,1 +965,2 @@
+         pub attributes: Option<KeyAttributes>,
+@@ -223,2 +1010,3 @@
 +        /// The Json web key.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -218,1 +968,4 @@
+         pub key: Option<JsonWebKey>,
+@@ -225,2 +1013,5 @@
 +        /// True if the key's lifetime is managed by key vault. If this is a key backing a certificate, then managed will be true.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -220,1 +973,2 @@
+         pub managed: Option<bool>,
+@@ -227,2 +1018,3 @@
 +        /// The policy rules under which the key can be exported.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -222,1 +976,2 @@
+         pub release_policy: Option<KeyReleasePolicy>,
+@@ -229,2 +1021,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -225,1 +980,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -232,3 +1025,4 @@
 +    /// The key attestation information.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -228,1 +984,2 @@
+     #[non_exhaustive]
+     pub struct KeyAttestation {
+@@ -235,2 +1029,3 @@
 +        /// A base64url-encoded string containing certificates in PEM format, used for attestation validation.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "certificatePemFile", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -230,1 +987,2 @@
+         pub certificate_pem_file: Option<Vec<u8>>,
+@@ -237,2 +1032,3 @@
 +        /// The attestation blob bytes encoded as base64url string corresponding to a private key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "privateKeyAttestation", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -232,1 +990,2 @@
+         pub private_key_attestation: Option<Vec<u8>>,
+@@ -239,2 +1035,3 @@
 +        /// The attestation blob bytes encoded as base64url string corresponding to a public key in case of asymmetric key.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "publicKeyAttestation", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -234,1 +993,2 @@
+         pub public_key_attestation: Option<Vec<u8>>,
+@@ -241,2 +1038,3 @@
 +        /// The version of the attestation.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -237,1 +997,2 @@
+         pub version: Option<String>,
+@@ -244,2 +1042,3 @@
 +    /// The attributes of a key managed by the key vault service.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -239,1 +1000,4 @@
+     pub struct KeyAttributes {
+@@ -246,2 +1045,5 @@
 +        /// The key or key version attestation information.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -241,1 +1005,4 @@
+         pub attestation: Option<KeyAttestation>,
+@@ -248,2 +1050,5 @@
 +        /// Creation time in UTC.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -243,1 +1010,2 @@
+         pub created: Option<azure_core::time::OffsetDateTime>,
+@@ -250,2 +1055,3 @@
 +        /// Determines whether the object is enabled.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -245,1 +1013,2 @@
+         pub enabled: Option<bool>,
+@@ -252,2 +1058,3 @@
 +        /// Expiry date in UTC.
          #[serde(default, rename = "exp", skip_serializing_if = "Option::is_none", with = "azure_core::time::unix_time::option")]
-@@ -247,1 +1016,3 @@
+         pub expires: Option<azure_core::time::OffsetDateTime>,
+@@ -254,2 +1061,4 @@
 +        /// Indicates if the private key can be exported. Release policy must be provided when creating the first version of an exportable
 +        /// key.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -249,1 +1020,4 @@
+         pub exportable: Option<bool>,
+@@ -256,2 +1065,3 @@
++        /// The external key information.
+         #[serde(skip_serializing_if = "Option::is_none")]
+         pub external_key: Option<ExternalKey>,
+@@ -258,2 +1068,5 @@
 +        /// The underlying HSM Platform.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "hsmPlatform", skip_serializing)]
-@@ -251,1 +1025,2 @@
+         pub hsm_platform: Option<String>,
+@@ -260,2 +1073,5 @@
++        /// The optional key size in bits for symmetric keys. For example: 128, 192, or 256 for AES keys.
++        ///
++        /// Operational visibility: Read
+         #[serde(skip_serializing)]
+         pub key_size: Option<i32>,
+@@ -262,2 +1078,3 @@
 +        /// Not before date in UTC.
          #[serde(default, rename = "nbf", skip_serializing_if = "Option::is_none", with = "azure_core::time::unix_time::option")]
-@@ -253,1 +1028,4 @@
+         pub not_before: Option<azure_core::time::OffsetDateTime>,
+@@ -264,2 +1081,5 @@
 +        /// softDelete data retention days. Value should be >=7 and <=90 when softDelete enabled, otherwise 0.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "recoverableDays", skip_serializing)]
-@@ -255,1 +1033,6 @@
+         pub recoverable_days: Option<i32>,
+@@ -266,2 +1086,7 @@
 +        /// Reflects the deletion recovery level currently in effect for keys in the current vault. If it contains 'Purgeable' the
 +        /// key can be permanently deleted by a privileged user; otherwise, only the system can purge the key, at the end of the retention
 +        /// interval.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "recoveryLevel", skip_serializing)]
-@@ -257,1 +1040,4 @@
+         pub recovery_level: Option<super::DeletionRecoveryLevel>,
+@@ -268,2 +1093,5 @@
 +        /// Last updated time in UTC.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -260,1 +1046,2 @@
+         pub updated: Option<azure_core::time::OffsetDateTime>,
+@@ -271,2 +1099,3 @@
 +    /// Options to be passed to [`KeyClient::backup_key()`](crate::generated::clients::KeyClient::backup_key())
      #[derive(Clone, Debug, Default)]
-@@ -262,1 +1049,2 @@
+     pub struct KeyClientBackupKeyOptions<'a> {
+@@ -273,1 +1102,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -264,1 +1052,2 @@
+@@ -275,2 +1105,3 @@
 +    /// Options to be passed to [`KeyClient::create_key()`](crate::generated::clients::KeyClient::create_key())
      #[derive(Clone, Debug, Default)]
-@@ -266,1 +1055,2 @@
+     pub struct KeyClientCreateKeyOptions<'a> {
+@@ -277,1 +1108,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -268,1 +1058,2 @@
+@@ -279,2 +1111,3 @@
 +    /// Options to be passed to [`KeyClient::decrypt()`](crate::generated::clients::KeyClient::decrypt())
      #[derive(Clone, Debug, Default)]
-@@ -270,1 +1061,2 @@
+     pub struct KeyClientDecryptOptions<'a> {
+@@ -281,1 +1114,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -272,1 +1064,2 @@
+@@ -283,2 +1117,3 @@
 +    /// Options to be passed to [`KeyClient::delete_key()`](crate::generated::clients::KeyClient::delete_key())
      #[derive(Clone, Debug, Default)]
-@@ -274,1 +1067,2 @@
+     pub struct KeyClientDeleteKeyOptions<'a> {
+@@ -285,1 +1120,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -276,1 +1070,2 @@
+@@ -287,2 +1123,3 @@
 +    /// Options to be passed to [`KeyClient::encrypt()`](crate::generated::clients::KeyClient::encrypt())
      #[derive(Clone, Debug, Default)]
-@@ -278,1 +1073,2 @@
+     pub struct KeyClientEncryptOptions<'a> {
+@@ -289,1 +1126,2 @@
 +        /// The version of the key.
          pub key_version: Option<String>,
-@@ -279,1 +1075,2 @@
+@@ -290,1 +1128,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -281,1 +1078,2 @@
+@@ -292,2 +1131,3 @@
 +    /// Options to be passed to [`KeyClient::get_deleted_key()`](crate::generated::clients::KeyClient::get_deleted_key())
      #[derive(Clone, Debug, Default)]
-@@ -283,1 +1081,2 @@
+     pub struct KeyClientGetDeletedKeyOptions<'a> {
+@@ -294,1 +1134,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -285,1 +1084,2 @@
+@@ -296,2 +1137,3 @@
 +    /// Options to be passed to [`KeyClient::get_key_attestation()`](crate::generated::clients::KeyClient::get_key_attestation())
      #[derive(Clone, Debug, Default)]
-@@ -287,1 +1087,3 @@
+     pub struct KeyClientGetKeyAttestationOptions<'a> {
+@@ -298,1 +1140,3 @@
 +        /// Adding the version parameter retrieves attestation blob for specific version of a key. This URI fragment is optional.
 +        /// If not specified, the latest version of the key attestation blob is returned.
          pub key_version: Option<String>,
-@@ -288,1 +1090,2 @@
+@@ -299,1 +1143,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -290,1 +1093,2 @@
+@@ -301,2 +1146,3 @@
 +    /// Options to be passed to [`KeyClient::get_key()`](crate::generated::clients::KeyClient::get_key())
      #[derive(Clone, Debug, Default)]
-@@ -292,1 +1096,3 @@
+     pub struct KeyClientGetKeyOptions<'a> {
+@@ -303,1 +1149,3 @@
 +        /// Adding the version parameter retrieves a specific version of a key. This URI fragment is optional. If not specified, the
 +        /// latest version of the key is returned.
          pub key_version: Option<String>,
-@@ -293,1 +1099,2 @@
+@@ -304,1 +1152,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -295,1 +1102,2 @@
+@@ -306,2 +1155,3 @@
 +    /// Options to be passed to [`KeyClient::get_key_rotation_policy()`](crate::generated::clients::KeyClient::get_key_rotation_policy())
      #[derive(Clone, Debug, Default)]
-@@ -297,1 +1105,2 @@
+     pub struct KeyClientGetKeyRotationPolicyOptions<'a> {
+@@ -308,1 +1158,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -299,1 +1108,2 @@
+@@ -310,2 +1161,3 @@
 +    /// Options to be passed to [`KeyClient::get_random_bytes()`](crate::generated::clients::KeyClient::get_random_bytes())
      #[derive(Clone, Debug, Default)]
-@@ -301,1 +1111,2 @@
+     pub struct KeyClientGetRandomBytesOptions<'a> {
+@@ -312,1 +1164,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -303,1 +1114,2 @@
+@@ -314,2 +1167,3 @@
 +    /// Options to be passed to [`KeyClient::import_key()`](crate::generated::clients::KeyClient::import_key())
      #[derive(Clone, Debug, Default)]
-@@ -305,1 +1117,2 @@
+     pub struct KeyClientImportKeyOptions<'a> {
+@@ -316,1 +1170,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -307,1 +1120,2 @@
+@@ -318,2 +1173,3 @@
 +    /// Options to be passed to [`KeyClient::list_deleted_key_properties()`](crate::generated::clients::KeyClient::list_deleted_key_properties())
      #[derive(Clone, Debug, Default)]
-@@ -309,1 +1123,2 @@
+     pub struct KeyClientListDeletedKeyPropertiesOptions<'a> {
+@@ -320,1 +1176,2 @@
 +        /// Maximum number of results to return in a page. If not specified the service will return up to 25 results.
          pub maxresults: Option<i32>,
-@@ -310,1 +1125,2 @@
+@@ -321,1 +1178,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::pager::PagerOptions<'a>,
-@@ -313,1 +1129,2 @@
+@@ -324,1 +1182,2 @@
 +        /// Transforms this [`KeyClientListDeletedKeyPropertiesOptions`] into a new `KeyClientListDeletedKeyPropertiesOptions` that owns the underlying data, cloning it if necessary.
          fn into_owned(self) -> KeyClientListDeletedKeyPropertiesOptions<'static>;
-@@ -315,1 +1132,2 @@
+@@ -326,2 +1185,3 @@
 +    /// Options to be passed to [`KeyClient::list_key_properties()`](crate::generated::clients::KeyClient::list_key_properties())
      #[derive(Clone, Debug, Default)]
-@@ -317,1 +1135,2 @@
+     pub struct KeyClientListKeyPropertiesOptions<'a> {
+@@ -328,1 +1188,2 @@
 +        /// Maximum number of results to return in a page. If not specified the service will return up to 25 results.
          pub maxresults: Option<i32>,
-@@ -318,1 +1137,2 @@
+@@ -329,1 +1190,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::pager::PagerOptions<'a>,
-@@ -321,1 +1141,2 @@
+@@ -332,1 +1194,2 @@
 +        /// Transforms this [`KeyClientListKeyPropertiesOptions`] into a new `KeyClientListKeyPropertiesOptions` that owns the underlying data, cloning it if necessary.
          fn into_owned(self) -> KeyClientListKeyPropertiesOptions<'static>;
-@@ -323,1 +1144,2 @@
+@@ -334,2 +1197,3 @@
 +    /// Options to be passed to [`KeyClient::list_key_properties_versions()`](crate::generated::clients::KeyClient::list_key_properties_versions())
      #[derive(Clone, Debug, Default)]
-@@ -325,1 +1147,2 @@
+     pub struct KeyClientListKeyPropertiesVersionsOptions<'a> {
+@@ -336,1 +1200,2 @@
 +        /// Maximum number of results to return in a page. If not specified the service will return up to 25 results.
          pub maxresults: Option<i32>,
-@@ -326,1 +1149,2 @@
+@@ -337,1 +1202,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::pager::PagerOptions<'a>,
-@@ -329,1 +1153,2 @@
+@@ -340,1 +1206,2 @@
 +        /// Transforms this [`KeyClientListKeyPropertiesVersionsOptions`] into a new `KeyClientListKeyPropertiesVersionsOptions` that owns the underlying data, cloning it if necessary.
          fn into_owned(self) -> KeyClientListKeyPropertiesVersionsOptions<'static>;
-@@ -331,1 +1156,2 @@
+@@ -342,2 +1209,3 @@
 +    /// Options to be passed to [`KeyClient::purge_deleted_key()`](crate::generated::clients::KeyClient::purge_deleted_key())
      #[derive(Clone, Debug, Default)]
-@@ -333,1 +1159,2 @@
+     pub struct KeyClientPurgeDeletedKeyOptions<'a> {
+@@ -344,1 +1212,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -335,1 +1162,2 @@
+@@ -346,2 +1215,3 @@
 +    /// Options to be passed to [`KeyClient::recover_deleted_key()`](crate::generated::clients::KeyClient::recover_deleted_key())
      #[derive(Clone, Debug, Default)]
-@@ -337,1 +1165,2 @@
+     pub struct KeyClientRecoverDeletedKeyOptions<'a> {
+@@ -348,1 +1218,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -339,1 +1168,2 @@
+@@ -350,2 +1221,3 @@
 +    /// Options to be passed to [`KeyClient::release()`](crate::generated::clients::KeyClient::release())
      #[derive(Clone, Debug, Default)]
-@@ -341,1 +1171,2 @@
+     pub struct KeyClientReleaseOptions<'a> {
+@@ -352,1 +1224,2 @@
 +        /// Adding the version parameter retrieves a specific version of a key.
          pub key_version: Option<String>,
-@@ -342,1 +1173,2 @@
+@@ -353,1 +1226,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -344,1 +1176,2 @@
+@@ -355,2 +1229,3 @@
 +    /// Options to be passed to [`KeyClient::restore_key()`](crate::generated::clients::KeyClient::restore_key())
      #[derive(Clone, Debug, Default)]
-@@ -346,1 +1179,2 @@
+     pub struct KeyClientRestoreKeyOptions<'a> {
+@@ -357,1 +1232,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -348,1 +1182,2 @@
+@@ -359,2 +1235,3 @@
 +    /// Options to be passed to [`KeyClient::rotate_key()`](crate::generated::clients::KeyClient::rotate_key())
      #[derive(Clone, Debug, Default)]
-@@ -350,1 +1185,2 @@
+     pub struct KeyClientRotateKeyOptions<'a> {
+@@ -361,1 +1238,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -352,1 +1188,2 @@
+@@ -363,2 +1241,3 @@
++    /// Options to be passed to [`KeyClient::secure_unwrap_key()`](crate::generated::clients::KeyClient::secure_unwrap_key())
+     #[derive(Clone, Debug, Default)]
+     pub struct KeyClientSecureUnwrapKeyOptions<'a> {
+@@ -365,1 +1244,2 @@
++        /// Allows customization of the method call.
+         pub method_options: azure_core::http::ClientMethodOptions<'a>,
+@@ -367,2 +1247,3 @@
++    /// Options to be passed to [`KeyClient::secure_wrap_key()`](crate::generated::clients::KeyClient::secure_wrap_key())
+     #[derive(Clone, Debug, Default)]
+     pub struct KeyClientSecureWrapKeyOptions<'a> {
+@@ -369,1 +1250,2 @@
++        /// The version of the key.
+         pub key_version: Option<String>,
+@@ -370,1 +1252,2 @@
++        /// Allows customization of the method call.
+         pub method_options: azure_core::http::ClientMethodOptions<'a>,
+@@ -372,2 +1255,3 @@
 +    /// Options to be passed to [`KeyClient::sign()`](crate::generated::clients::KeyClient::sign())
      #[derive(Clone, Debug, Default)]
-@@ -354,1 +1191,2 @@
+     pub struct KeyClientSignOptions<'a> {
+@@ -374,1 +1258,2 @@
 +        /// The version of the key.
          pub key_version: Option<String>,
-@@ -355,1 +1193,2 @@
+@@ -375,1 +1260,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -357,1 +1196,2 @@
+@@ -377,2 +1263,3 @@
 +    /// Options to be passed to [`KeyClient::unwrap_key()`](crate::generated::clients::KeyClient::unwrap_key())
      #[derive(Clone, Debug, Default)]
-@@ -359,1 +1199,2 @@
+     pub struct KeyClientUnwrapKeyOptions<'a> {
+@@ -379,1 +1266,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -361,1 +1202,2 @@
+@@ -381,2 +1269,3 @@
 +    /// Options to be passed to [`KeyClient::update_key_properties()`](crate::generated::clients::KeyClient::update_key_properties())
      #[derive(Clone, Debug, Default)]
-@@ -363,1 +1205,2 @@
+     pub struct KeyClientUpdateKeyPropertiesOptions<'a> {
+@@ -383,1 +1272,2 @@
 +        /// The version of the key to update.
          pub key_version: Option<String>,
-@@ -364,1 +1207,2 @@
+@@ -384,1 +1274,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -366,1 +1210,2 @@
+@@ -386,2 +1277,3 @@
 +    /// Options to be passed to [`KeyClient::update_key_rotation_policy()`](crate::generated::clients::KeyClient::update_key_rotation_policy())
      #[derive(Clone, Debug, Default)]
-@@ -368,1 +1213,2 @@
+     pub struct KeyClientUpdateKeyRotationPolicyOptions<'a> {
+@@ -388,1 +1280,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -370,1 +1216,2 @@
+@@ -390,2 +1283,3 @@
 +    /// Options to be passed to [`KeyClient::verify()`](crate::generated::clients::KeyClient::verify())
      #[derive(Clone, Debug, Default)]
-@@ -372,1 +1219,2 @@
+     pub struct KeyClientVerifyOptions<'a> {
+@@ -392,1 +1286,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -374,1 +1222,2 @@
+@@ -394,2 +1289,3 @@
 +    /// Options to be passed to [`KeyClient::wrap_key()`](crate::generated::clients::KeyClient::wrap_key())
      #[derive(Clone, Debug, Default)]
-@@ -376,1 +1225,2 @@
+     pub struct KeyClientWrapKeyOptions<'a> {
+@@ -396,1 +1292,2 @@
 +        /// The version of the key.
          pub key_version: Option<String>,
-@@ -377,1 +1227,2 @@
+@@ -397,1 +1294,2 @@
 +        /// Allows customization of the method call.
          pub method_options: azure_core::http::ClientMethodOptions<'a>,
-@@ -379,1 +1230,2 @@
+@@ -399,2 +1297,3 @@
 +    /// The key operations parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -381,1 +1233,2 @@
+     pub struct KeyOperationParameters {
+@@ -401,2 +1300,3 @@
 +        /// Additional data to authenticate but not encrypt/decrypt when using authenticated crypto algorithms.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "aad", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -383,1 +1236,2 @@
+         pub additional_authenticated_data: Option<Vec<u8>>,
+@@ -403,2 +1303,3 @@
 +        /// algorithm identifier
          #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
-@@ -385,1 +1239,2 @@
+         pub algorithm: Option<super::EncryptionAlgorithm>,
+@@ -405,2 +1306,3 @@
 +        /// The tag to authenticate when performing decryption with an authenticated algorithm.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "tag", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -387,1 +1242,2 @@
+         pub authentication_tag: Option<Vec<u8>>,
+@@ -407,2 +1309,3 @@
 +        /// Cryptographically random, non-repeating initialization vector for symmetric algorithms.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -389,1 +1245,2 @@
+         pub iv: Option<Vec<u8>>,
+@@ -409,2 +1312,3 @@
 +        /// The value to operate on.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -396,1 +1253,2 @@
+         pub value: Option<Vec<u8>>,
+@@ -416,3 +1320,4 @@
 +    /// The key operation result.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -399,1 +1257,4 @@
+     #[non_exhaustive]
+     pub struct KeyOperationResult {
+@@ -419,2 +1324,5 @@
 +        /// Additional data to authenticate but not encrypt/decrypt when using authenticated crypto algorithms.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "aad", serialize_with = "base64::option::serialize_url_safe", skip_serializing)]
-@@ -401,1 +1262,4 @@
+         pub additional_authenticated_data: Option<Vec<u8>>,
+@@ -421,2 +1329,5 @@
 +        /// The tag to authenticate when performing decryption with an authenticated algorithm.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "tag", serialize_with = "base64::option::serialize_url_safe", skip_serializing)]
-@@ -403,1 +1267,4 @@
+         pub authentication_tag: Option<Vec<u8>>,
+@@ -423,2 +1334,5 @@
 +        /// Cryptographically random, non-repeating initialization vector for symmetric algorithms.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing)]
-@@ -405,1 +1272,12 @@
+         pub iv: Option<Vec<u8>>,
+@@ -425,2 +1339,13 @@
 +        /// Key identifier
 +        ///
 +        /// You should record this when returned from [`KeyClient::encrypt()`](crate::KeyClient::encrypt), [`sign()`](crate::KeyClient::sign),
@@ -1260,478 +1454,631 @@
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -407,1 +1285,4 @@
+         pub kid: Option<String>,
+@@ -427,2 +1352,5 @@
 +        /// The result of the operation.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "value", serialize_with = "base64::option::serialize_url_safe", skip_serializing)]
-@@ -410,1 +1291,2 @@
+         pub result: Option<Vec<u8>>,
+@@ -430,3 +1358,4 @@
 +    /// The key item containing key metadata.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -413,1 +1295,2 @@
+     #[non_exhaustive]
+     pub struct KeyProperties {
+@@ -433,2 +1362,3 @@
 +        /// The key management attributes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -415,1 +1298,2 @@
+         pub attributes: Option<KeyAttributes>,
+@@ -435,2 +1365,3 @@
 +        /// Key identifier.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -417,1 +1301,4 @@
+         pub kid: Option<String>,
+@@ -437,2 +1368,5 @@
 +        /// True if the key's lifetime is managed by key vault. If this is a key backing a certificate, then managed will be true.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -419,1 +1306,2 @@
+         pub managed: Option<bool>,
+@@ -439,2 +1373,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -422,1 +1310,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -442,2 +1377,3 @@
 +    /// The policy rules under which the key can be exported.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -424,1 +1313,2 @@
+     pub struct KeyReleasePolicy {
+@@ -444,2 +1380,3 @@
 +        /// Content type and version of key release policy
          #[serde(rename = "contentType", skip_serializing_if = "Option::is_none")]
-@@ -426,1 +1316,2 @@
+         pub content_type: Option<String>,
+@@ -446,2 +1383,3 @@
 +        /// Blob encoding the policy rules under which the key can be released. Blob must be base64 URL encoded.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "data", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -428,1 +1319,3 @@
+         pub encoded_policy: Option<Vec<u8>>,
+@@ -448,2 +1386,4 @@
 +        /// Defines the mutability state of the policy. Once marked immutable, this flag cannot be reset and the policy cannot be
 +        /// changed under any circumstances.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -431,1 +1324,2 @@
+         pub immutable: Option<bool>,
+@@ -451,3 +1391,4 @@
 +    /// The release result, containing the released key.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -434,1 +1328,4 @@
+     #[non_exhaustive]
+     pub struct KeyReleaseResult {
+@@ -454,2 +1395,5 @@
 +        /// A signed object containing the released key.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -437,1 +1334,2 @@
+         pub value: Option<String>,
+@@ -457,2 +1401,3 @@
 +    /// Management policy for a key.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -439,1 +1337,2 @@
+     pub struct KeyRotationPolicy {
+@@ -459,2 +1404,3 @@
 +        /// The key rotation policy attributes.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -441,1 +1340,4 @@
+         pub attributes: Option<KeyRotationPolicyAttributes>,
+@@ -461,2 +1407,5 @@
 +        /// The key policy id.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -443,1 +1345,4 @@
+         pub id: Option<String>,
+@@ -463,2 +1412,5 @@
 +        /// Actions that will be performed by Key Vault over the lifetime of a key. For preview, lifetimeActions can only have two
 +        /// items at maximum: one for rotate, one for notify. Notification time would be default to 30 days before expiry and it is
 +        /// not configurable.
          #[serde(rename = "lifetimeActions", skip_serializing_if = "Option::is_none")]
-@@ -450,1 +1355,2 @@
+         pub lifetime_actions: Option<Vec<LifetimeAction>>,
+@@ -470,2 +1422,3 @@
 +    /// The key rotation policy attributes.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -452,1 +1358,4 @@
+     pub struct KeyRotationPolicyAttributes {
+@@ -472,2 +1425,5 @@
 +        /// The key rotation policy created time in UTC.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -454,1 +1363,3 @@
+         pub created: Option<azure_core::time::OffsetDateTime>,
+@@ -474,2 +1430,4 @@
 +        /// The expiryTime will be applied on the new key version. It should be at least 28 days. It will be in ISO 8601 Format. Examples:
 +        /// 90 days: P90D, 3 months: P3M, 48 hours: PT48H, 1 year and 10 days: P1Y10D
          #[serde(rename = "expiryTime", skip_serializing_if = "Option::is_none")]
-@@ -456,1 +1367,4 @@
+         pub expiry_time: Option<String>,
+@@ -476,2 +1434,5 @@
 +        /// The key rotation policy's last updated time in UTC.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing, with = "azure_core::time::unix_time::option")]
-@@ -459,1 +1373,2 @@
+         pub updated: Option<azure_core::time::OffsetDateTime>,
+@@ -479,2 +1440,3 @@
 +    /// The key vault error exception.
      #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-@@ -461,1 +1376,4 @@
+     pub struct KeyVaultError {
+@@ -481,2 +1443,5 @@
 +        /// The key vault server error.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -464,1 +1382,2 @@
+         pub error: Option<KeyVaultErrorError>,
+@@ -484,2 +1449,3 @@
 +    /// The key vault server error.
      #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-@@ -466,1 +1385,4 @@
+     pub struct KeyVaultErrorError {
+@@ -486,2 +1452,5 @@
 +        /// The error code.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -468,1 +1390,4 @@
+         pub code: Option<String>,
+@@ -488,2 +1457,5 @@
 +        /// The key vault server error.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "innererror", skip_serializing)]
-@@ -470,1 +1395,4 @@
+         pub inner_error: Option<Box<KeyVaultErrorError>>,
+@@ -490,2 +1462,5 @@
 +        /// The error message.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -473,1 +1401,2 @@
+         pub message: Option<String>,
+@@ -493,3 +1468,4 @@
 +    /// The key verify result.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -476,1 +1405,4 @@
+     #[non_exhaustive]
+     pub struct KeyVerifyResult {
+@@ -496,2 +1472,5 @@
 +        /// True if the signature is verified, otherwise false.
 +        ///
 +        /// Operational visibility: Read
          #[serde(skip_serializing)]
-@@ -479,1 +1411,2 @@
+         pub value: Option<bool>,
+@@ -499,2 +1478,3 @@
 +    /// Action and its trigger that will be performed by Key Vault over the lifetime of a key.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -481,1 +1414,2 @@
+     pub struct LifetimeAction {
+@@ -501,2 +1481,3 @@
 +        /// The action that will be executed.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -483,1 +1417,2 @@
+         pub action: Option<LifetimeActionType>,
+@@ -503,2 +1484,3 @@
 +        /// The condition that will execute the action.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -486,1 +1421,2 @@
+         pub trigger: Option<LifetimeActionTrigger>,
+@@ -506,2 +1488,3 @@
 +    /// A condition to be satisfied for an action to be executed.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -488,1 +1424,3 @@
+     pub struct LifetimeActionTrigger {
+@@ -508,2 +1491,4 @@
 +        /// Time after creation to attempt to rotate. It only applies to rotate. It will be in ISO 8601 duration format. Example:
 +        /// 90 days : "P90D"
          #[serde(rename = "timeAfterCreate", skip_serializing_if = "Option::is_none")]
-@@ -490,1 +1428,2 @@
+         pub time_after_create: Option<String>,
+@@ -510,2 +1495,3 @@
 +        /// Time before expiry to attempt to rotate or notify. It will be in ISO 8601 duration format. Example: 90 days : "P90D"
          #[serde(rename = "timeBeforeExpiry", skip_serializing_if = "Option::is_none")]
-@@ -493,1 +1432,2 @@
+         pub time_before_expiry: Option<String>,
+@@ -513,2 +1499,3 @@
 +    /// The action that will be executed.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -495,1 +1435,2 @@
+     pub struct LifetimeActionType {
+@@ -515,2 +1502,3 @@
 +        /// The type of the action. The value should be compared case-insensitively.
          #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-@@ -498,1 +1439,2 @@
+         pub type_prop: Option<super::KeyRotationPolicyAction>,
+@@ -518,3 +1506,4 @@
 +    /// A list of keys that have been deleted in this vault.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -501,1 +1443,4 @@
+     #[non_exhaustive]
+     pub struct ListDeletedKeyPropertiesResult {
+@@ -521,2 +1510,5 @@
 +        /// The URL to get the next set of deleted keys.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "nextLink", skip_serializing)]
-@@ -503,1 +1448,4 @@
+         pub next_link: Option<String>,
+@@ -523,2 +1515,5 @@
 +        /// A response message containing a list of deleted keys in the key vault along with a link to the next page of deleted keys.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing)]
-@@ -512,1 +1460,2 @@
+         pub value: Vec<DeletedKeyProperties>,
+@@ -532,3 +1527,4 @@
 +    /// The key list result.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -515,1 +1464,4 @@
+     #[non_exhaustive]
+     pub struct ListKeyPropertiesResult {
+@@ -535,2 +1531,5 @@
 +        /// The URL to get the next set of keys.
 +        ///
 +        /// Operational visibility: Read
          #[serde(rename = "nextLink", skip_serializing)]
-@@ -517,1 +1469,4 @@
+         pub next_link: Option<String>,
+@@ -537,2 +1536,5 @@
 +        /// A response message containing a list of keys in the key vault along with a link to the next page of keys.
 +        ///
 +        /// Operational visibility: Read
          #[serde(default, skip_serializing)]
-@@ -526,1 +1481,2 @@
+         pub value: Vec<KeyProperties>,
+@@ -546,3 +1548,4 @@
 +    /// The get random bytes response object containing the bytes.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -529,1 +1485,2 @@
+     #[non_exhaustive]
+     pub struct RandomBytes {
+@@ -549,2 +1552,3 @@
 +        /// The bytes encoded as a base64url string.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -532,1 +1489,2 @@
+         pub value: Option<Vec<u8>>,
+@@ -552,2 +1556,3 @@
 +    /// The release key parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -534,1 +1492,2 @@
+     pub struct ReleaseParameters {
+@@ -554,2 +1559,3 @@
 +        /// The encryption algorithm to use to protected the exported key material
          #[serde(rename = "enc", skip_serializing_if = "Option::is_none")]
-@@ -536,1 +1495,2 @@
+         pub algorithm: Option<super::KeyEncryptionAlgorithm>,
+@@ -556,2 +1562,3 @@
 +        /// A client provided nonce for freshness.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -538,1 +1498,2 @@
+         pub nonce: Option<String>,
+@@ -558,2 +1565,3 @@
 +        /// The attestation assertion for the target of the key release.
          #[serde(rename = "target", skip_serializing_if = "Option::is_none")]
-@@ -545,1 +1506,2 @@
+         pub target_attestation_token: Option<String>,
+@@ -565,2 +1573,3 @@
 +    /// The key restore parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -547,1 +1509,2 @@
+     pub struct RestoreKeyParameters {
+@@ -567,2 +1576,3 @@
 +        /// The backup blob associated with a key bundle.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "value", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -554,1 +1517,2 @@
-+    /// The key operations parameters.
+         pub key_backup: Option<Vec<u8>>,
+@@ -574,3 +1584,4 @@
++    /// The secure key wrap operation result.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -556,1 +1520,2 @@
-+        /// The signing/verification algorithm identifier. For more information on possible algorithm types, see JsonWebKeySignatureAlgorithm.
+     #[non_exhaustive]
+     pub struct SecureKeyOperationResult {
+@@ -577,2 +1588,3 @@
++        /// The algorithm used for the operation.
          #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
-@@ -558,1 +1523,2 @@
+         pub algorithm: Option<super::JsonWebKeyWrapAlgorithm>,
+@@ -579,2 +1591,3 @@
++        /// Key identifier
+         #[serde(skip_serializing_if = "Option::is_none")]
+         pub kid: Option<String>,
+@@ -581,2 +1594,3 @@
++        /// The result of the operation.
+         #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
+         pub value: Option<Vec<u8>>,
+@@ -584,2 +1598,3 @@
++    /// The Secure Key unwrap attributes.
+     #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+     pub struct SecureKeyUnWrapOperationParameters {
+@@ -586,2 +1601,3 @@
++        /// algorithm identifier
+         #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
+         pub algorithm: Option<super::JsonWebKeyWrapAlgorithm>,
+@@ -588,2 +1604,3 @@
++        /// The attestation assertion for the target of the key release.
+         #[serde(rename = "target", skip_serializing_if = "Option::is_none")]
+         pub target_attestation_token: Option<String>,
+@@ -590,2 +1607,3 @@
 +        /// The value to operate on.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -565,1 +1531,2 @@
+         pub value: Option<Vec<u8>>,
+@@ -597,2 +1615,3 @@
++    /// The Secure Key wrap attributes.
+     #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+     pub struct SecureKeyWrapOperationParameters {
+@@ -599,2 +1618,3 @@
++        /// algorithm identifier
+         #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
+         pub algorithm: Option<super::JsonWebKeyWrapAlgorithm>,
+@@ -606,2 +1626,3 @@
++    /// The key operations parameters.
+     #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+     pub struct SignParameters {
+@@ -608,2 +1629,3 @@
++        /// The signing/verification algorithm identifier. For more information on possible algorithm types, see JsonWebKeySignatureAlgorithm.
+         #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
+         pub algorithm: Option<super::SignatureAlgorithm>,
+@@ -610,2 +1632,3 @@
++        /// The value to operate on.
+         #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
+         pub value: Option<Vec<u8>>,
+@@ -617,2 +1640,3 @@
 +    /// The key update parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -567,1 +1534,2 @@
+     pub struct UpdateKeyPropertiesParameters {
+@@ -619,2 +1643,3 @@
 +        /// The attributes of a key managed by the key vault service.
          #[serde(rename = "attributes", skip_serializing_if = "Option::is_none")]
-@@ -569,1 +1537,2 @@
+         pub key_attributes: Option<KeyAttributes>,
+@@ -621,2 +1646,3 @@
 +        /// Json web key operations. For more information on possible key operations, see JsonWebKeyOperation.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -571,1 +1540,2 @@
+         pub key_ops: Option<Vec<super::KeyOperation>>,
+@@ -623,2 +1649,3 @@
 +        /// The policy rules under which the key can be exported.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -573,1 +1543,2 @@
+         pub release_policy: Option<KeyReleasePolicy>,
+@@ -625,2 +1652,3 @@
 +        /// Application specific metadata in the form of key-value pairs.
          #[serde(skip_serializing_if = "Option::is_none")]
-@@ -580,1 +1551,2 @@
+         pub tags: Option<std::collections::HashMap<String, String>>,
+@@ -632,2 +1660,3 @@
 +    /// The key verify parameters.
      #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
-@@ -582,1 +1554,2 @@
+     pub struct VerifyParameters {
+@@ -634,2 +1663,3 @@
 +        /// The signing/verification algorithm. For more information on possible algorithm types, see JsonWebKeySignatureAlgorithm.
          #[serde(rename = "alg", skip_serializing_if = "Option::is_none")]
-@@ -584,1 +1557,2 @@
+         pub algorithm: Option<super::SignatureAlgorithm>,
+@@ -636,2 +1666,3 @@
 +        /// The digest used for signing.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -586,1 +1560,2 @@
+         pub digest: Option<Vec<u8>>,
+@@ -638,2 +1669,3 @@
 +        /// The signature to be verified.
          #[serde(default, deserialize_with = "base64::option::deserialize_url_safe", rename = "value", serialize_with = "base64::option::serialize_url_safe", skip_serializing_if = "Option::is_none")]
-@@ -593,1 +1568,2 @@
+         pub signature: Option<Vec<u8>>,
+@@ -645,2 +1677,3 @@
 +    /// Elliptic curve name. For valid values, see JsonWebKeyCurveName.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -595,1 +1571,2 @@
+     pub enum CurveName {
+@@ -647,1 +1680,2 @@
 +        /// The NIST P-256 elliptic curve, AKA SECG curve SECP256R1.
          P256,
-@@ -596,1 +1573,2 @@
+@@ -648,1 +1682,2 @@
 +        /// The SECG SECP256K1 elliptic curve.
          P256K,
-@@ -597,1 +1575,2 @@
+@@ -649,1 +1684,2 @@
 +        /// The NIST P-384 elliptic curve, AKA SECG curve SECP384R1.
          P384,
-@@ -598,1 +1577,2 @@
+@@ -650,1 +1686,2 @@
 +        /// The NIST P-521 elliptic curve, AKA SECG curve SECP521R1.
          P521,
-@@ -599,1 +1579,2 @@
+@@ -651,1 +1688,2 @@
 +        /// Any other value not defined in `CurveName`.
          UnknownValue(String),
-@@ -620,1 +1601,4 @@
+@@ -672,2 +1710,5 @@
 +    /// Reflects the deletion recovery level currently in effect for certificates in the current vault. If it contains 'Purgeable',
 +    /// the certificate can be permanently deleted by a privileged user; otherwise, only the system can purge the certificate,
 +    /// at the end of the retention interval.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -622,1 +1606,4 @@
+     pub enum DeletionRecoveryLevel {
+@@ -674,1 +1715,4 @@
 +        /// Denotes a vault state in which deletion is recoverable without the possibility for immediate and permanent deletion (i.e.
 +        /// purge when 7 <= SoftDeleteRetentionInDays < 90).This level guarantees the recoverability of the deleted entity during
 +        /// the retention interval and while the subscription is still available.
          CustomizedRecoverable,
-@@ -623,1 +1610,5 @@
+@@ -675,1 +1719,5 @@
 +        /// Denotes a vault and subscription state in which deletion is recoverable, immediate and permanent deletion (i.e. purge)
 +        /// is not permitted, and in which the subscription itself cannot be permanently canceled when 7 <= SoftDeleteRetentionInDays
 +        /// < 90. This level guarantees the recoverability of the deleted entity during the retention interval, and also reflects
 +        /// the fact that the subscription itself cannot be cancelled.
          CustomizedRecoverableProtectedSubscription,
-@@ -624,1 +1615,4 @@
+@@ -676,1 +1724,4 @@
 +        /// Denotes a vault state in which deletion is recoverable, and which also permits immediate and permanent deletion (i.e.
 +        /// purge when 7 <= SoftDeleteRetentionInDays < 90). This level guarantees the recoverability of the deleted entity during
 +        /// the retention interval, unless a Purge operation is requested, or the subscription is cancelled.
          CustomizedRecoverablePurgeable,
-@@ -625,1 +1619,4 @@
+@@ -677,1 +1728,4 @@
 +        /// Denotes a vault state in which deletion is an irreversible operation, without the possibility for recovery. This level
 +        /// corresponds to no protection being available against a Delete operation; the data is irretrievably lost upon accepting
 +        /// a Delete operation at the entity level or higher (vault, resource group, subscription etc.)
          Purgeable,
-@@ -626,1 +1623,4 @@
+@@ -678,1 +1732,4 @@
 +        /// Denotes a vault state in which deletion is recoverable without the possibility for immediate and permanent deletion (i.e.
 +        /// purge). This level guarantees the recoverability of the deleted entity during the retention interval(90 days) and while
 +        /// the subscription is still available. System wil permanently delete it after 90 days, if not recovered
          Recoverable,
-@@ -627,1 +1627,4 @@
+@@ -679,1 +1736,4 @@
 +        /// Denotes a vault and subscription state in which deletion is recoverable within retention interval (90 days), immediate
 +        /// and permanent deletion (i.e. purge) is not permitted, and in which the subscription itself cannot be permanently canceled.
 +        /// System wil permanently delete it after 90 days, if not recovered
          RecoverableProtectedSubscription,
-@@ -628,1 +1631,5 @@
+@@ -680,1 +1740,5 @@
 +        /// Denotes a vault state in which deletion is recoverable, and which also permits immediate and permanent deletion (i.e.
 +        /// purge). This level guarantees the recoverability of the deleted entity during the retention interval (90 days), unless
 +        /// a Purge operation is requested, or the subscription is cancelled. System wil permanently delete it after 90 days, if not
 +        /// recovered
          RecoverablePurgeable,
-@@ -629,1 +1636,2 @@
+@@ -681,1 +1745,2 @@
 +        /// Any other value not defined in `DeletionRecoveryLevel`.
          UnknownValue(String),
-@@ -650,1 +1658,2 @@
+@@ -702,2 +1767,3 @@
 +    /// An algorithm used for encryption and decryption.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -652,1 +1661,2 @@
+     pub enum EncryptionAlgorithm {
+@@ -704,1 +1770,2 @@
 +        /// 128-bit AES-CBC.
          A128Cbc,
-@@ -653,1 +1663,2 @@
+@@ -705,1 +1772,2 @@
 +        /// 128-bit AES-CBC with PKCS padding.
          A128Cbcpad,
-@@ -654,1 +1665,2 @@
+@@ -706,1 +1774,2 @@
 +        /// 128-bit AES-GCM.
          A128Gcm,
-@@ -655,1 +1667,2 @@
+@@ -707,1 +1776,2 @@
 +        /// 128-bit AES key wrap.
          A128Kw,
-@@ -656,1 +1669,2 @@
+@@ -708,1 +1778,2 @@
 +        /// 192-bit AES-CBC.
          A192Cbc,
-@@ -657,1 +1671,2 @@
+@@ -709,1 +1780,2 @@
 +        /// 192-bit AES-CBC with PKCS padding.
          A192Cbcpad,
-@@ -658,1 +1673,2 @@
+@@ -710,1 +1782,2 @@
 +        /// 192-bit AES-GCM.
          A192Gcm,
-@@ -659,1 +1675,2 @@
+@@ -711,1 +1784,2 @@
 +        /// 192-bit AES key wrap.
          A192Kw,
-@@ -660,1 +1677,2 @@
+@@ -712,1 +1786,2 @@
 +        /// 256-bit AES-CBC.
          A256Cbc,
-@@ -661,1 +1679,2 @@
+@@ -713,1 +1788,2 @@
 +        /// 256-bit AES-CBC with PKCS padding.
          A256Cbcpad,
-@@ -662,1 +1681,2 @@
+@@ -714,1 +1790,2 @@
 +        /// 256-bit AES-GCM.
          A256Gcm,
-@@ -663,1 +1683,2 @@
+@@ -715,1 +1792,2 @@
 +        /// 256-bit AES key wrap.
          A256Kw,
-@@ -664,1 +1685,2 @@
+@@ -716,1 +1794,2 @@
 +        /// CKM AES key wrap.
          CkmAesKeyWrap,
-@@ -665,1 +1687,2 @@
+@@ -717,1 +1796,2 @@
 +        /// CKM AES key wrap with padding.
          CkmAesKeyWrapPad,
-@@ -666,1 +1689,5 @@
+@@ -718,1 +1798,5 @@
 +        /// [Not recommended] RSAES-PKCS1-V1_5 key encryption, as described in <https://tools.ietf.org/html/rfc3447>. Microsoft recommends
 +        /// using RSA_OAEP_256 or stronger algorithms for enhanced security. Microsoft does *not* recommend RSA_1_5, which is included
 +        /// solely for backwards compatibility. Cryptographic standards no longer consider RSA with the PKCS#1 v1.5 padding scheme
 +        /// secure for encryption.
          Rsa1_5,
-@@ -667,1 +1694,6 @@
+@@ -719,1 +1803,6 @@
 +        /// [Not recommended] RSAES using Optimal Asymmetric Encryption Padding (OAEP), as described in <https://tools.ietf.org/html/rfc3447>,
 +        /// with the default parameters specified by RFC 3447 in Section A.2.1. Those default parameters are using a hash function
 +        /// of SHA-1 and a mask generation function of MGF1 with SHA-1. Microsoft recommends using RSA_OAEP_256 or stronger algorithms
 +        /// for enhanced security. Microsoft does *not* recommend RSA_OAEP, which is included solely for backwards compatibility.
 +        /// RSA_OAEP utilizes SHA1, which has known collision problems.
          RsaOaep,
-@@ -668,1 +1700,3 @@
+@@ -720,1 +1809,3 @@
 +        /// RSAES using Optimal Asymmetric Encryption Padding with a hash function of SHA-256 and a mask generation function of MGF1
 +        /// with SHA-256.
          RsaOaep256,
-@@ -669,1 +1703,2 @@
+@@ -721,1 +1812,2 @@
 +        /// Any other value not defined in `EncryptionAlgorithm`.
          UnknownValue(String),
-@@ -690,1 +1725,2 @@
+@@ -742,2 +1834,3 @@
++    /// An algorithm used for key wrapping and unwrapping.
+     #[derive(Clone, Debug, Eq, PartialEq)]
+     pub enum JsonWebKeyWrapAlgorithm {
+@@ -744,1 +1837,2 @@
++        /// 128-bit AES key wrap.
+         A128Kw,
+@@ -745,1 +1839,2 @@
++        /// 128-bit AES key wrap with padding.
+         A128Kwpad,
+@@ -746,1 +1841,2 @@
++        /// 192-bit AES key wrap.
+         A192Kw,
+@@ -747,1 +1843,2 @@
++        /// 192-bit AES key wrap with padding.
+         A192Kwpad,
+@@ -748,1 +1845,2 @@
++        /// 256-bit AES key wrap.
+         A256Kw,
+@@ -749,1 +1847,2 @@
++        /// 256-bit AES key wrap with padding.
+         A256Kwpad,
+@@ -750,1 +1849,2 @@
++        /// CKM AES key wrap.
+         CkmAesKeyWrap,
+@@ -751,1 +1851,2 @@
++        /// CKM AES key wrap with padding.
+         CkmAesKeyWrapPad,
+@@ -752,1 +1853,3 @@
++        /// RSAES using Optimal Asymmetric Encryption Padding with a hash function of SHA-256 and a mask generation function of MGF1
++        /// with SHA-256.
+         RsaOaep256,
+@@ -753,1 +1856,2 @@
++        /// Any other value not defined in `JsonWebKeyWrapAlgorithm`.
+         UnknownValue(String),
+@@ -774,2 +1878,3 @@
 +    /// The encryption algorithm to use to protected the exported key material
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -692,1 +1728,2 @@
+     pub enum KeyEncryptionAlgorithm {
+@@ -776,1 +1881,2 @@
 +        /// The CKM_RSA_AES_KEY_WRAP key wrap mechanism.
          CkmRsaAesKeyWrap,
-@@ -693,1 +1730,2 @@
+@@ -777,1 +1883,2 @@
 +        /// The RSA_AES_KEY_WRAP_256 key wrap mechanism.
          RsaAesKeyWrap256,
-@@ -694,1 +1732,2 @@
+@@ -778,1 +1885,2 @@
 +        /// The RSA_AES_KEY_WRAP_384 key wrap mechanism.
          RsaAesKeyWrap384,
-@@ -695,1 +1734,2 @@
+@@ -779,1 +1887,2 @@
 +        /// Any other value not defined in `KeyEncryptionAlgorithm`.
          UnknownValue(String),
-@@ -716,1 +1756,2 @@
+@@ -800,2 +1909,3 @@
 +    /// JSON web key operations. For more information, see JsonWebKeyOperation.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -718,1 +1759,2 @@
+     pub enum KeyOperation {
+@@ -802,1 +1912,2 @@
 +        /// Indicates that the key can be used to decrypt.
          Decrypt,
-@@ -719,1 +1761,2 @@
+@@ -803,1 +1914,2 @@
 +        /// Indicates that the key can be used to encrypt.
          Encrypt,
-@@ -720,1 +1763,2 @@
+@@ -804,1 +1916,2 @@
 +        /// Indicates that the private component of the key can be exported.
          Export,
-@@ -721,1 +1765,2 @@
+@@ -805,1 +1918,2 @@
 +        /// Indicates that the key can be imported during creation.
          Import,
-@@ -722,1 +1767,2 @@
+@@ -806,1 +1920,2 @@
 +        /// Indicates that the key can be used to sign.
          Sign,
-@@ -723,1 +1769,2 @@
+@@ -807,1 +1922,2 @@
 +        /// Indicates that the key can be used to unwrap another key.
          UnwrapKey,
-@@ -724,1 +1771,2 @@
+@@ -808,1 +1924,2 @@
 +        /// Indicates that the key can be used to verify.
          Verify,
-@@ -725,1 +1773,2 @@
+@@ -809,1 +1926,2 @@
 +        /// Indicates that the key can be used to wrap another key.
          WrapKey,
-@@ -726,1 +1775,2 @@
+@@ -810,1 +1928,2 @@
 +        /// Any other value not defined in `KeyOperation`.
          UnknownValue(String),
-@@ -747,1 +1797,2 @@
+@@ -831,2 +1950,3 @@
 +    /// The type of the action. The value should be compared case-insensitively.
      #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-@@ -749,1 +1800,2 @@
+     pub enum KeyRotationPolicyAction {
+@@ -833,1 +1953,2 @@
 +        /// Trigger Event Grid events. Defaults to 30 days before expiry. Key Vault only.
          Notify,
-@@ -750,1 +1802,2 @@
+@@ -834,1 +1955,2 @@
 +        /// Rotate the key based on the key policy.
          Rotate,
-@@ -768,1 +1821,2 @@
+@@ -852,2 +1974,3 @@
 +    /// JsonWebKey Key Type (kty), as defined in <https://tools.ietf.org/html/draft-ietf-jose-json-web-algorithms-40>.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -770,1 +1824,2 @@
+     pub enum KeyType {
+@@ -854,1 +1977,2 @@
 +        /// Elliptic Curve.
          Ec,
-@@ -771,1 +1826,2 @@
+@@ -855,1 +1979,2 @@
 +        /// Elliptic Curve with a private key which is stored in the HSM.
          EcHsm,
-@@ -772,1 +1828,2 @@
+@@ -856,1 +1981,2 @@
 +        /// Octet sequence (used to represent symmetric keys)
          Oct,
-@@ -773,1 +1830,2 @@
+@@ -857,1 +1983,2 @@
 +        /// Octet sequence (used to represent symmetric keys) which is stored the HSM.
          OctHsm,
-@@ -774,1 +1832,2 @@
+@@ -858,1 +1985,2 @@
 +        /// RSA (https://tools.ietf.org/html/rfc3447)
          Rsa,
-@@ -775,1 +1834,2 @@
+@@ -859,1 +1987,2 @@
 +        /// RSA with a private key which is stored in the HSM.
          RsaHsm,
-@@ -776,1 +1836,2 @@
+@@ -860,1 +1989,2 @@
 +        /// Any other value not defined in `KeyType`.
          UnknownValue(String),
-@@ -797,1 +1858,2 @@
+@@ -881,2 +2011,3 @@
 +    /// The signing/verification algorithm identifier. For more information on possible algorithm types, see JsonWebKeySignatureAlgorithm.
      #[derive(Clone, Debug, Eq, PartialEq)]
-@@ -799,1 +1861,2 @@
+     pub enum SignatureAlgorithm {
+@@ -883,1 +2014,2 @@
 +        /// ECDSA using P-256 and SHA-256, as described in <https://tools.ietf.org/html/rfc7518>.
          Es256,
-@@ -800,1 +1863,2 @@
+@@ -884,1 +2016,2 @@
 +        /// ECDSA using P-256K and SHA-256, as described in <https://tools.ietf.org/html/rfc7518>
          Es256K,
-@@ -801,1 +1865,2 @@
+@@ -885,1 +2018,2 @@
 +        /// ECDSA using P-384 and SHA-384, as described in <https://tools.ietf.org/html/rfc7518>
          Es384,
-@@ -802,1 +1867,2 @@
+@@ -886,1 +2020,2 @@
 +        /// ECDSA using P-521 and SHA-512, as described in <https://tools.ietf.org/html/rfc7518>
          Es512,
-@@ -803,1 +1869,2 @@
+@@ -887,1 +2022,2 @@
 +        /// HMAC using SHA-256, as described in <https://tools.ietf.org/html/rfc7518>
          Hs256,
-@@ -804,1 +1871,2 @@
+@@ -888,1 +2024,2 @@
 +        /// HMAC using SHA-384, as described in <https://tools.ietf.org/html/rfc7518>
          Hs384,
-@@ -805,1 +1873,2 @@
+@@ -889,1 +2026,2 @@
 +        /// HMAC using SHA-512, as described in <https://tools.ietf.org/html/rfc7518>
          Hs512,
-@@ -806,1 +1875,2 @@
+@@ -890,1 +2028,2 @@
 +        /// RSASSA-PSS using SHA-256 and MGF1 with SHA-256, as described in <https://tools.ietf.org/html/rfc7518>
          Ps256,
-@@ -807,1 +1877,2 @@
+@@ -891,1 +2030,2 @@
 +        /// RSASSA-PSS using SHA-384 and MGF1 with SHA-384, as described in <https://tools.ietf.org/html/rfc7518>
          Ps384,
-@@ -808,1 +1879,2 @@
+@@ -892,1 +2032,2 @@
 +        /// RSASSA-PSS using SHA-512 and MGF1 with SHA-512, as described in <https://tools.ietf.org/html/rfc7518>
          Ps512,
-@@ -809,1 +1881,2 @@
+@@ -893,1 +2034,2 @@
 +        /// RSASSA-PKCS1-v1_5 using SHA-256, as described in <https://tools.ietf.org/html/rfc7518>
          Rs256,
-@@ -810,1 +1883,2 @@
+@@ -894,1 +2036,2 @@
 +        /// RSASSA-PKCS1-v1_5 using SHA-384, as described in <https://tools.ietf.org/html/rfc7518>
          Rs384,
-@@ -811,1 +1885,2 @@
+@@ -895,1 +2038,2 @@
 +        /// RSASSA-PKCS1-v1_5 using SHA-512, as described in <https://tools.ietf.org/html/rfc7518>
          Rs512,
-@@ -812,1 +1887,2 @@
+@@ -896,1 +2040,2 @@
 +        /// Reserved
          Rsnull,
-@@ -813,1 +1889,2 @@
+@@ -897,1 +2042,2 @@
 +        /// Any other value not defined in `SignatureAlgorithm`.
          UnknownValue(String),

@@ -5,6 +5,15 @@
     "**/api/API.md.map": true,
     "**/api/API.metadata.yml": true
   },
+  "heaths.azureApiReview.files.include": [
+    "**/api/API.md"
+  ],
+  "heaths.azureApiReview.files.comments": [
+    "API.comments.patch"
+  ],
+  "heaths.azureApiReview.files.sourceMaps": [
+    "API.md.map"
+  ],
   "workbench.editorAssociations": {
     "**/api/API.md": "heaths.azureApiReview.preview"
   }
