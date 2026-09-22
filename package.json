@@ -220,7 +220,7 @@
           "type": "array",
           "scope": "resource",
           "default": [
-            "**/api/API.md"
+            "**/api/api.md"
           ],
           "items": {
             "type": "string"
@@ -231,8 +231,8 @@
           "type": "array",
           "scope": "resource",
           "default": [
-            "API.comments.diff",
-            "API.comments.patch"
+            "api.comments.diff",
+            "api.comments.patch"
           ],
           "items": {
             "type": "string"
@@ -243,7 +243,7 @@
           "type": "array",
           "scope": "resource",
           "default": [
-            "API.md.map"
+            "api.md.map"
           ],
           "items": {
             "type": "string"

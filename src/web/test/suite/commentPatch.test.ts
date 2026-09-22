@@ -119,8 +119,8 @@ suite('Comment patch', () => {
       '```',
     ].join('\n');
     const patch = [
-      '--- a/API.md',
-      '+++ b/API.md',
+      '--- a/api.md',
+      '+++ b/api.md',
       '@@ -4,1 +4,2 @@',
       '+/// Prints a greeting.',
       ' pub fn hello();',

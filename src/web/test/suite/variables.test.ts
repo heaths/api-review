@@ -19,14 +19,14 @@ suite('Path variables', () => {
   test('expands API-file variables in related patterns', () => {
     const expanded = expandRelatedPattern(
       '${fileBasenameNoExtension}.comments.patch',
-      { file: vscode.Uri.parse('memfs:/workspace/crate/api/API.md'), workspaceFolder: folder },
+      { file: vscode.Uri.parse('memfs:/workspace/crate/api/api.md'), workspaceFolder: folder },
     );
-    assert.strictEqual(expanded, 'API.comments.patch');
+    assert.strictEqual(expanded, 'api.comments.patch');
   });
 
   test('rejects unsupported variables', () => {
-    assert.strictEqual(expandRelatedPattern('${env:HOME}/API.md.map', {
-      file: vscode.Uri.parse('memfs:/workspace/crate/api/API.md'),
+    assert.strictEqual(expandRelatedPattern('${env:HOME}/api.md.map', {
+      file: vscode.Uri.parse('memfs:/workspace/crate/api/api.md'),
       workspaceFolder: folder,
     }), undefined);
   });

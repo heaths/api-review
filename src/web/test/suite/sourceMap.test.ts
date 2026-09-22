@@ -5,7 +5,7 @@ import { resolveOriginalLocation } from '../../sourceMap';
 
 suite('Source map', () => {
   test('resolves an exact generated line to source', () => {
-    const generator = new SourceMapGenerator({ file: 'API.md' });
+    const generator = new SourceMapGenerator({ file: 'api.md' });
     generator.addMapping({
       generated: { line: 4, column: 0 },
       original: { line: 4, column: 0 },

@@ -71,11 +71,11 @@ suite('Pull request service', () => {
     const documentRef = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'api-review',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     };
     const document = {
       uri: vscode.Uri.parse(
-        'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const promptValues: boolean[] = [];
@@ -100,7 +100,7 @@ suite('Pull request service', () => {
     const service = new PullRequestService(githubClient, createGitClient({}));
 
     assert.strictEqual(githubClient.isGitHubDocument(document.uri), true);
-    assert.strictEqual(githubClient.isGitHubDocument(vscode.Uri.parse('test-workspace:/API.md')), false);
+    assert.strictEqual(githubClient.isGitHubDocument(vscode.Uri.parse('test-workspace:/api.md')), false);
     assert.strictEqual(await service.getContext(document), undefined);
 
     const context = await service.getContext(document, { promptForGitHubAuth: true });
@@ -115,7 +115,7 @@ suite('Pull request service', () => {
   test('does not infer pull request context from a commit permalink', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'vscode-vfs://github/heaths/api-review/e951fe014e6f88027561db809aba0e3e6054a3c6/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'vscode-vfs://github/heaths/api-review/e951fe014e6f88027561db809aba0e3e6054a3c6/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     let pullRequestLookups = 0;
@@ -124,7 +124,7 @@ suite('Pull request service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
-          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
         };
       },
       async getPullRequest() {
@@ -140,7 +140,7 @@ suite('Pull request service', () => {
 
   test('continues pull request detection for a hex-only branch name', async () => {
     const document = {
-      uri: vscode.Uri.parse('vscode-vfs://github/heaths/api-review/deadbeef/api/API.md'),
+      uri: vscode.Uri.parse('vscode-vfs://github/heaths/api-review/deadbeef/api/api.md'),
     } as vscode.TextDocument;
     const pullRequestRefs: string[] = [];
     const githubClient = createGitHubClient({
@@ -148,7 +148,7 @@ suite('Pull request service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'deadbeef',
-          path: 'api/API.md',
+          path: 'api/api.md',
         };
       },
       async getPullRequest(request) {
@@ -164,7 +164,7 @@ suite('Pull request service', () => {
 
   test('uses the upstream branch name before the local branch name for local repository detection', async () => {
     const document = {
-      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/api.md'),
     } as vscode.TextDocument;
     const pullRequestRefs: string[] = [];
     const githubClient = createGitHubClient({
@@ -225,13 +225,13 @@ suite('Pull request service', () => {
     assert.deepStrictEqual(context?.document, {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'feature/history',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     });
   });
 
   test('parses current encoded PR-backed GitHub documents into pull request context', async () => {
     const uri = vscode.Uri.parse(
-      'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     );
     const document = { uri } as vscode.TextDocument;
     const githubClient = createGitHubClient({
@@ -259,7 +259,7 @@ suite('Pull request service', () => {
     assert.deepStrictEqual(context?.document, {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'refs/pull/26/head',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       pullRequestNumber: 26,
     });
     assert.strictEqual(context?.pullRequest.number, 26);

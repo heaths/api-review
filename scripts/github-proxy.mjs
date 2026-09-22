@@ -9,7 +9,7 @@ const mockUserAvatarUrl = 'https://avatars.githubusercontent.com/u/1532486?v=4';
 const historyResponseDelayMs = 2000;
 const mockHistoryPath = 'scripts/github-proxy.mjs';
 const mockHistorySourceRef = 'api-review';
-const mockHistorySourcePath = 'sdk/keyvault/azure_security_keyvault_keys/api/API.md';
+const mockHistorySourcePath = 'sdk/keyvault/azure_security_keyvault_keys/api/api.md';
 
 export async function startGitHubProxy(repositoryRoot, options = {}) {
   const app = express();
@@ -503,7 +503,7 @@ function createSeededPullRequestStore(commitId) {
     comments: [{
       id: 3993158275,
       body: 'This is a review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183174172,
@@ -514,7 +514,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993164859,
       body: 'This is an immediate review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 66,
       commit_id: commitId,
       pull_request_review_id: 5183181104,
@@ -525,7 +525,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993167721,
       body: 'This is an immediately review comment reply.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183184124,
@@ -536,7 +536,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993171853,
       body: 'This is a review comment reply in a separate review.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183188404,
@@ -547,7 +547,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3994090762,
       body: 'This is an immediately review comment reply added by the VSCode extension.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5184128494,

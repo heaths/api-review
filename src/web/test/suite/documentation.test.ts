@@ -6,7 +6,7 @@ suite('Documentation peek', function () {
   this.timeout(20_000);
 
   test('round-trips the declaration location through the virtual document URI', () => {
-    const uri = vscode.Uri.from({ scheme: 'vscode-test-web', authority: 'mount', path: '/src/API.md' });
+    const uri = vscode.Uri.from({ scheme: 'vscode-test-web', authority: 'mount', path: '/src/api.md' });
     const target = createDocumentationUri(uri, 42, 'rust');
 
     assert.strictEqual(target.scheme, documentationScheme);

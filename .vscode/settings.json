@@ -4,16 +4,16 @@
     "dist": false
   },
   "files.readonlyInclude": {
-    "**/API.md": true,
-    "**/API.comments.diff": true,
-    "**/API.comments.patch": true,
-    "**/API.md.map": true
+    "**/api.md": true,
+    "**/api.comments.diff": true,
+    "**/api.comments.patch": true,
+    "**/api.md.map": true
   },
   "heaths.azureApiReview.files.include": [
-    "**/API.md"
+    "**/api.md"
   ],
   "workbench.editorAssociations": {
-    "**/API.md": "heaths.azureApiReview.preview"
+    "**/api.md": "heaths.azureApiReview.preview"
   },
   "search.exclude": {
     "dist": true
