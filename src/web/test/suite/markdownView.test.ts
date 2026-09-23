@@ -93,9 +93,9 @@ suite('Markdown view', () => {
   });
 
   test('extracts labels from file paths and versioned file specs', () => {
-    assert.strictEqual(getPathLabel('/sdk/keyvault/API.md'), 'API.md');
-    assert.strictEqual(getPathLabel('my_crate@1.2.3:/sdk/keyvault/API.md'), 'API.md');
-    assert.strictEqual(getPathLabel('file:///sdk/keyvault/API.md'), 'API.md');
+    assert.strictEqual(getPathLabel('/sdk/keyvault/api.md'), 'api.md');
+    assert.strictEqual(getPathLabel('my_crate@1.2.3:/sdk/keyvault/api.md'), 'api.md');
+    assert.strictEqual(getPathLabel('file:///sdk/keyvault/api.md'), 'api.md');
   });
 
   test('shows only choose file and cancel while diff history loads', () => {
@@ -105,7 +105,7 @@ suite('Markdown view', () => {
       {
         action: 'chooseFile',
         label: '$(folder-opened) Choose file...',
-        description: 'Compare against another API.md file',
+        description: 'Compare against another api.md file',
       },
       {
         action: 'hide',
@@ -173,7 +173,7 @@ suite('Markdown view', () => {
       {
         kind: undefined,
         label: '$(folder-opened) Choose file...',
-        description: 'Compare against another API.md file',
+        description: 'Compare against another api.md file',
         detail: undefined,
         action: 'chooseFile',
       },
@@ -250,7 +250,7 @@ suite('Markdown view', () => {
       {
         kind: undefined,
         label: '$(folder-opened) Choose file...',
-        description: 'Compare against another API.md file',
+        description: 'Compare against another api.md file',
         detail: undefined,
         action: 'chooseFile',
         source: undefined,
@@ -345,8 +345,8 @@ suite('Markdown view', () => {
       ].join('\n'),
       hasCommentsPatch: true,
       commentsPatch: [
-        '--- a/API.md',
-        '+++ b/API.md',
+        '--- a/api.md',
+        '+++ b/api.md',
         '@@ -4,1 +4,2 @@',
         '+/// Prints a greeting.',
         ' pub fn hello();',
@@ -396,8 +396,8 @@ suite('Markdown view', () => {
       ].join('\n'),
       hasCommentsPatch: true,
       commentsPatch: [
-        '--- a/API.md',
-        '+++ b/API.md',
+        '--- a/api.md',
+        '+++ b/api.md',
         '@@ -4,2 +4,3 @@',
         '+/// Documentation only.',
         ' pub fn docs_only();',
@@ -711,8 +711,8 @@ suite('Markdown view', () => {
       markdown,
       hasCommentsPatch: true,
       commentsPatch: [
-        '--- a/API.md',
-        '+++ b/API.md',
+        '--- a/api.md',
+        '+++ b/api.md',
         '@@ -4,2 +4,3 @@',
         '+/// Documentation only.',
         ' pub fn docs_only();',
@@ -748,7 +748,7 @@ suite('Markdown view', () => {
     const html = getMarkdownViewHtml(
       webview,
       root,
-      vscode.Uri.parse('test-workspace:/API.md'),
+      vscode.Uri.parse('test-workspace:/api.md'),
       '<p>API</p>',
       true,
       false,
@@ -976,7 +976,7 @@ suite('Markdown view', () => {
     const documentRef = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'head-sha',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
     };
     const pullRequestContext = {
       document: documentRef,
@@ -1028,7 +1028,7 @@ suite('Markdown view', () => {
 
     const preview = {
       document: {
-        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        uri: vscode.Uri.parse('test-workspace:/api.md'),
         getText() {
           return '';
         },
@@ -1099,7 +1099,7 @@ suite('Markdown view', () => {
 
     const preview = {
       document: {
-        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        uri: vscode.Uri.parse('test-workspace:/api.md'),
         getText() {
           return '';
         },
@@ -1121,15 +1121,15 @@ suite('Markdown view', () => {
     (previewProvider as unknown as { refreshDiffAvailability(preview: unknown): Promise<void> }).refreshDiffAvailability = async () => {};
     (previewProvider as unknown as { activePreview?: unknown }).activePreview = preview;
 
-    await previewProvider.showDiff('test-workspace:/API.md', {
+    await previewProvider.showDiff('test-workspace:/api.md', {
       kind: 'file',
-      uri: 'my_crate@1.2.3:/sdk/keyvault/API.md',
+      uri: 'my_crate@1.2.3:/sdk/keyvault/api.md',
     });
-    await previewProvider.hideDiff('test-workspace:/API.md');
+    await previewProvider.hideDiff('test-workspace:/api.md');
 
     assert.deepStrictEqual(loggerCalls.info, [
-      'Opening diff for test-workspace:/API.md against file "my_crate@1.2.3:/sdk/keyvault/API.md"',
-      'Closed diff for test-workspace:/API.md against file "my_crate@1.2.3:/sdk/keyvault/API.md"',
+      'Opening diff for test-workspace:/api.md against file "my_crate@1.2.3:/sdk/keyvault/api.md"',
+      'Closed diff for test-workspace:/api.md against file "my_crate@1.2.3:/sdk/keyvault/api.md"',
     ]);
   });
 
@@ -1157,7 +1157,7 @@ suite('Markdown view', () => {
       createLogger(),
     );
     const document = {
-      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/api.md'),
       getText() {
         return '# API';
       },
@@ -1187,7 +1187,7 @@ suite('Markdown view', () => {
     await previewProvider.resolveCustomTextEditor(document, webviewPanel);
     await Promise.resolve();
 
-    assert.deepStrictEqual(requests, ['file:///workspace/sdk/keyvault/API.md']);
+    assert.deepStrictEqual(requests, ['file:///workspace/sdk/keyvault/api.md']);
     assert.strictEqual(diffAvailabilityRequests, 0);
     assert.strictEqual((previewProvider as unknown as {
       activePreview?: { diffAvailable: boolean };
@@ -1224,7 +1224,7 @@ suite('Markdown view', () => {
             document: {
               repository: { owner: 'heaths', repo: 'api-review' },
               ref: 'feature/history',
-              path: 'sdk/keyvault/API.md',
+              path: 'sdk/keyvault/api.md',
             } satisfies GitHubDocumentRef,
             pullRequest: {
               number: 26,
@@ -1244,7 +1244,7 @@ suite('Markdown view', () => {
     (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
     const activePreview = {
       document: {
-        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/api.md'),
         getText() {
           return '# API';
         },
@@ -1289,7 +1289,7 @@ suite('Markdown view', () => {
     );
     const preview = {
       document: {
-        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        uri: vscode.Uri.parse('test-workspace:/api.md'),
         getText() {
           return '# API';
         },
@@ -1299,7 +1299,7 @@ suite('Markdown view', () => {
       commentsVisible: false,
       hasCommentsPatch: false,
       diffAvailable: true,
-      diffBaseline: { kind: 'file', uri: 'file:///baseline/API.md' },
+      diffBaseline: { kind: 'file', uri: 'file:///baseline/api.md' },
       canNavigatePreviousDiff: true,
       canNavigateNextDiff: true,
       diffRefreshGeneration: 0,
@@ -1315,7 +1315,7 @@ suite('Markdown view', () => {
     }).refreshDiffAvailability(preview);
 
     assert.strictEqual(availability, undefined);
-    assert.deepStrictEqual(preview.diffBaseline, { kind: 'file', uri: 'file:///baseline/API.md' });
+    assert.deepStrictEqual(preview.diffBaseline, { kind: 'file', uri: 'file:///baseline/api.md' });
     assert.strictEqual(preview.diffAvailable, true);
   });
 
@@ -1325,7 +1325,7 @@ suite('Markdown view', () => {
       document: {
         repository: { owner: 'heaths', repo: 'api-review' },
         ref: 'feature/history',
-        path: 'sdk/keyvault/API.md',
+        path: 'sdk/keyvault/api.md',
       } satisfies GitHubDocumentRef,
       pullRequest: {
         number: 26,
@@ -1370,7 +1370,7 @@ suite('Markdown view', () => {
     (previewProvider as unknown as { render(preview: unknown): Promise<void> }).render = async () => {};
     const preview = {
       document: {
-        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/API.md'),
+        uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/api.md'),
         getText() {
           return '# API';
         },
@@ -1435,7 +1435,7 @@ suite('Markdown view', () => {
     const documentRef = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'head-sha',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
     };
     const pullRequestContext = {
       document: documentRef,
@@ -1469,7 +1469,7 @@ suite('Markdown view', () => {
 
     const preview = {
       document: {
-        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        uri: vscode.Uri.parse('test-workspace:/api.md'),
         getText() {
           return '';
         },
@@ -1531,7 +1531,7 @@ suite('Markdown view', () => {
     const documentRef = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'head-sha',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
     };
     const pullRequestContext = {
       document: documentRef,
@@ -1586,7 +1586,7 @@ suite('Markdown view', () => {
 
     const preview = {
       document: {
-        uri: vscode.Uri.parse('test-workspace:/API.md'),
+        uri: vscode.Uri.parse('test-workspace:/api.md'),
         getText() {
           return '';
         },

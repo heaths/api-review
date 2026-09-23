@@ -58,20 +58,20 @@ Documentation and Go to source CodeLens actions described above.
 
 ## Configure Repositories
 
-The defaults support repositories that generate `api/API.md` together with
+The defaults support repositories that generate `api/api.md` together with
 adjacent patch and source-map files:
 
 ```json
 {
   "heaths.azureApiReview.files.include": [
-    "**/api/API.md"
+    "**/api/api.md"
   ],
   "heaths.azureApiReview.files.comments": [
-    "API.comments.diff",
-    "API.comments.patch"
+    "api.comments.diff",
+    "api.comments.patch"
   ],
   "heaths.azureApiReview.files.sourceMaps": [
-    "API.md.map"
+    "api.md.map"
   ],
   "heaths.azureApiReview.git.tags": [
     "^[\\w-]+@(?<version>.+)$"
@@ -107,10 +107,10 @@ sync with `heaths.azureApiReview.files.include`:
 ```json
 {
   "heaths.azureApiReview.files.include": [
-    "**/api/API.md"
+    "**/api/api.md"
   ],
   "workbench.editorAssociations": {
-    "**/api/API.md": "heaths.azureApiReview.preview"
+    "**/api/api.md": "heaths.azureApiReview.preview"
   }
 }
 ```
@@ -119,7 +119,7 @@ Repositories can replace both occurrences with their own API Markdown pattern.
 
 ### Additional Configuration
 
-Edits to API review files like `API.md` can disable code lenses.
+Edits to API review files like `api.md` can disable code lenses.
 To mitigate possible changes to review files, you should consider configuring
 your workspace's `.vscode/settings.json` to treat default or custom review files
 as read-only:
@@ -127,10 +127,10 @@ as read-only:
 ```json
 {
   "files.readonlyInclude": {
-    "**/API.md": true,
-    "**/API.comments.diff": true,
-    "**/API.comments.patch": true,
-    "**/API.md.map": true
+    "**/api.md": true,
+    "**/api.comments.diff": true,
+    "**/api.comments.patch": true,
+    "**/api.md.map": true
   }
 }
 ```

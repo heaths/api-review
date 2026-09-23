@@ -32,83 +32,83 @@ suite('GitHub client', () => {
     const expected = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'api-review',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     };
     assert.deepStrictEqual(parseGitHubDocument(
-      'https://github.com/heaths/api-review/blob/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'https://github.com/heaths/api-review/blob/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), expected);
     assert.deepStrictEqual(parseGitHubDocument(
-      'https://github.dev/heaths/api-review/blob/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'https://github.dev/heaths/api-review/blob/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), expected);
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github/heaths/api-review/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), expected);
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github/heaths/api-review/e951fe014e6f88027561db809aba0e3e6054a3c6/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github/heaths/api-review/e951fe014e6f88027561db809aba0e3e6054a3c6/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github/heaths/api-review/pull/26/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github/heaths/api-review/pull/26/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'refs/pull/26/head',
       pullRequestNumber: 26,
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github/heaths/api-review/refs/pull/26/merge/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github/heaths/api-review/refs/pull/26/merge/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'refs/pull/26/merge',
       pullRequestNumber: 26,
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'refs/pull/26/head',
       pullRequestNumber: 26,
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a322c226964223a2265393531666530313465366638383032373536316462383039616261306533653630353461336336227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a322c226964223a2265393531666530313465366638383032373536316462383039616261306533653630353461336336227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a342c226964223a22666561747572652f686973746f7279227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github+7b2276223a312c22726566223a7b2274797065223a342c226964223a22666561747572652f686973746f7279227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'feature/history',
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'https://vscode.dev/heaths/api-review/blob/feature%2Fhistory/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'https://vscode.dev/heaths/api-review/blob/feature%2Fhistory/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'feature/history',
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'https://vscode.dev/heaths/api-review/blob/refs%2Fpull%2F26%2Fhead/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'https://vscode.dev/heaths/api-review/blob/refs%2Fpull%2F26%2Fhead/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'refs/pull/26/head',
       pullRequestNumber: 26,
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github+7b22726566223a22666561747572652f686973746f7279227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github+7b22726566223a22666561747572652f686973746f7279227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'feature/history',
     });
     assert.deepStrictEqual(parseGitHubDocument(
-      'vscode-vfs://github+7b227072223a223236227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      'vscode-vfs://github+7b227072223a223236227d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
     ), {
       ...expected,
       ref: 'refs/pull/26/head',
       pullRequestNumber: 26,
     });
-    assert.strictEqual(parseGitHubDocument('https://example.com/heaths/api-review/blob/main/API.md'), undefined);
+    assert.strictEqual(parseGitHubDocument('https://example.com/heaths/api-review/blob/main/api.md'), undefined);
   });
 
   test('loads and caches GitHub tags, commit details, commits, and file content', async () => {
@@ -140,7 +140,7 @@ suite('GitHub client', () => {
                 }) as unknown as GitHubTransportResponse<T>;
               case 'GET /repos/{owner}/{repo}/commits':
                 assert.strictEqual(parameters.sha, 'main');
-                assert.strictEqual(parameters.path, 'api/API.md');
+                assert.strictEqual(parameters.path, 'api/api.md');
                 assert.strictEqual(parameters.per_page, 64);
                 return createResponse([{
                   sha: 'commit-sha',
@@ -148,7 +148,7 @@ suite('GitHub client', () => {
                 }]) as unknown as GitHubTransportResponse<T>;
               case 'GET /repos/{owner}/{repo}/contents/{path}':
                 assert.strictEqual(parameters.ref, 'crate@1.0.0');
-                assert.strictEqual(parameters.path, 'api/API.md');
+                assert.strictEqual(parameters.path, 'api/api.md');
                 return createResponse('# API') as unknown as GitHubTransportResponse<T>;
               default:
                 throw new Error(`Unexpected route: ${route}`);
@@ -168,13 +168,13 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(await client.getCommits({
       repository,
       ref: 'main',
-      path: 'api/API.md',
+      path: 'api/api.md',
       maxEntries: 64,
     }), [{ hash: 'commit-sha', message: 'Update API', committedAt: '2026-09-10T12:00:00Z' }]);
     assert.strictEqual(await client.getFileContent({
       repository,
       ref: 'crate@1.0.0',
-      path: 'api/API.md',
+      path: 'api/api.md',
     }), '# API');
     assert.deepStrictEqual(routes, [
       'GET /repos/{owner}/{repo}/tags',
@@ -308,7 +308,7 @@ suite('GitHub client', () => {
                 return createResponse([{
                   id: 3993158275,
                   body: 'This is a review comment.',
-                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
                   line: 65,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183174172,
@@ -318,7 +318,7 @@ suite('GitHub client', () => {
                 }, {
                   id: 3993164859,
                   body: 'This is an immediate review comment.',
-                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
                   line: 66,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183181104,
@@ -328,7 +328,7 @@ suite('GitHub client', () => {
                 }, {
                   id: 3993167721,
                   body: 'This is an immediately review comment reply.',
-                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
                   line: 65,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183184124,
@@ -339,7 +339,7 @@ suite('GitHub client', () => {
                 }, {
                   id: 3993171853,
                   body: 'This is a review comment reply in a separate review.',
-                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+                  path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
                   line: 65,
                   commit_id: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
                   pull_request_review_id: 5183188404,
@@ -364,7 +364,7 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(comments, [{
       id: 3993158275,
       body: 'This is a review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
       kind: 'review',
@@ -378,7 +378,7 @@ suite('GitHub client', () => {
     }, {
       id: 3993164859,
       body: 'This is an immediate review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 66,
       commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
       kind: 'individual',
@@ -392,7 +392,7 @@ suite('GitHub client', () => {
     }, {
       id: 3993167721,
       body: 'This is an immediately review comment reply.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
       kind: 'reply',
@@ -406,7 +406,7 @@ suite('GitHub client', () => {
     }, {
       id: 3993171853,
       body: 'This is a review comment reply in a separate review.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commitId: 'e951fe014e6f88027561db809aba0e3e6054a3c6',
       kind: 'reply',
@@ -440,14 +440,14 @@ suite('GitHub client', () => {
               case 'POST /repos/{owner}/{repo}/pulls/{pull_number}/comments':
                 assert.strictEqual(parameters.pull_number, 42);
                 assert.strictEqual(parameters.commit_id, 'commit-sha');
-                assert.strictEqual(parameters.path, 'sdk/keyvault/api/API.md');
+                assert.strictEqual(parameters.path, 'sdk/keyvault/api/api.md');
                 assert.strictEqual(parameters.line, 18);
                 assert.strictEqual(parameters.side, 'RIGHT');
                 assert.strictEqual(parameters.body, 'Immediate comment');
                 return createResponse({
                   id: 9,
                   body: 'Immediate comment',
-                  path: 'sdk/keyvault/api/API.md',
+                  path: 'sdk/keyvault/api/api.md',
                   line: 18,
                   commit_id: 'commit-sha',
                   user: { login: 'heaths', avatar_url: 'https://avatars.githubusercontent.com/u/1532486?v=4' },
@@ -461,7 +461,7 @@ suite('GitHub client', () => {
                 return createResponse({
                   id: 10,
                   body: 'Immediate reply',
-                  path: 'sdk/keyvault/api/API.md',
+                  path: 'sdk/keyvault/api/api.md',
                   line: 18,
                   commit_id: 'commit-sha',
                   pull_request_review_id: 12,
@@ -476,7 +476,7 @@ suite('GitHub client', () => {
                 return createResponse({
                   id: 7,
                   body: 'Updated docs.',
-                  path: 'sdk/keyvault/api/API.md',
+                  path: 'sdk/keyvault/api/api.md',
                   line: 18,
                   commit_id: 'commit-sha',
                   pull_request_review_id: 12,
@@ -496,7 +496,7 @@ suite('GitHub client', () => {
       repository: { owner: 'heaths', repo: 'api-review' },
       prNumber: 42,
       commitId: 'commit-sha',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
       line: 18,
       body: 'Immediate comment',
     });
@@ -516,7 +516,7 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(created, {
       id: 9,
       body: 'Immediate comment',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
       line: 18,
       commitId: 'commit-sha',
       kind: 'individual',
@@ -531,7 +531,7 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(reply, {
       id: 10,
       body: 'Immediate reply',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
       line: 18,
       commitId: 'commit-sha',
       kind: 'reply',
@@ -546,7 +546,7 @@ suite('GitHub client', () => {
     assert.deepStrictEqual(updated, {
       id: 7,
       body: 'Updated docs.',
-      path: 'sdk/keyvault/api/API.md',
+      path: 'sdk/keyvault/api/api.md',
       line: 18,
       commitId: 'commit-sha',
       kind: 'review',
@@ -625,7 +625,7 @@ suite('GitHub client', () => {
             assert.strictEqual(parameters.commit_id, 'commit-sha');
             assert.strictEqual(parameters.event, 'APPROVE');
             assert.deepStrictEqual(parameters.comments, [{
-              path: 'sdk/keyvault/api/API.md',
+              path: 'sdk/keyvault/api/api.md',
               line: 18,
               side: 'RIGHT',
               body: 'Looks good.',
@@ -642,7 +642,7 @@ suite('GitHub client', () => {
       commitId: 'commit-sha',
       event: 'APPROVE',
       comments: [{
-        path: 'sdk/keyvault/api/API.md',
+        path: 'sdk/keyvault/api/api.md',
         line: 18,
         body: 'Looks good.',
       }],

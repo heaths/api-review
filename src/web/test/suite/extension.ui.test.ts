@@ -8,7 +8,7 @@ import {
 suite('Web Extension UI Test Suite', function () {
   this.timeout(20_000);
 
-  const fixturePath = 'src/web/test/fixtures/v2/API.md';
+  const fixturePath = 'src/web/test/fixtures/v2/api.md';
 
   test('navigates from the API fixture to the mapped source file', async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];

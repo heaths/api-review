@@ -16,8 +16,8 @@ import { ReviewModel } from '../../reviewModel';
 suite('Web Extension Test Suite', function () {
   this.timeout(20_000);
 
-  const fixturePath = 'src/web/test/fixtures/v2/API.md';
-  const baselineFixturePath = 'src/web/test/fixtures/v1/API.md';
+  const fixturePath = 'src/web/test/fixtures/v2/api.md';
+  const baselineFixturePath = 'src/web/test/fixtures/v1/api.md';
 
   test('activates for Markdown and registers review commands', async () => {
     const document = await vscode.workspace.openTextDocument({ language: 'markdown', content: '# API' });
@@ -132,7 +132,7 @@ suite('Web Extension Test Suite', function () {
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document);
     const include = vscode.workspace.getConfiguration('heaths.azureApiReview.files', uri).get<string[]>('include');
-    assert.deepStrictEqual(include, ['**/API.md']);
+    assert.deepStrictEqual(include, ['**/api.md']);
 
     const descriptor = (await discoverApiDocuments()).find(candidate => candidate.uri.toString() === uri.toString());
     assert.ok(descriptor, 'API fixture was not discovered');

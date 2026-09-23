@@ -9,17 +9,19 @@ const mockUserAvatarUrl = 'https://avatars.githubusercontent.com/u/1532486?v=4';
 const historyResponseDelayMs = 2000;
 const mockHistoryPath = 'scripts/github-proxy.mjs';
 const mockHistorySourceRef = 'api-review';
-const mockHistorySourcePath = 'sdk/keyvault/azure_security_keyvault_keys/api/API.md';
+const mockHistorySourcePaths = [
+  'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
+  'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+];
 
 export async function startGitHubProxy(repositoryRoot, options = {}) {
   const app = express();
   const token = randomUUID();
   const simulatePullRequest = options.simulatePullRequest === true;
   const seededPullRequest = simulatePullRequest ? await getSeededPullRequest(repositoryRoot) : undefined;
-  const seededCommitId = await getSeededPullRequestCommitId(repositoryRoot);
-  const pullRequests = new Map([
-    [1, createSeededPullRequestStore(seededCommitId)],
-  ]);
+  const pullRequests = new Map(seededPullRequest
+    ? [[seededPullRequest.number, createSeededPullRequestStore(seededPullRequest.headSha)]]
+    : []);
 
   app.disable('x-powered-by');
   app.use(express.json());
@@ -108,7 +110,7 @@ export async function startGitHubProxy(repositoryRoot, options = {}) {
     try {
       response.type('text/plain').send(await runGit(
         repositoryRoot,
-        ['show', `${ref}:${filePath === mockHistoryPath ? mockHistorySourcePath : filePath}`],
+        ['show', `${ref}:${filePath === mockHistoryPath ? await getMockHistorySourcePath(repositoryRoot, ref) ?? filePath : filePath}`],
       ));
     } catch (error) {
       if (isMissingContentError(error)) {
@@ -340,29 +342,46 @@ async function getMockTags(repositoryRoot) {
     .filter(Boolean);
 
   return (await Promise.all(names.map(async name => {
-    try {
-      await runGit(repositoryRoot, ['show', `${name}:${mockHistorySourcePath}`]);
-      return {
-        name,
-        commit: await runGit(repositoryRoot, ['rev-list', '-n', '1', name]),
-      };
-    } catch {
+    const path = await getMockHistorySourcePath(repositoryRoot, name);
+    if (!path) {
       return undefined;
     }
+
+    return {
+      name,
+      commit: await runGit(repositoryRoot, ['rev-list', '-n', '1', name]),
+    };
   }))).filter(Boolean);
 }
 
 async function getMockHistoryCommits(repositoryRoot, maxEntries) {
+  const path = await getMockHistorySourcePath(repositoryRoot, mockHistorySourceRef);
+  if (!path) {
+    return appendMockHistory([], maxEntries);
+  }
+
   const output = await runGit(repositoryRoot, [
     'log',
     `--max-count=${Math.max(maxEntries, 1)}`,
     '--format=%H%x00%cI%x00%B%x00%x1e',
     mockHistorySourceRef,
     '--',
-    mockHistorySourcePath,
+    path,
   ]);
 
   return appendMockHistory(parseCommits(output).slice(1), maxEntries);
+}
+
+async function getMockHistorySourcePath(repositoryRoot, ref) {
+  for (const path of mockHistorySourcePaths) {
+    try {
+      await runGit(repositoryRoot, ['cat-file', '-e', `${ref}:${path}`]);
+      return path;
+    } catch {
+    }
+  }
+
+  return undefined;
 }
 
 function appendMockHistory(commits, maxEntries) {
@@ -433,17 +452,11 @@ function readDraftComment(value) {
 
 function getPullRequestStore(pullRequests, prNumber, create) {
   let store = pullRequests.get(prNumber);
-  if (!store && (create || shouldSeedPullRequest(prNumber))) {
-    store = shouldSeedPullRequest(prNumber)
-      ? createSeededPullRequestStore(pullRequests.get(1)?.reviews[0]?.commitId ?? '')
-      : createEmptyPullRequestStore();
+  if (!store && create) {
+    store = createEmptyPullRequestStore();
     pullRequests.set(prNumber, store);
   }
   return store;
-}
-
-function shouldSeedPullRequest(prNumber) {
-  return prNumber === 1;
 }
 
 function createEmptyPullRequestStore() {
@@ -503,7 +516,7 @@ function createSeededPullRequestStore(commitId) {
     comments: [{
       id: 3993158275,
       body: 'This is a review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183174172,
@@ -514,7 +527,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993164859,
       body: 'This is an immediate review comment.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 66,
       commit_id: commitId,
       pull_request_review_id: 5183181104,
@@ -525,7 +538,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993167721,
       body: 'This is an immediately review comment reply.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183184124,
@@ -536,7 +549,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3993171853,
       body: 'This is a review comment reply in a separate review.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5183188404,
@@ -547,7 +560,7 @@ function createSeededPullRequestStore(commitId) {
     }, {
       id: 3994090762,
       body: 'This is an immediately review comment reply added by the VSCode extension.',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       line: 65,
       commit_id: commitId,
       pull_request_review_id: 5184128494,
@@ -560,27 +573,26 @@ function createSeededPullRequestStore(commitId) {
 }
 
 async function getSeededPullRequestCommitId(repositoryRoot) {
-  try {
-    return await runGit(repositoryRoot, ['rev-parse', 'api-review']);
-  } catch {
-    return runGit(repositoryRoot, ['rev-parse', 'HEAD']);
-  }
+  return runGit(repositoryRoot, ['rev-parse', 'HEAD']);
 }
 
 async function getSeededPullRequest(repositoryRoot) {
   const headRef = await getSeededPullRequestRef(repositoryRoot);
   const headSha = await getSeededPullRequestCommitId(repositoryRoot);
-  const base = await getSeededPullRequestBase(repositoryRoot);
+  const livePullRequest = await getLivePullRequest(repositoryRoot, headRef);
+  const base = livePullRequest
+    ? { ref: livePullRequest.baseRef, sha: livePullRequest.baseSha }
+    : await getSeededPullRequestBase(repositoryRoot);
 
   return {
-    number: 1,
-    title: `Pull request for ${shortRef(headRef)}`,
+    number: livePullRequest?.number ?? 1,
+    title: livePullRequest?.title ?? `Pull request for ${shortRef(headRef)}`,
     state: 'open',
     baseRef: base.ref,
     baseSha: base.sha,
     headRef,
     headSha,
-    headOwner: mockUserLogin,
+    headOwner: livePullRequest?.headOwner ?? mockUserLogin,
   };
 }
 
@@ -595,16 +607,110 @@ async function getSeededPullRequestRef(repositoryRoot) {
 }
 
 async function getSeededPullRequestBase(repositoryRoot) {
-  const tags = await getMockTags(repositoryRoot);
-  const taggedBase = tags.find(tag => tag.name.endsWith('@1.0.0')) ?? tags[0];
-  if (taggedBase) {
-    return { ref: taggedBase.name, sha: taggedBase.commit };
+  const defaultBranch = await getRepositoryDefaultBranch(repositoryRoot);
+  if (defaultBranch) {
+    try {
+      return {
+        ref: defaultBranch,
+        sha: await runGit(repositoryRoot, ['rev-parse', `origin/${defaultBranch}`]),
+      };
+    } catch {
+      try {
+        return {
+          ref: defaultBranch,
+          sha: await runGit(repositoryRoot, ['rev-parse', defaultBranch]),
+        };
+      } catch {
+      }
+    }
   }
 
   return {
-    ref: 'main',
+    ref: await getSeededPullRequestRef(repositoryRoot),
     sha: await getSeededPullRequestCommitId(repositoryRoot),
   };
+}
+
+async function getLivePullRequest(repositoryRoot, headRef) {
+  const repository = await getGitHubRepository(repositoryRoot);
+  if (!repository) {
+    return undefined;
+  }
+
+  for (const selector of [`${repository.owner}:${headRef}`, headRef]) {
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'pr',
+        'view',
+        selector,
+        '--repo',
+        `${repository.owner}/${repository.repo}`,
+        '--json',
+        'number,title,state,baseRefName,baseRefOid,headRefName,headRepositoryOwner',
+      ], {
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024,
+      });
+      const pullRequest = parseLivePullRequest(stdout);
+      if (pullRequest?.state === 'OPEN' && pullRequest.headRef === headRef) {
+        return pullRequest;
+      }
+    } catch {
+    }
+  }
+
+  return undefined;
+}
+
+async function getGitHubRepository(repositoryRoot) {
+  try {
+    const remoteUrl = await runGit(repositoryRoot, ['config', '--get', 'remote.origin.url']);
+    return parseGitHubRepository(remoteUrl);
+  } catch {
+    return undefined;
+  }
+}
+
+async function getRepositoryDefaultBranch(repositoryRoot) {
+  try {
+    const symbolicRef = await runGit(repositoryRoot, ['symbolic-ref', 'refs/remotes/origin/HEAD']);
+    const prefix = 'refs/remotes/origin/';
+    return symbolicRef.startsWith(prefix) ? symbolicRef.slice(prefix.length) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseGitHubRepository(url) {
+  const match = url.match(/^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?$/iu);
+  return match ? { owner: match[1], repo: match[2] } : undefined;
+}
+
+function parseLivePullRequest(payload) {
+  const parsed = JSON.parse(payload);
+  if (!parsed || typeof parsed !== 'object') {
+    return undefined;
+  }
+
+  return typeof parsed.number === 'number'
+    && typeof parsed.title === 'string'
+    && typeof parsed.state === 'string'
+    && typeof parsed.baseRefName === 'string'
+    && typeof parsed.baseRefOid === 'string'
+    && typeof parsed.headRefName === 'string'
+    && parsed.headRepositoryOwner
+    && typeof parsed.headRepositoryOwner === 'object'
+    && typeof parsed.headRepositoryOwner.login === 'string'
+    ? {
+      number: parsed.number,
+      title: parsed.title,
+      state: parsed.state,
+      baseRef: parsed.baseRefName,
+      baseSha: parsed.baseRefOid,
+      headRef: parsed.headRefName,
+      headOwner: parsed.headRepositoryOwner.login,
+    }
+    : undefined;
 }
 
 function matchesSeededPullRequestRef(ref, seededPullRequest) {

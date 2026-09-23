@@ -115,12 +115,12 @@ suite('Diff service', () => {
     const githubDocument = {
       repository: { owner: 'heaths', repo: 'api-review' },
       ref: 'refs/pull/26/head',
-      path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+      path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       pullRequestNumber: 26,
     };
     const document = {
       uri: vscode.Uri.parse(
-        'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'vscode-vfs://github%2B7b2276223a312c22726566223a7b2274797065223a332c226964223a223236227d7d/heaths/api-review/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const headSha = 'e951fe014e6f88027561db809aba0e3e6054a3c6';
@@ -190,7 +190,7 @@ suite('Diff service', () => {
   test('uses GitHub history when local Git is unavailable', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const gitClient = createGitClient();
@@ -199,7 +199,7 @@ suite('Diff service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'main',
-          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
         };
       },
       async getTags() {
@@ -243,7 +243,7 @@ suite('Diff service', () => {
   test('keeps commit history when GitHub tags fail', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const gitClient = createGitClient();
@@ -252,7 +252,7 @@ suite('Diff service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'main',
-          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
         };
       },
       async getTags() {
@@ -293,7 +293,7 @@ suite('Diff service', () => {
   test('keeps tag history when GitHub commits fail', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const gitClient = createGitClient();
@@ -302,7 +302,7 @@ suite('Diff service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'main',
-          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
         };
       },
       async getTags() {
@@ -340,7 +340,7 @@ suite('Diff service', () => {
   test('skips GitHub tags that do not contain the current API file', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'https://github.dev/heaths/api-review/blob/main/src/web/test/fixtures/v2/API.md',
+        'https://github.dev/heaths/api-review/blob/main/src/web/test/fixtures/v2/api.md',
       ),
     } as vscode.TextDocument;
     const gitClient = createGitClient();
@@ -349,7 +349,7 @@ suite('Diff service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'main',
-          path: 'src/web/test/fixtures/v2/API.md',
+          path: 'src/web/test/fixtures/v2/api.md',
         };
       },
       async getTags() {
@@ -390,7 +390,7 @@ suite('Diff service', () => {
   test('uses safe first-line details for tags and commits', async () => {
     const document = {
       uri: vscode.Uri.parse(
-        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+        'https://github.dev/heaths/api-review/blob/main/sdk/keyvault/azure_security_keyvault_keys/api/api.md',
       ),
     } as vscode.TextDocument;
     const gitClient = createGitClient();
@@ -399,7 +399,7 @@ suite('Diff service', () => {
         return {
           repository: { owner: 'heaths', repo: 'api-review' },
           ref: 'main',
-          path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+          path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
         };
       },
       async getTags() {
@@ -453,7 +453,7 @@ suite('Diff service', () => {
 
   test('uses the dedicated pull request context for local repository baselines', async () => {
     const document = {
-      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/api.md'),
     } as vscode.TextDocument;
     const baseSha = 'base-sha';
     const service = new DiffService(
@@ -490,7 +490,7 @@ suite('Diff service', () => {
             document: {
               repository: { owner: 'heaths', repo: 'api-review' },
               ref: 'feature/history',
-              path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+              path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
             },
             pullRequest: {
               number: 26,
@@ -523,7 +523,7 @@ suite('Diff service', () => {
 
   test('exposes a pull request base commit candidate when the base is not tagged', async () => {
     const document = {
-      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/API.md'),
+      uri: vscode.Uri.parse('file:///workspace/sdk/keyvault/azure_security_keyvault_keys/api/api.md'),
     } as vscode.TextDocument;
     const baseSha = '0123456789abcdef0123456789abcdef01234567';
     const service = new DiffService(
@@ -569,7 +569,7 @@ suite('Diff service', () => {
             document: {
               repository: { owner: 'heaths', repo: 'api-review' },
               ref: 'feature/history',
-              path: 'sdk/keyvault/azure_security_keyvault_keys/api/API.md',
+              path: 'sdk/keyvault/azure_security_keyvault_keys/api/api.md',
             },
             pullRequest: {
               number: 26,
@@ -689,9 +689,9 @@ suite('Diff service', () => {
   });
 
   test('formats versioned file baselines with their parent folder', () => {
-    const label = getFileBaselineLabel(vscode.Uri.parse('vscode-test-web://mount/src/web/test/fixtures/v1/API.md'));
+    const label = getFileBaselineLabel(vscode.Uri.parse('vscode-test-web://mount/src/web/test/fixtures/v1/api.md'));
 
-    assert.strictEqual(label, 'v1/API.md');
+    assert.strictEqual(label, 'v1/api.md');
   });
 
   test('disambiguates duplicate captured tag labels with the original ref', () => {
@@ -920,8 +920,8 @@ suite('Diff service', () => {
   });
 
   test('renders versioned fixture diffs with markdown blocks and compact code blocks', async () => {
-    const baseline = await readFixture('v1/API.md');
-    const target = await readFixture('v2/API.md');
+    const baseline = await readFixture('v1/api.md');
+    const target = await readFixture('v2/api.md');
     const lineMetadata = createMarkdownViewLineMetadata(target, {
       markdown: target,
       hasCommentsPatch: false,

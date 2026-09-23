@@ -10,7 +10,7 @@ suite('Pull request service review workflows', () => {
   const document = {
     repository: { owner: 'heaths', repo: 'api-review' },
     ref: 'commit-sha',
-    path: 'sdk/keyvault/api/API.md',
+    path: 'sdk/keyvault/api/api.md',
   };
   const pullRequest: GitHubPullRequest = {
     number: 42,

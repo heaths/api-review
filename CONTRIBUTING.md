@@ -122,7 +122,10 @@ pnpm run run-in-browser ../api-review-worktree/ --pr
 When `--pr` is present, the command starts a small local GitHub proxy backed by
 the selected Git repository and rebuilds the web bundle with the proxy-backed
 GitHub client enabled. It simulates an active pull request review and saves or
-deletes comments the way a real pull request does.
+deletes comments the way a real pull request does. When possible, the proxy
+uses the live open pull request metadata for the current branch so the browser
+session opens against the real PR base branch; otherwise it falls back to local
+git-based inference.
 
 ## Build a VSIX
 

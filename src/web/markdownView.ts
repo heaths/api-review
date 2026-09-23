@@ -1444,7 +1444,7 @@ function createChooseFileQuickPickItem(): DiffChooseFileQuickPickItem {
   return {
     action: 'chooseFile',
     label: '$(folder-opened) Choose file...',
-    description: 'Compare against another API.md file',
+    description: 'Compare against another api.md file',
   };
 }
 
