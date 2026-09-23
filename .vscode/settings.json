@@ -9,9 +9,6 @@
     "**/api.comments.patch": true,
     "**/api.md.map": true
   },
-  "heaths.azureApiReview.files.include": [
-    "**/api.md"
-  ],
   "workbench.editorAssociations": {
     "**/api.md": "heaths.azureApiReview.preview"
   },

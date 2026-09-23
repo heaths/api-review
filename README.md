@@ -58,16 +58,15 @@ Documentation and Go to source CodeLens actions described above.
 
 ## Configure Repositories
 
-The defaults support repositories that generate `api/api.md` together with
+The defaults support repositories that generate `api.md` together with
 adjacent patch and source-map files:
 
 ```json
 {
   "heaths.azureApiReview.files.include": [
-    "**/api/api.md"
+    "**/api.md"
   ],
   "heaths.azureApiReview.files.comments": [
-    "api.comments.diff",
     "api.comments.patch"
   ],
   "heaths.azureApiReview.files.sourceMaps": [
@@ -94,6 +93,18 @@ Configure these settings at workspace or workspace-folder scope:
   `^[\\w-]+@(?<version>.+)$` maps `azure_security_keyvault_keys@1.1.0-beta.1`
   to `1.1.0-beta.1`.
 
+For example, repositories that want to try `api.comments.patch` before a
+legacy `api.comments.diff` file can configure:
+
+```json
+{
+  "heaths.azureApiReview.files.comments": [
+    "api.comments.patch",
+    "api.comments.diff"
+  ]
+}
+```
+
 Related-file patterns support file-context variables such as `${file}`,
 `${relativeFile}`, `${fileBasename}`, `${fileBasenameNoExtension}`,
 `${fileDirname}`, and `${workspaceFolder}`. Environment, command, input,
@@ -107,10 +118,10 @@ sync with `heaths.azureApiReview.files.include`:
 ```json
 {
   "heaths.azureApiReview.files.include": [
-    "**/api/api.md"
+    "**/api.md"
   ],
   "workbench.editorAssociations": {
-    "**/api/api.md": "heaths.azureApiReview.preview"
+    "**/api.md": "heaths.azureApiReview.preview"
   }
 }
 ```

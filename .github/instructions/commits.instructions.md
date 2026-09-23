@@ -23,6 +23,7 @@ Write commit messages and pull request titles as [Conventional Commits](https://
   - changelog: changes to CHANGELOG generation
   - codeLens: Code Lens changes to the built-in markdown editor
   - comments: comment patch files and line metadata
+  - configuration: changes to configuration options
   - copilot: changes to agentic instructions or skills
   - github: GitHub API and proxying
   - highlight: code syntax highlighting
