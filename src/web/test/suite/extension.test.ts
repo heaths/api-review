@@ -158,13 +158,15 @@ suite('Web Extension Test Suite', function () {
     const documentationLenses = codeLenses.filter(
       lens => lens.command?.command === 'heaths.azureApiReview.showDocumentation',
     );
-    assert.strictEqual(documentationLenses.length, 1,
-      'Documentation CodeLens should only be provided on the last hunk line');
-    const [documentation] = documentationLenses;
-    assert.ok(documentation,
-      `Documentation CodeLens missing from ${codeLenses.length} results`);
-    assert.strictEqual(documentation.command?.title, '$(file-text) Documentation');
-    assert.strictEqual(documentation.command?.tooltip, 'Show documentation');
+    assert.deepStrictEqual(
+      documentationLenses.map(lens => lens.range.start.line),
+      [13, 14],
+      'Documentation CodeLens should be provided for each documented declaration',
+    );
+    for (const documentation of documentationLenses) {
+      assert.strictEqual(documentation.command?.title, '$(file-text) Documentation');
+      assert.strictEqual(documentation.command?.tooltip, 'Show documentation');
+    }
     assert.ok(codeLenses.some(lens => lens.command?.command === 'heaths.azureApiReview.goToSource'),
       `Source CodeLens missing from ${codeLenses.length} results`);
   });
