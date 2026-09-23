@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { getConfiguration } from '../../configuration';
 import { discoverApiDocuments } from '../../fileDiscovery';
 import {
   approveViewPullRequestCommand,
@@ -29,6 +30,16 @@ suite('Web Extension Test Suite', function () {
       extension.packageJSON.contributes.customEditors[0].selector[0].filenamePattern,
       '*.md',
     );
+    assert.deepStrictEqual(
+      extension.packageJSON.contributes.configuration.properties['heaths.azureApiReview.files.include'].default,
+      ['**/api.md'],
+    );
+    assert.deepStrictEqual(getConfiguration(vscode.Uri.parse('untitled:api.md')).include, ['**/api.md']);
+    assert.deepStrictEqual(
+      extension.packageJSON.contributes.configuration.properties['heaths.azureApiReview.files.comments'].default,
+      ['api.comments.patch'],
+    );
+    assert.deepStrictEqual(getConfiguration(vscode.Uri.parse('untitled:api.md')).comments, ['api.comments.patch']);
     const sourceCommand = extension.packageJSON.contributes.commands.find(
       (command: { command: string }) => command.command === reopenViewAsTextCommand,
     );

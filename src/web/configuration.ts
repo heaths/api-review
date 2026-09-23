@@ -11,8 +11,8 @@ export interface AzureApiReviewGitConfiguration {
 }
 
 const defaults: AzureApiReviewConfiguration = {
-  include: ['**/api/api.md'],
-  comments: ['api.comments.diff', 'api.comments.patch'],
+  include: ['**/api.md'],
+  comments: ['api.comments.patch'],
   sourceMaps: ['api.md.map'],
 };
 
