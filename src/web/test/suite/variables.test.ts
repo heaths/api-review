@@ -18,10 +18,10 @@ suite('Path variables', () => {
 
   test('expands API-file variables in related patterns', () => {
     const expanded = expandRelatedPattern(
-      '${fileBasenameNoExtension}.comments.patch',
+      '${fileBasenameNoExtension}.documentation.patch',
       { file: vscode.Uri.parse('memfs:/workspace/crate/api/api.md'), workspaceFolder: folder },
     );
-    assert.strictEqual(expanded, 'api.comments.patch');
+    assert.strictEqual(expanded, 'api.documentation.patch');
   });
 
   test('rejects unsupported variables', () => {

@@ -231,7 +231,7 @@
           "type": "array",
           "scope": "resource",
           "default": [
-            "api.comments.patch"
+            "api.documentation.patch"
           ],
           "items": {
             "type": "string"

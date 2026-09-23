@@ -6,7 +6,7 @@
   "files.readonlyInclude": {
     "**/api.md": true,
     "**/api.comments.diff": true,
-    "**/api.comments.patch": true,
+    "**/api.documentation.patch": true,
     "**/api.md.map": true
   },
   "workbench.editorAssociations": {

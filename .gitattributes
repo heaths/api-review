@@ -1,4 +1,4 @@
 * text=auto eol=lf
 
-api.comments.patch merge=binary linguist-generated=true
+api.documentation.patch merge=binary linguist-generated=true
 api.md.map merge=binary linguist-generated=true

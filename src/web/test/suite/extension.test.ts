@@ -37,9 +37,9 @@ suite('Web Extension Test Suite', function () {
     assert.deepStrictEqual(getConfiguration(vscode.Uri.parse('untitled:api.md')).include, ['**/api.md']);
     assert.deepStrictEqual(
       extension.packageJSON.contributes.configuration.properties['heaths.azureApiReview.files.comments'].default,
-      ['api.comments.patch'],
+      ['api.documentation.patch'],
     );
-    assert.deepStrictEqual(getConfiguration(vscode.Uri.parse('untitled:api.md')).comments, ['api.comments.patch']);
+    assert.deepStrictEqual(getConfiguration(vscode.Uri.parse('untitled:api.md')).comments, ['api.documentation.patch']);
     const sourceCommand = extension.packageJSON.contributes.commands.find(
       (command: { command: string }) => command.command === reopenViewAsTextCommand,
     );
@@ -147,7 +147,7 @@ suite('Web Extension Test Suite', function () {
 
     const descriptor = (await discoverApiDocuments()).find(candidate => candidate.uri.toString() === uri.toString());
     assert.ok(descriptor, 'API fixture was not discovered');
-    assert.ok(descriptor.comments, 'API comments patch was not discovered');
+    assert.ok(descriptor.comments, 'API documentation patch was not discovered');
     assert.ok(descriptor.sourceMap, 'API source map was not discovered');
 
     const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
@@ -231,7 +231,7 @@ suite('Web Extension Test Suite', function () {
     }
   });
 
-  test('applies the configured comments patch for preview only', async () => {
+  test('applies the configured documentation patch for preview only', async () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'Test workspace was not mounted');
 
