@@ -29,22 +29,29 @@ suite('Documentation peek UI', function () {
     const documentationLenses = codeLenses.filter(
       candidate => candidate.command?.command === 'heaths.azureApiReview.showDocumentation',
     );
-    assert.strictEqual(documentationLenses.length, 1, 'Documentation CodeLens should only be on the last hunk line');
-    const [lens] = documentationLenses;
+    assert.deepStrictEqual(
+      documentationLenses.map(lens => lens.range.start.line),
+      [13, 14],
+      'Documentation CodeLens should be provided for each documented declaration',
+    );
+    const [lens, secondLens] = documentationLenses;
     assert.ok(lens.command?.arguments, 'Documentation CodeLens was not provided');
+    assert.ok(secondLens.command?.arguments, 'Second Documentation CodeLens was not provided');
     assert.strictEqual(lens.command.title, '$(file-text) Documentation');
     assert.strictEqual(lens.command.tooltip, 'Show documentation');
+    assert.strictEqual(secondLens.command.title, '$(file-text) Documentation');
+    assert.strictEqual(secondLens.command.tooltip, 'Show documentation');
 
     const source = codeLenses.find(candidate => candidate.command?.command === 'heaths.azureApiReview.goToSource');
     assert.strictEqual(source?.command?.tooltip, 'Navigate to declaration');
 
     const line = lens.range.start.line;
-    const firstTarget = createDocumentationUri(uri, line - 1, 'rust');
+    const firstTarget = createDocumentationUri(uri, line, 'rust');
     const documentation = (await vscode.workspace.openTextDocument(firstTarget)).getText().trim();
     assert.ok(documentation, 'The peeked document should contain the extracted doc comments');
-    const target = createDocumentationUri(uri, line, 'rust');
+    const target = createDocumentationUri(uri, secondLens.range.start.line, 'rust');
     const secondDocumentation = (await vscode.workspace.openTextDocument(target)).getText().trim();
-    assert.strictEqual(secondDocumentation, documentation);
+    assert.notStrictEqual(secondDocumentation, documentation);
 
     // The command opens the peek widget without allowing the editor association to reopen the
     // declaration in the Azure API Review custom editor.

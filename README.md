@@ -67,7 +67,7 @@ adjacent patch and source-map files:
     "**/api.md"
   ],
   "heaths.azureApiReview.files.comments": [
-    "api.comments.patch"
+    "api.documentation.patch"
   ],
   "heaths.azureApiReview.files.sourceMaps": [
     "api.md.map"
@@ -93,13 +93,13 @@ Configure these settings at workspace or workspace-folder scope:
   `^[\\w-]+@(?<version>.+)$` maps `azure_security_keyvault_keys@1.1.0-beta.1`
   to `1.1.0-beta.1`.
 
-For example, repositories that want to try `api.comments.patch` before a
+For example, repositories that want to try `api.documentation.patch` before a
 legacy `api.comments.diff` file can configure:
 
 ```json
 {
   "heaths.azureApiReview.files.comments": [
-    "api.comments.patch",
+    "api.documentation.patch",
     "api.comments.diff"
   ]
 }
@@ -140,7 +140,7 @@ as read-only:
   "files.readonlyInclude": {
     "**/api.md": true,
     "**/api.comments.diff": true,
-    "**/api.comments.patch": true,
+    "**/api.documentation.patch": true,
     "**/api.md.map": true
   }
 }
