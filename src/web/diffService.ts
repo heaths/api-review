@@ -683,7 +683,7 @@ function formatCommitDate(date: Date | string): string {
 function createPullRequestBaseTagCandidate(candidate: TagCandidate): PullRequestBaseCandidate {
   return {
     baseline: candidate.candidate.baseline,
-    label: candidate.candidate.baseline.kind === 'tag' ? candidate.candidate.baseline.ref : candidate.candidate.label,
+    label: candidate.candidate.label,
     description: candidate.candidate.description,
     detail: candidate.candidate.detail,
   };
@@ -702,7 +702,7 @@ function createPullRequestBaseCommitCandidate(
 
   return {
     baseline,
-    label: baseline.kind === 'commit' ? baseline.ref : label,
+    label,
     description: commitDate ? formatCommitDate(commitDate) : undefined,
     detail: getDisplayDetail(commit?.message),
   };

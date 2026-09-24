@@ -191,7 +191,7 @@ suite('Markdown view', () => {
     const items = createDiffQuickPickItems({
       pullRequestBase: {
         baseline: { kind: 'commit', ref: '1234567890abcdef' },
-        label: '1234567890abcdef',
+        label: '12345678',
         description: '2026-09-11',
         detail: 'merge latest baseline',
       },
@@ -217,7 +217,7 @@ suite('Markdown view', () => {
     })), [
       {
         kind: undefined,
-        label: '$(git-pull-request) 1234567890abcdef',
+        label: '$(git-pull-request) 12345678',
         description: '2026-09-11',
         detail: 'merge latest baseline',
         action: 'baseline',
@@ -311,7 +311,7 @@ suite('Markdown view', () => {
   test('renders pull request base entries with the pull request icon', () => {
     const item = createPullRequestBaseQuickPickItem({
       baseline: { kind: 'tag', ref: 'crate@1.2.0' },
-      label: 'crate@1.2.0',
+      label: '1.2.0',
       description: '2026-09-10',
       detail: 'latest stable release',
     });
@@ -320,7 +320,7 @@ suite('Markdown view', () => {
       action: 'baseline',
       baseline: { kind: 'tag', ref: 'crate@1.2.0' },
       source: 'pullRequestBase',
-      label: '$(git-pull-request) crate@1.2.0',
+      label: '$(git-pull-request) 1.2.0',
       description: '2026-09-10',
       detail: 'latest stable release',
     });
