@@ -177,7 +177,7 @@ suite('Diff service', () => {
     ]);
     assert.deepStrictEqual(availability.pullRequestBase, {
       baseline: { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
-      label: 'azure_security_keyvault_keys@1.0.0',
+      label: '1.0.0',
       description: '2026-09-10',
       detail: 'Update API',
     });
@@ -511,7 +511,7 @@ suite('Diff service', () => {
 
     assert.deepStrictEqual(availability.pullRequestBase, {
       baseline: { kind: 'tag', ref: 'azure_security_keyvault_keys@1.0.0' },
-      label: 'azure_security_keyvault_keys@1.0.0',
+      label: '1.0.0',
       description: undefined,
       detail: undefined,
     });
@@ -590,7 +590,7 @@ suite('Diff service', () => {
 
     assert.deepStrictEqual(availability.pullRequestBase, {
       baseline: { kind: 'commit', ref: baseSha },
-      label: baseSha,
+      label: '01234567',
       description: '2026-09-08',
       detail: 'Create API baseline',
     });
